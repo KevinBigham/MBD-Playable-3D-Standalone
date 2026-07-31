@@ -1,0 +1,28 @@
+{
+  "name": "moonshot-nine",
+  "private": true,
+  "version": "1.0.0",
+  "description": "MOONSHOT NINE — an original arcade baseball game for the desktop browser.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "sim": "tsx scripts/simulate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/three": "^0.169.0",
+    "playwright": "^1.62.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

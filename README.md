@@ -1,0 +1,162 @@
+# MOONSHOT NINE
+
+**An original arcade baseball game for the desktop browser.**
+
+Ten fictional clubs, eight fictional ballparks and about two hundred fictional
+ballplayers make up the Meridian Circuit. Games are fast, contact is loud, and
+you hold the controls for every pitch, every swing, every throw and every
+runner. There is no simulation to sit and watch: if something happens on the
+field, somebody pressed a button to make it happen.
+
+MOONSHOT NINE is a spiritual successor to the fast, personality-filled console
+baseball games of the late 1990s. Everything in it — the league, the players,
+the parks, the art, the sound, the music and the code — is original and
+generated at runtime. No third-party game assets are used anywhere.
+
+---
+
+## Install
+
+Requires **Node.js 20 or newer**.
+
+```bash
+npm install
+```
+
+## Run
+
+```bash
+npm run dev
+```
+
+Then open the URL Vite prints (by default `http://localhost:5173`).
+
+## Controls
+
+The four action buttons are laid out like the bases, and always mean the base
+they point at:
+
+```
+            I  =  2ND
+      J = 3RD        L = 1ST
+            K  =  HOME
+```
+
+| Situation | W A S D | J | K | L | I | Space | Left-Shift | Q |
+|---|---|---|---|---|---|---|---|---|
+| **Batting** | move the contact cursor | bunt | contact swing | power swing | take / check swing | — | hold + base = steal | — |
+| **Pitching** | aim before the pitch, steer during it | pitch 1 | pitch 2 | pitch 3 | pitch 4 | — | — | — |
+| **Fielding** | move the selected fielder | throw to 3rd | throw home | throw to 1st | throw to 2nd | dive / leap | — | switch fielder |
+| **Baserunning** | — | send to 3rd | send home | send to 1st | send to 2nd | advance everyone | hold + base = go back | — |
+
+`Escape` pauses. `Enter` confirms in menus. Mouse works in every menu.
+
+**Player 2** uses the arrow keys with `; . ' [` as the diamond (`;`=3rd, `.`=home,
+`'`=1st, `[`=2nd), `/` for Special and Right-Shift as the modifier. Numpad
+aliases (`4 5 6 8`, `0`, `7`) work too.
+
+**Gamepad:** left stick or D-pad moves; the face buttons are the same diamond
+(A = down/home, B = right/1st, X = left/3rd, Y = up/2nd); RB is Special, LB
+switches fielder, LT is the modifier, Start pauses. Two pads = two players.
+
+Every control can be rebound from **Controls** in the main menu or the pause
+menu. Full detail lives in [CONTROLS.md](CONTROLS.md).
+
+## Modes
+
+| Mode | What it is |
+|---|---|
+| **Quick Play** | One exhibition game. Pick both clubs, the park, 3 / 6 / 9 innings, the difficulty, day or night, and whether each club is Player 1, Player 2 or the CPU. Set both to CPU to watch. |
+| **Season** | A saved season of 18, 36 or 54 games per club with standings, league leaders, a full schedule, a four-team postseason and the Meridian Cup. Games you are not in are simulated instantly. Saves automatically after every game. |
+| **Championship** | A standalone eight-club single-elimination bracket. Three wins takes the cup. Saved separately from Season. |
+| **Moonshot Derby** | The home-run challenge. Ten outs each, anything that is not a home run is an out, ties go to a three-out swing-off and then to the longest blast. Two to four hitters, up to two of them human. |
+| **Practice** | Endless drills for batting, pitching, fielding and baserunning. Nothing is scored; three outs simply resets the situation. |
+| **Player Creator** | Build an original ballplayer — name, number, position, handedness, build, appearance — and spend a fixed pool of rating points. He joins the club you choose and plays in every mode. Saved locally; deleting him restores the club's original player. |
+| **Clubs & Rosters** | Browse every club's line-up, bench, rotation and ratings. Your creations are tagged. |
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs the full Vitest suite: RNG determinism, ball-flight calibration, the swing
+model, baseball rules driven through the real engine, runner invariants, season
+and cup mode integrity, the derby, box-score bookkeeping, and a batch of 100
+CPU-versus-CPU games checked for deadlocks, invalid states and believable
+statistics.
+
+Extra harnesses:
+
+```bash
+npx tsx scripts/simulate.ts 100 9 pro    # games, innings, difficulty
+npx tsx scripts/tune-physics.ts          # ball-flight calibration table
+npx tsx scripts/verify-fixes.ts          # box-score bookkeeping
+npx tsx scripts/verify-season.ts         # full season and postseason integrity
+npx tsx scripts/verify-foulout.ts        # no team ever bats with three outs
+npx tsx scripts/verify-extras.ts         # extra innings stay bounded
+```
+
+## Production build
+
+```bash
+npm run build      # type-checks, then builds to dist/
+npm run preview    # serves dist/ on http://localhost:4173
+```
+
+`dist/` is a static folder. It can be opened from any static host; no backend,
+no account and no paid service is involved at any point.
+
+To regenerate the screenshots and the gameplay recording in `docs/`, or to
+measure frame rate and memory, first download the browser Playwright drives
+(once per machine):
+
+```bash
+npx playwright install chromium
+```
+
+then:
+
+```bash
+npm run build
+npm run preview &
+npx tsx scripts/capture.ts     # screenshots + gameplay recording
+npx tsx scripts/perf.ts        # frame rate, heap and GPU resource growth
+```
+
+Neither is needed to play the game.
+
+## Known limitations
+
+These are documented deliberately; none of them blocks a complete game.
+
+- **No pickoff throws.** A runner's steal is decided against the catcher's arm
+  rather than the pitcher's. Holding runners is done by pitching quickly.
+- **Baserunners follow straight lines between bases** rather than a rounded
+  arc. Distances and timings are exact; the visual path is simplified.
+- **One-batter substitutions are limited to pitching changes.** There is no
+  pinch hitter or defensive replacement.
+- **Infield fly, balk, interference and obstruction are not implemented.**
+  Their absence is consistent, never advantageous to one side, and does not
+  affect any other rule.
+- **A foul ball that lands more than 30 m from the plate is immediately dead**
+  rather than being chased into the seats. Foul pop-ups inside that radius are
+  fully playable.
+- **The umpire's strike zone is exact.** There is no called-strike variance;
+  what the zone shows is what is called.
+- **Season statistics do not persist across seasons.** Each season keeps its
+  own record book.
+- **Extra innings use a tiebreaker.** From two innings past regulation, each
+  half-inning starts with a runner on second base, so a tied game always ends.
+- **A created player replaces the weakest player at his position** on the club
+  you assign him to, rather than expanding the roster. Roster sizes stay fixed
+  so the league stays balanced.
+
+## Documentation
+
+- [CONTROLS.md](CONTROLS.md) — every input, both players, keyboard and gamepad
+- [GAME_DESIGN.md](GAME_DESIGN.md) — the design and every tuned number
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the code is organised and why
+- [TEST_REPORT.md](TEST_REPORT.md) — what was tested and what was found
+- [BUILD_LOG.md](BUILD_LOG.md) — decisions, defects, fixes, remaining risks
+- [LICENSES.md](LICENSES.md) — dependencies and originality statement
