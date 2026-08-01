@@ -86,6 +86,10 @@ export type ContactGrade =
   | 'solid'
   | 'barreled';
 
+/** Where the bat was relative to the ball, in words the HUD can print. */
+export type TimingLabel = 'WAY EARLY' | 'EARLY' | 'ON TIME' | 'LATE' | 'WAY LATE';
+export type PlaneLabel = 'UNDER IT' | 'ON PLANE' | 'OVER IT';
+
 export interface ContactResult {
   grade: ContactGrade;
   /** 0..1 overall contact quality. */
@@ -103,9 +107,27 @@ export interface ContactResult {
   /** Signed metres; positive = the ball was above the cursor. */
   vertMiss: number;
   horizMiss: number;
+  /**
+   * The same three errors expressed in units of the swing's own tolerance,
+   * so 1.0 always means "one sweet-spot away" whoever is hitting. These are
+   * what the plate view draws; nothing else needs to know the profile.
+   */
+  timingNorm: number;
+  vertNorm: number;
+  horizNorm: number;
+  timingLabel: TimingLabel;
+  planeLabel: PlaneLabel;
   /** Short human-readable reason, shown in the feedback pip. */
   note: string;
 }
+
+/**
+ * How wrong you have to be, vertically, before the ball goes foul instead of
+ * fair. Deterministic on purpose: "half a bat under it goes straight back" is
+ * a rule the hitter can learn, where a coin flip is not. The jitter band below
+ * is the only stochastic part, and it shrinks as contact rating rises.
+ */
+const FOUL_PLANE = 0.66;
 
 export interface SwingInput {
   batter: Player;
@@ -137,6 +159,8 @@ export function resolveSwing(input: SwingInput): ContactResult {
   // Distance in normalised "miss space". 1.0 is the edge of the sweet spot.
   const norm = Math.sqrt(xn * xn + yn * yn * 0.85 + tn * tn * 1.15);
 
+  const contact01 = attr01(input.batter.bat.contact);
+
   const base: ContactResult = {
     grade: 'miss',
     quality: 0,
@@ -148,6 +172,11 @@ export function resolveSwing(input: SwingInput): ContactResult {
     timingError: input.timingError,
     vertMiss: dy,
     horizMiss: dx,
+    timingNorm: tn,
+    vertNorm: yn,
+    horizNorm: xn,
+    timingLabel: timingLabelOf(tn),
+    planeLabel: planeLabelOf(yn),
     note: '',
   };
 
@@ -166,27 +195,40 @@ export function resolveSwing(input: SwingInput): ContactResult {
     return base;
   }
   // Catching the ball well off the centre of the bat vertically sends it
-  // straight back or off the handle: the classic count-extending foul.
-  if (input.kind !== 'bunt' && Math.abs(yn) > 0.5 && rng.chance(clamp01((Math.abs(yn) - 0.5) * 2.2))) {
-    base.grade = 'foul';
-    base.quality = 0.08;
-    base.note = yn > 0 ? 'Fouled it straight back' : 'Chopped it foul';
-    return base;
+  // straight back or off the handle: the classic count-extending foul. The
+  // threshold is a line, not a lottery — a good hitter's line is just a little
+  // fuzzier at the edges than a bad one's.
+  if (input.kind !== 'bunt') {
+    const edge = FOUL_PLANE + rng.normal(0, 0.05 + (1 - contact01) * 0.07);
+    if (Math.abs(yn) > edge) {
+      base.grade = 'foul';
+      base.quality = 0.08;
+      base.note = yn > 0 ? 'Fouled it straight back' : 'Chopped it foul';
+      return base;
+    }
   }
 
   const quality = clamp01(1 - norm);
   const power01 = attr01(input.batter.bat.power);
-  const contact01 = attr01(input.batter.bat.contact);
+
+  /**
+   * Noise scales with how badly the swing was missed. Squaring a ball up is
+   * close to deterministic — that is the whole point of aiming and timing —
+   * while a mishit off the end of the bat genuinely can go anywhere. Without
+   * this, good contact and bad contact were equally unpredictable and the
+   * game read as a dice roll.
+   */
+  const noise = 0.3 + 0.7 * (1 - quality);
 
   if (input.kind === 'bunt') {
-    const ev = clamp(4.5 + quality * 5 + rng.normal(0, 0.7), 1.2, 12);
-    const spray = clamp(input.cursorX * 90 + rng.normal(0, 7), -44, 44);
+    const ev = clamp(4.5 + quality * 5 + rng.normal(0, 0.7 * noise), 1.2, 12);
+    const spray = clamp(input.cursorX * 90 + rng.normal(0, 7 * noise), -44, 44);
     return {
       ...base,
       grade: quality > 0.5 ? 'ok' : 'weak',
       quality,
       exitVelo: ev,
-      launchAngle: clamp(2 + rng.normal(0, 4), -12, 22),
+      launchAngle: clamp(2 + rng.normal(0, 4 * noise), -12, 22),
       sprayAngle: spray,
       spin: 0,
       sideSpin: 0,
@@ -201,7 +243,7 @@ export function resolveSwing(input: SwingInput): ContactResult {
   // Hard pitches come off the bat faster, but only on good contact.
   const speedTransfer = (input.pitchSpeed - 35) * 0.16 * quality;
   let exitVelo = ceiling * evFrac * profile.evMult + speedTransfer;
-  exitVelo += rng.normal(0, 0.9 + (1 - contact01) * 1.1);
+  exitVelo += rng.normal(0, (0.9 + (1 - contact01) * 1.1) * noise);
   exitVelo = clamp(exitVelo, 6, 56);
 
   // --- Launch angle --------------------------------------------------------
@@ -210,14 +252,20 @@ export function resolveSwing(input: SwingInput): ContactResult {
   // 20-25deg window that actually leaves the yard.
   const vertOff = clamp(yn, -2.2, 2.2);
   let launchAngle = 14 + vertOff * 24 + profile.loft;
-  // Very late or very early contact adds a little unintended loft.
-  launchAngle += Math.abs(tn) * 7;
-  launchAngle += rng.normal(0, 2.6 + (1 - contact01) * 2.4);
+  // Timing changes the plane, not just the direction. Out in front you meet the
+  // ball early in the swing's upswing and lift it; beaten by the pitch you are
+  // fighting it off with the barrel below your hands and it goes on the ground.
+  // Both halves are deterministic, so "I was late and rolled over" is a lesson
+  // rather than a shrug.
+  launchAngle += -tn * 11 + Math.abs(tn) * 3;
+  launchAngle += rng.normal(0, (2.6 + (1 - contact01) * 2.4) * noise);
   launchAngle = clamp(launchAngle, -32, 78);
 
   // Off-centre vertical contact bleeds energy.
   const mishit = clamp01(Math.abs(vertOff) - 0.45);
   exitVelo *= 1 - mishit * 0.24;
+  // So does catching it off the end of the bat or in on the hands.
+  exitVelo *= 1 - clamp01(Math.abs(xn) - 0.3) * 0.3;
 
   // --- Spray ---------------------------------------------------------------
   // Early contact pulls, late contact goes the other way, and an inside pitch
@@ -226,7 +274,7 @@ export function resolveSwing(input: SwingInput): ContactResult {
   // which is what creates gaps, corners and doubles.
   const inside = input.pullDir * input.plateX;
   let spray = input.pullDir * (-tn * 58 + inside * 46 + xn * 6);
-  spray += rng.normal(0, 6.5 + (1 - contact01) * 4.5);
+  spray += rng.normal(0, (6.5 + (1 - contact01) * 4.5) * noise);
   spray = clamp(spray, -68, 68);
 
   // --- Spin ----------------------------------------------------------------
@@ -240,6 +288,7 @@ export function resolveSwing(input: SwingInput): ContactResult {
   else grade = 'weak';
 
   return {
+    ...base,
     grade,
     quality,
     exitVelo,
@@ -247,11 +296,24 @@ export function resolveSwing(input: SwingInput): ContactResult {
     sprayAngle: spray,
     spin,
     sideSpin,
-    timingError: input.timingError,
-    vertMiss: dy,
-    horizMiss: dx,
     note: describeContact(grade, tn, vertOff),
   };
+}
+
+/** Bat arrival vs ball arrival, bucketed for the timing bar. */
+export function timingLabelOf(tn: number): TimingLabel {
+  if (tn <= -0.75) return 'WAY EARLY';
+  if (tn <= -0.28) return 'EARLY';
+  if (tn < 0.28) return 'ON TIME';
+  if (tn < 0.75) return 'LATE';
+  return 'WAY LATE';
+}
+
+/** Cursor height vs where the ball crossed. Positive yn = the ball was higher. */
+export function planeLabelOf(yn: number): PlaneLabel {
+  if (yn >= 0.35) return 'UNDER IT';
+  if (yn <= -0.35) return 'OVER IT';
+  return 'ON PLANE';
 }
 
 function describeMiss(tn: number, xn: number, yn: number): string {

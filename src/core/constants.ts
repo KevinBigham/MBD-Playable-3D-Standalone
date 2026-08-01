@@ -31,11 +31,33 @@ export const BASE_POS: ReadonlyArray<{ x: number; z: number }> = [
   BASES.HOME,
 ];
 
-export const MOUND_Z = 18.44; // 60 ft 6 in
+/**
+ * THE MOUND IS DELIBERATELY DEEP.
+ *
+ * Regulation is 60 ft 6 in. The Meridian Circuit plays at 68 ft, and that is a
+ * design decision rather than an error.
+ *
+ * A real hitter gets about 0.42 s from release to the plate and has spent two
+ * decades training for it. A player at a keyboard has to read the pitch, move a
+ * cursor to it and commit a swing in the same window, and at regulation depth
+ * that window is simply too short to feel like a decision — it feels like a
+ * reflex test you keep failing.
+ *
+ * Moving the rubber back buys the hitter ~15% more time (0.42 s to 0.48 s on a
+ * fastball) while keeping the physics completely honest: the ball travels at
+ * exactly the speed the radar readout claims, over a longer path. The
+ * alternative — quietly stretching the flight clock, or slowing the ball but
+ * still printing 95 on the scoreboard — would be lying to the player.
+ *
+ * The CPU hitter gains nothing from this. Its read is budgeted in seconds
+ * before arrival (see `react` in cpuBatting), not as a fraction of the flight,
+ * so a longer trip moves its decision point later by exactly the same amount.
+ */
+export const MOUND_Z = 20.9; // 68 ft
 export const MOUND_HEIGHT = 0.254;
 
 /** Ball is released in front of the rubber, from roughly shoulder height. */
-export const RELEASE_Z = 16.6;
+export const RELEASE_Z = 19.0;
 export const RELEASE_Y = 1.85;
 
 /** The plane the batter actually makes contact on, just in front of the plate. */
@@ -75,6 +97,24 @@ export const TICK_DT = 1 / TICK_HZ;
 export const MAX_FRAME_DT = 0.25;
 
 export const OUTFIELD_GRASS_RADIUS = 140;
+
+/**
+ * Documented, human-only presentation assist, shared by the plate view and the
+ * ball renderer so the two never disagree.
+ *
+ * The value is the fraction of the pitch's flight that must elapse before the
+ * hitter is shown what the pitch is and where it is going to cross. Rookie
+ * shows it early enough to react to; Pro shows it late enough that you have
+ * already had to commit; on Ace it is never shown at all.
+ *
+ * This changes nothing about the ball. The CPU hitter reads pitches through its
+ * own noisy estimate in ai.ts and receives none of this.
+ */
+export const PITCH_TELL_REVEAL: Record<'rookie' | 'pro' | 'allstar', number> = {
+  rookie: 0.34,
+  pro: 0.62,
+  allstar: 2,
+};
 
 /** Player movement caps, m/s, before attribute scaling. */
 export const RUNNER_BASE_SPEED = 6.4;

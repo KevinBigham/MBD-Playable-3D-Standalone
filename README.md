@@ -11,7 +11,10 @@ field, somebody pressed a button to make it happen.
 MOONSHOT NINE is a spiritual successor to the fast, personality-filled console
 baseball games of the late 1990s. Everything in it — the league, the players,
 the parks, the art, the sound, the music and the code — is original and
-generated at runtime. No third-party game assets are used anywhere.
+generated at runtime. No third-party game assets are used anywhere: there is not
+one binary art or audio file in `src/`. Players are jointed low-poly models built
+from primitives, ballparks are generated from their own fence curves, every sound
+is synthesised by the Web Audio API, and type is set in system fonts.
 
 ---
 
@@ -61,6 +64,30 @@ switches fielder, LT is the modifier, Start pauses. Two pads = two players.
 
 Every control can be rebound from **Controls** in the main menu or the pause
 menu. Full detail lives in [CONTROLS.md](CONTROLS.md).
+
+## The plate view
+
+The at-bat is framed by a long lens from behind the plate, and everything you
+need to win the duel is drawn on the strike zone itself:
+
+- **A real strike zone**, big and static, marked in thirds, sized to the hitter
+  standing in the box.
+- **Your contact cursor** at the true size of that hitter's sweet spot — it
+  shrinks when you commit to a power swing.
+- **A pitch tracker**: a numbered, colour-coded dot for every pitch of the at-bat
+  where it crossed. Three pitches in, you can see the pattern being worked on you.
+- **The ball's flight path**, filled in from the pitcher's hand in that pitch's
+  own colour once you have earned the read.
+- **A swing verdict** under the zone after every cut: a timing needle plus EARLY
+  or LATE, UNDER IT or OVER IT.
+- **For the pitcher**: an aim bracket at the crossing point, with a preview arc
+  for every pitch in the repertoire so you can pick a spot first and a shape
+  second.
+
+How much of the read you are given is the difficulty setting — Rookie shows it
+early, Pro shows it late, Ace never shows it. The CPU hitter receives none of it,
+and no ball physics change on any setting. The entire overlay can be switched off
+under **Settings → Plate view**.
 
 ## Modes
 
@@ -151,6 +178,10 @@ These are documented deliberately; none of them blocks a complete game.
 - **A created player replaces the weakest player at his position** on the club
   you assign him to, rather than expanding the roster. Roster sizes stay fixed
   so the league stays balanced.
+- **The catcher and umpire are not drawn during the at-bat.** The plate camera is
+  a long lens standing roughly where the umpire's head would be, and a figure
+  that close to it covers the strike zone rather than framing it. Both are drawn
+  in every other shot.
 
 ## Documentation
 

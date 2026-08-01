@@ -1,13 +1,11 @@
-import { CONTACT_Z } from '../core/constants';
 import { PITCHES } from '../data/pitches';
-import { zoneBounds } from '../sim/contact';
-import { swingProfile } from '../sim/contact';
 import { controllerFor, humanIsBatting, humanIsPitching } from '../sim/game';
 import type { GameState } from '../sim/state';
 import { battingSide, currentBatter, fieldingSide, lookupPlayer, teamOf } from '../sim/state';
 import { cssColor } from '../render/palette';
 import type { GameWorld } from '../render/world';
 import type { InputManager } from './input';
+import { PlateView } from './plateview';
 
 /**
  * In-game HUD.
@@ -31,10 +29,8 @@ export class Hud {
   private readoutBox!: HTMLDivElement;
   private feedbackBox!: HTMLDivElement;
   private lineBox!: HTMLDivElement;
-  private svg!: SVGSVGElement;
-  private zonePoly!: SVGPolygonElement;
-  private cursorEl!: SVGEllipseElement;
-  private aimEl!: SVGGElement;
+  private legendBox!: HTMLDivElement;
+  private plate = new PlateView();
   private feedbackT = 0;
   private feedbackText = '';
   private lastPitchLabel = '';
@@ -51,6 +47,12 @@ export class Hud {
   setLineScoreVisible(v: boolean): void {
     this.showLineScore = v;
     this.lineBox.style.display = v ? '' : 'none';
+  }
+
+  /** Turns the whole strike-zone overlay off for players who want a clean view. */
+  setPlateViewEnabled(v: boolean): void {
+    this.plate.setEnabled(v);
+    this.legendBox.dataset.off = v ? '' : '1';
   }
 
   private build(): void {
@@ -84,6 +86,14 @@ export class Hud {
       <div class="hud-banner"><div class="big"></div><div class="sub"></div></div>
       <div class="hud-pitches"></div>
       <div class="hud-readout"><div class="k">LAST PITCH</div><div class="v">—</div><div class="note"></div></div>
+      <div class="hud-legend">
+        <b>PITCH TRACKER</b>
+        <span class="lg" data-r="ball">BALL</span>
+        <span class="lg" data-r="called">STRIKE</span>
+        <span class="lg" data-r="swinging">WHIFF</span>
+        <span class="lg" data-r="foul">FOUL</span>
+        <span class="lg" data-r="inplay">IN PLAY</span>
+      </div>
       <div class="hud-feedback"></div>
       <div class="hud-prompts"></div>
     `;
@@ -95,39 +105,11 @@ export class Hud {
     this.readoutBox = this.root.querySelector('.hud-readout') as HTMLDivElement;
     this.feedbackBox = this.root.querySelector('.hud-feedback') as HTMLDivElement;
     this.lineBox = this.root.querySelector('.hud-linescore') as HTMLDivElement;
+    this.legendBox = this.root.querySelector('.hud-legend') as HTMLDivElement;
 
-    this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    this.svg.setAttribute('class', 'hud-zone');
-    this.svg.style.position = 'absolute';
-    this.svg.style.inset = '0';
-    this.svg.style.width = '100%';
-    this.svg.style.height = '100%';
-    this.svg.setAttribute('preserveAspectRatio', 'none');
-
-    this.zonePoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    this.zonePoly.setAttribute('fill', 'rgba(255,255,255,0.06)');
-    this.zonePoly.setAttribute('stroke', 'rgba(255,255,255,0.72)');
-    this.zonePoly.setAttribute('stroke-width', '2');
-    this.svg.appendChild(this.zonePoly);
-
-    this.aimEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    const cross1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    const cross2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    for (const l of [cross1, cross2]) {
-      l.setAttribute('stroke', '#5ce1ff');
-      l.setAttribute('stroke-width', '3');
-    }
-    this.aimEl.appendChild(cross1);
-    this.aimEl.appendChild(cross2);
-    this.svg.appendChild(this.aimEl);
-
-    this.cursorEl = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
-    this.cursorEl.setAttribute('fill', 'rgba(255,209,92,0.2)');
-    this.cursorEl.setAttribute('stroke', '#ffd15c');
-    this.cursorEl.setAttribute('stroke-width', '3');
-    this.svg.appendChild(this.cursorEl);
-
-    this.root.appendChild(this.svg);
+    // The plate view sits underneath the panels so a tracker dot can never
+    // cover the count or the prompts.
+    this.root.insertBefore(this.plate.root, this.root.firstChild);
   }
 
   flashFeedback(text: string, color = '#ffd15c'): void {
@@ -138,6 +120,15 @@ export class Hud {
 
   noteContact(text: string): void {
     this.lastContact = text;
+  }
+
+  /** Clears the carried-over last-pitch readout at the start of a new game. */
+  resetReadout(): void {
+    this.lastContact = '';
+    this.lastPitchLabel = '';
+    this.lastPitchSpeed = 0;
+    this.feedbackT = 0;
+    this.feedbackText = '';
   }
 
   // -------------------------------------------------------------------------
@@ -154,7 +145,14 @@ export class Hud {
     this.updatePrompts(state);
     this.updatePitchChips(state);
     this.updateReadout(state);
-    this.updateZone(state, world);
+    this.plate.update(state, world, this.promptBox.offsetTop);
+    this.legendBox.classList.toggle(
+      'on',
+      !this.legendBox.dataset.off &&
+        (humanIsBatting(state) || humanIsPitching(state)) &&
+        state.phase !== 'inplay' &&
+        state.pitchLog.length > 0,
+    );
 
     if (this.feedbackT > 0) {
       this.feedbackT -= dt;
@@ -244,12 +242,21 @@ export class Hud {
     const bar = this.matchupBox.querySelector('.stamina i') as HTMLElement;
     const arm = this.matchupBox.querySelector('.arm') as HTMLElement;
 
+    // Whoever is holding a controller needs to know, at a glance and without
+    // counting keys, which half of the duel is theirs. In a two-player game
+    // that swaps every half-inning, so it cannot be left implicit.
+    const you = humanIsBatting(state)
+      ? 'YOU BAT · '
+      : humanIsPitching(state)
+        ? 'YOU PITCH · '
+        : '';
+
     if (state.setup.practice) {
       who.textContent = 'PRACTICE — NOT SCORED';
       name.textContent = `${batter.firstName} ${batter.lastName}`;
       line.textContent = PRACTICE_HINTS[state.setup.practice];
     } else if (showPitcher) {
-      who.textContent = `AT BAT — #${batter.number} ${batter.primary}`;
+      who.textContent = `${you}AT BAT — #${batter.number} ${batter.primary}`;
       name.textContent = `${batter.firstName} ${batter.lastName}`;
       const l = state.stats[battingSide(state)].batting[batter.id];
       const today = l ? `${l.h}-${l.ab} TODAY` : '0-0 TODAY';
@@ -300,7 +307,13 @@ export class Hud {
       );
     } else if (state.phase === 'inplay' && pitching) {
       prompts.push(
-        [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'MOVE FIELDER'],
+        [
+          `${k('up')}${k('left')}${k('down')}${k('right')}`,
+          // Auto-fielding is silent otherwise, and a fielder running on its own
+          // while you hold the controls is exactly the kind of thing a player
+          // should never have to guess about.
+          state.autoFielding ? 'AUTO — MOVE TO TAKE OVER' : 'MOVE FIELDER',
+        ],
         [k('diamondRight'), 'THROW 1ST'],
         [k('diamondUp'), 'THROW 2ND'],
         [k('diamondLeft'), 'THROW 3RD'],
@@ -382,76 +395,14 @@ export class Hud {
       note.textContent = `${Math.round(state.play.launchAngle)}° · ${state.play.description}`;
     } else {
       k.textContent = 'LAST PITCH';
+      // Speed and pitch name together: the two facts a hitter needs to build a
+      // read, and the pair the tracker dot cannot show on its own.
       v.textContent = this.lastPitchSpeed
-        ? `${Math.round(this.lastPitchSpeed * MPH)} MPH`
+        ? `${Math.round(this.lastPitchSpeed * MPH)} ${this.lastPitchLabel.toUpperCase()}`
         : '—';
-      note.textContent = this.lastContact || this.lastPitchLabel;
-    }
-  }
-
-  private updateZone(state: GameState, world: GameWorld): void {
-    const show =
-      (state.phase === 'preplay' || state.phase === 'windup' || state.phase === 'pitch') &&
-      (humanIsBatting(state) || humanIsPitching(state));
-    this.svg.style.display = show ? '' : 'none';
-    if (!show) return;
-
-    const batter = currentBatter(state);
-    const z = zoneBounds(batter);
-    const w = this.root.clientWidth;
-    const h = this.root.clientHeight;
-
-    const corners = [
-      world.project(-z.halfWidth, z.top, CONTACT_Z),
-      world.project(z.halfWidth, z.top, CONTACT_Z),
-      world.project(z.halfWidth, z.bottom, CONTACT_Z),
-      world.project(-z.halfWidth, z.bottom, CONTACT_Z),
-    ];
-    this.zonePoly.setAttribute(
-      'points',
-      corners.map((c) => `${(c.x * w).toFixed(1)},${(c.y * h).toFixed(1)}`).join(' '),
-    );
-
-    // Batter's contact cursor, sized by the hitter's actual sweet spot.
-    if (humanIsBatting(state)) {
-      this.cursorEl.style.display = '';
-      const kind =
-        state.batter.swingKind === 'power'
-          ? 'power'
-          : state.batter.bunting
-            ? 'bunt'
-            : 'contact';
-      const prof = swingProfile(batter, kind, state.difficulty, true);
-      const c = world.project(state.batter.cx, state.batter.cy, CONTACT_Z);
-      const edgeX = world.project(state.batter.cx + prof.rx, state.batter.cy, CONTACT_Z);
-      const edgeY = world.project(state.batter.cx, state.batter.cy + prof.ry, CONTACT_Z);
-      this.cursorEl.setAttribute('cx', String(c.x * w));
-      this.cursorEl.setAttribute('cy', String(c.y * h));
-      this.cursorEl.setAttribute('rx', String(Math.abs(edgeX.x - c.x) * w));
-      this.cursorEl.setAttribute('ry', String(Math.abs(edgeY.y - c.y) * h));
-      this.cursorEl.setAttribute('stroke', kind === 'power' ? '#ff6b3d' : kind === 'bunt' ? '#7ee081' : '#ffd15c');
-    } else {
-      this.cursorEl.style.display = 'none';
-    }
-
-    // Pitcher's aim reticle.
-    if (humanIsPitching(state) && state.phase === 'preplay') {
-      this.aimEl.style.display = '';
-      const a = world.project(state.pitcher.aimX, state.pitcher.aimY, CONTACT_Z);
-      const px = a.x * w;
-      const py = a.y * h;
-      const r = 13;
-      const [l1, l2] = Array.from(this.aimEl.children) as SVGLineElement[];
-      l1.setAttribute('x1', String(px - r));
-      l1.setAttribute('y1', String(py));
-      l1.setAttribute('x2', String(px + r));
-      l1.setAttribute('y2', String(py));
-      l2.setAttribute('x1', String(px));
-      l2.setAttribute('y1', String(py - r));
-      l2.setAttribute('x2', String(px));
-      l2.setAttribute('y2', String(py + r));
-    } else {
-      this.aimEl.style.display = 'none';
+      const s = state.lastSwing;
+      note.textContent =
+        s && s.t > 0 ? `${s.timingLabel} · ${s.planeLabel}` : this.lastContact || '';
     }
   }
 

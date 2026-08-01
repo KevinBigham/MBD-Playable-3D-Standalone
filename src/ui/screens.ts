@@ -68,6 +68,8 @@ export interface GameSettings {
   cameraShake: boolean;
   reducedFlashing: boolean;
   showLineScore: boolean;
+  /** The strike-zone overlay, contact cursor and pitch tracker at the plate. */
+  plateView: boolean;
   highContrast: boolean;
   muted: boolean;
   quality: 'high' | 'balanced' | 'performance';
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   cameraShake: true,
   reducedFlashing: false,
   showLineScore: true,
+  plateView: true,
   highContrast: false,
   muted: false,
   quality: 'high',
@@ -769,7 +772,13 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
     app.saveSettings();
   };
   const toggle = (
-    key: 'cameraShake' | 'reducedFlashing' | 'showLineScore' | 'highContrast' | 'muted',
+    key:
+      | 'cameraShake'
+      | 'reducedFlashing'
+      | 'showLineScore'
+      | 'plateView'
+      | 'highContrast'
+      | 'muted',
   ) => () => {
     s[key] = !s[key];
     app.saveSettings();
@@ -830,6 +839,15 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
       onSelect: toggle('reducedFlashing'),
     },
     {
+      id: 'plate',
+      label: 'Plate view',
+      value: () => onOff(s.plateView),
+      hint: 'The strike zone, contact cursor, pitch tracker and swing feedback at the plate. Turn off for a clean camera; the game plays identically either way.',
+      onLeft: toggle('plateView'),
+      onRight: toggle('plateView'),
+      onSelect: toggle('plateView'),
+    },
+    {
       id: 'line',
       label: 'Line score on HUD',
       value: () => onOff(s.showLineScore),
@@ -870,6 +888,7 @@ export function settingsSummaryHtml(app: AppApi): string {
       <tr><td style="text-align:left">Camera shake</td><td>${yn(s.cameraShake)}</td></tr>
       <tr><td style="text-align:left">High contrast HUD</td><td>${yn(s.highContrast)}</td></tr>
       <tr><td style="text-align:left">Reduced flashing</td><td>${yn(s.reducedFlashing)}</td></tr>
+      <tr><td style="text-align:left">Plate view</td><td>${yn(s.plateView)}</td></tr>
       <tr><td style="text-align:left">Line score on HUD</td><td>${yn(s.showLineScore)}</td></tr>
       <tr><td style="text-align:left">Graphics</td><td>${s.quality.toUpperCase()}</td></tr>
       <tr><td style="text-align:left">Last difficulty</td><td>${DIFFICULTY[s.lastDifficulty].label}</td></tr>

@@ -62,11 +62,34 @@ src/
     audio.ts, music.ts
 
   ui/           DOM. menus, HUD, input, app shell
-    input.ts, hud.ts, screens.ts, app.ts
+    input.ts, hud.ts, plateview.ts, screens.ts, app.ts
 
   tests/        vitest
 scripts/        simulate, tune-physics, verify-fixes, capture
 ```
+
+## The plate view is a reader, not a writer
+
+`ui/plateview.ts` draws the strike zone, the contact cursor, the pitch tracker,
+the live flight path and the swing verdict. It is a pure function of `GameState`
+plus one call into `GameWorld.project()`, and it never writes to either. Deleting
+it would not change a single pitch.
+
+Two pieces of state exist solely to feed it — `GameState.pitchLog` and
+`GameState.lastSwing` — and both are marked display-only where they are declared.
+No rule, no AI and no statistic reads them. They are inside `GameState` rather
+than beside it so that a headless run produces them too, which is what lets
+`plate.test.ts` assert that the dots the player sees match the game that was
+actually played.
+
+Two constants are deliberately shared rather than duplicated, because a copy that
+drifts is worse than no copy at all:
+
+- `PITCH_TELL_REVEAL` in `core/constants.ts` gates the colour tell, the flight
+  arc and the crossing marker, and is read by both `plateview.ts` and
+  `render/world.ts`
+- `pitchBreak()` in `data/pitches.ts` is the single source of a pitch's movement,
+  called by `sim/game.ts` to launch the ball and by `plateview.ts` to preview it
 
 ## Determinism
 

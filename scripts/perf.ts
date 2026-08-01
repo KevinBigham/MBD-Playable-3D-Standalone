@@ -65,8 +65,16 @@ async function main(): Promise<void> {
     `fps over ${SECONDS}s of live play — min ${samples[0].toFixed(1)}  p5 ${p5.toFixed(1)}  mean ${mean.toFixed(1)}  max ${samples[samples.length - 1].toFixed(1)}`,
   );
 
-  // Leak check: eight games back to back.
-  const rows: { game: number; heapMB: number; sceneChildren: number }[] = [];
+  // Leak check: eight games back to back. GPU geometries and HUD nodes are
+  // counted alongside the heap because neither shows up in usedJSHeapSize —
+  // an earlier build leaked 1500 geometries with a completely flat heap.
+  const rows: {
+    game: number;
+    heapMB: number;
+    sceneChildren: number;
+    geometries: number;
+    hudNodes: number;
+  }[] = [];
   const stadiums = [
     'anchor-yard',
     'sandpit',
@@ -99,24 +107,33 @@ async function main(): Promise<void> {
       const w = window as any;
       if (w.gc) w.gc();
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
+      const info = w.moonshot.world.renderer.info.memory;
       return {
         heapMB: mem ? mem.usedJSHeapSize / 1048576 : -1,
         sceneChildren: w.moonshot.world.scene.children.length,
+        geometries: info.geometries as number,
+        hudNodes: document.querySelectorAll('#hud *').length,
       };
     });
     rows.push({ game: i + 1, ...snap });
   }
 
-  console.log('\ngame  heap(MB)  scene children');
+  console.log('\ngame  heap(MB)  scene children  GPU geometries  HUD nodes');
   for (const r of rows) {
-    console.log(`${String(r.game).padStart(4)}  ${r.heapMB.toFixed(1).padStart(8)}  ${String(r.sceneChildren).padStart(14)}`);
+    console.log(
+      `${String(r.game).padStart(4)}  ${r.heapMB.toFixed(1).padStart(8)}  ` +
+        `${String(r.sceneChildren).padStart(14)}  ${String(r.geometries).padStart(14)}  ` +
+        `${String(r.hudNodes).padStart(9)}`,
+    );
   }
   const first = rows[0];
   const last = rows[rows.length - 1];
   const grew = last.heapMB - first.heapMB;
   console.log(
     `\nheap change across 8 games: ${grew >= 0 ? '+' : ''}${grew.toFixed(1)} MB` +
-      `   scene children ${first.sceneChildren} -> ${last.sceneChildren}`,
+      `   scene children ${first.sceneChildren} -> ${last.sceneChildren}` +
+      `   geometries ${first.geometries} -> ${last.geometries}` +
+      `   HUD nodes ${first.hudNodes} -> ${last.hudNodes}`,
   );
   console.log(`console errors: ${errors.length}`);
   for (const e of errors.slice(0, 8)) console.log('  ' + e);

@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import type { Stadium, Team } from '../core/types';
-import { CONTACT_Z, MOUND_Z, clamp01 } from '../core/constants';
+import { CONTACT_Z, MOUND_Z, PITCH_TELL_REVEAL, clamp01 } from '../core/constants';
+import { PITCHES } from '../data/pitches';
 import { batterBoxX } from '../sim/contact';
+import { humanIsPitching } from '../sim/game';
 import { horizontalDist } from '../sim/physics';
 import { runnerPos } from '../sim/runners';
 import type { GameEvent, GameState } from '../sim/state';
 import { fieldingSide, lookupPlayer } from '../sim/state';
-import { BallActor, PlayerActor, type Pose, actorColorsFor } from './actors';
+import { BallActor, type Headgear, PlayerActor, type Pose, actorColorsFor } from './actors';
 import type { Ball } from '../sim/physics';
 import { CameraDirector } from './camera';
 import { ImpactRings, ParticleField } from './fx';
@@ -18,6 +20,16 @@ import { flatMat, shade } from './palette';
  * reads GameState every frame and never writes to it, which is what lets the
  * whole simulation run headless in tests.
  */
+
+const PROJECT_SCRATCH = new THREE.Vector3();
+
+/** Index of the catcher in GameState.fielders; mirrors CATCHER_SLOT in the sim. */
+const CATCHER_SLOT_RENDER = 1;
+
+/** True while the camera is the tight behind-the-plate duel shot. */
+function nearPlateShot(state: GameState): boolean {
+  return state.phase === 'preplay' || state.phase === 'windup' || state.phase === 'pitch';
+}
 
 interface ActorSlot {
   actor: PlayerActor;
@@ -34,6 +46,8 @@ export interface WorldQuality {
   pixelRatioCap: number;
   /** Fraction of the CSS resolution actually rendered, then upscaled. */
   renderScale: number;
+  /** Real cast shadows for players and the ball, instead of painted blobs. */
+  shadows: boolean;
 }
 
 /** The subset of derby state the renderer needs. */
@@ -51,6 +65,7 @@ export class GameWorld {
   readonly director: CameraDirector;
 
   private stadiumBuild: StadiumBuild | null = null;
+  private skyDome: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial> | null = null;
   private ball = new BallActor();
   private particles = new ParticleField();
   private rings = new ImpactRings();
@@ -67,6 +82,7 @@ export class GameWorld {
 
   private hemi: THREE.HemisphereLight;
   private sun: THREE.DirectionalLight;
+  private readonly sunTarget = new THREE.Object3D();
   private fill: THREE.DirectionalLight;
 
   private lastEventId = 0;
@@ -77,6 +93,7 @@ export class GameWorld {
     particles: true,
     pixelRatioCap: 2,
     renderScale: 1,
+    shadows: true,
   };
   private night = false;
   private teams: { away: Team; home: Team } | null = null;
@@ -88,12 +105,37 @@ export class GameWorld {
       powerPreference: 'high-performance',
     });
     this.renderer.setClearColor(0x87ceeb, 1);
+    // Soft-edged shadow maps. The map is deliberately small and tightly framed
+    // (see loadMatch) — it only ever has to cover the part of the field players
+    // are standing on, so 1024 is plenty and costs one cheap extra pass.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.director = new CameraDirector(canvas.clientWidth / Math.max(1, canvas.clientHeight));
 
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x445544, 1.15);
     this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff3d6, 1.0);
     this.sun.position.set(-60, 90, -40);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(1024, 1024);
+    // An orthographic volume around the infield and the near outfield. Anything
+    // wider washes the resolution out into mush; anything narrower and a fielder
+    // walks out of his own shadow.
+    const sc = this.sun.shadow.camera;
+    sc.left = -48;
+    sc.right = 48;
+    sc.top = 52;
+    sc.bottom = -34;
+    sc.near = 20;
+    sc.far = 260;
+    sc.updateProjectionMatrix();
+    this.sun.shadow.bias = -0.0016;
+    this.sun.shadow.normalBias = 0.03;
+    // The light has to be aimed at the diamond rather than at the origin of the
+    // world, or the shadow volume sits behind home plate looking at nothing.
+    this.sunTarget.position.set(0, 0, 26);
+    this.scene.add(this.sunTarget);
+    this.sun.target = this.sunTarget;
     this.scene.add(this.sun);
     // Fill from behind the plate so players never silhouette into mush.
     this.fill = new THREE.DirectionalLight(0xcfe4ff, 0.5);
@@ -163,7 +205,19 @@ export class GameWorld {
 
   setQuality(q: Partial<WorldQuality>): void {
     Object.assign(this.quality, q);
+    this.applyShadowQuality();
     this.resize(this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight);
+  }
+
+  private applyShadowQuality(): void {
+    const on = this.quality.shadows;
+    this.renderer.shadowMap.enabled = on;
+    this.sun.castShadow = on;
+    for (const s of [...this.fielders, ...this.runners]) s.actor.setShadows(on);
+    this.batter?.actor.setShadows(on);
+    this.umpire?.setShadows(on);
+    this.ball.setShadows(on);
+    if (this.stadiumBuild) this.stadiumBuild.setShadowReceive(on);
   }
 
   setShakeEnabled(v: boolean): void {
@@ -189,11 +243,16 @@ export class GameWorld {
     this.teams = { away, home };
 
     this.stadiumBuild = buildStadium(stadium, this.night);
+    this.stadiumBuild.setShadowReceive(this.quality.shadows);
     this.scene.add(this.stadiumBuild.root);
 
     const sky = this.night ? stadium.palette.skyNight : stadium.palette.sky;
     this.renderer.setClearColor(sky, 1);
     this.scene.fog = new THREE.Fog(sky, 190, 460);
+    // A flat clear colour reads as a wall of paint behind the park. A gradient
+    // from a warmer horizon up to a deeper zenith costs one 32-triangle dome and
+    // is most of the difference between "3-D scene" and "sky".
+    this.applySkyDome(sky);
 
     // Bright and flat by design: the reference era lit its ballparks like a
     // toy, and a murky field makes the ball impossible to track.
@@ -225,6 +284,44 @@ export class GameWorld {
     this.ball.clearTrail();
   }
 
+  /**
+   * Vertical gradient sky. Built once and recoloured per park by rewriting the
+   * vertex colours in place, so switching ballparks allocates nothing.
+   */
+  private applySkyDome(sky: number): void {
+    if (!this.skyDome) {
+      const geo = new THREE.SphereGeometry(620, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      geo.setAttribute(
+        'color',
+        new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3),
+      );
+      this.skyDome = new THREE.Mesh(
+        geo,
+        new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          side: THREE.BackSide,
+          depthWrite: false,
+          fog: false,
+        }),
+      );
+      this.skyDome.renderOrder = -1;
+      this.scene.add(this.skyDome);
+    }
+    const geo = this.skyDome.geometry;
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const col = geo.attributes.color as THREE.BufferAttribute;
+    const horizon = new THREE.Color(shade(sky, this.night ? 0.16 : 0.3));
+    const zenith = new THREE.Color(shade(sky, this.night ? -0.42 : -0.26));
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      // 0 at the horizon, 1 straight up.
+      const t = clamp01(pos.getY(i) / 620);
+      c.copy(horizon).lerp(zenith, Math.pow(t, 0.65));
+      col.setXYZ(i, c.r, c.g, c.b);
+    }
+    col.needsUpdate = true;
+  }
+
   private unloadStadium(): void {
     if (!this.stadiumBuild) return;
     this.scene.remove(this.stadiumBuild.root);
@@ -240,14 +337,15 @@ export class GameWorld {
     this.batter = null;
   }
 
-  private makeActor(playerId: string, side: 'away' | 'home'): ActorSlot {
+  private makeActor(playerId: string, side: 'away' | 'home', gear: Headgear = 'cap'): ActorSlot {
     const team = side === 'away' ? this.teams!.away : this.teams!.home;
     const player =
       team.players.find((p) => p.id === playerId) ??
       this.teams!.away.players.find((p) => p.id === playerId) ??
       this.teams!.home.players.find((p) => p.id === playerId) ??
       team.players[0];
-    const actor = new PlayerActor(actorColorsFor(player, team), player.body);
+    const actor = new PlayerActor(actorColorsFor(player, team), player.body, gear);
+    actor.setShadows(this.quality.shadows);
     this.scene.add(actor.group);
     return { actor, playerId, pose: 'idle', poseT: 0, lastX: 0, lastZ: 0 };
   }
@@ -258,6 +356,7 @@ export class GameWorld {
       { jersey: 0x232838, trim: 0x11151f, accent: 0x8f98aa, skin: 0xc68642 },
       'stocky',
     );
+    this.umpire.setShadows(this.quality.shadows);
     this.scene.add(this.umpire.group);
   }
 
@@ -429,8 +528,16 @@ export class GameWorld {
             ? clamp01(state.phaseT / 0.42)
             : clamp01(state.phaseT / 0.28);
       } else if (i === 1) {
-        pose = 'fieldReady';
+        pose = state.phase === 'inplay' ? 'fieldReady' : 'crouch';
       }
+
+      // The plate camera is a long lens roughly where the umpire's head would
+      // be. Anything standing between it and the plate is not a character in
+      // the shot, it is a wall: a 1.4 m catcher three metres from the lens
+      // covers most of the screen, including the strike zone the hitter is
+      // trying to read. Both near-plate figures are therefore drawn in every
+      // shot except this one. See the 'batting' shot in camera.ts.
+      s.actor.setVisible(!(nearPlateShot(state) && i === CATCHER_SLOT_RENDER));
 
       // Fielders face the ball when it is live, otherwise the plate.
       const live = state.phase === 'inplay';
@@ -455,7 +562,7 @@ export class GameWorld {
     }
     if (!this.batter || this.batter.playerId !== batterId) {
       this.batter?.actor.dispose();
-      this.batter = this.makeActor(batterId, side);
+      this.batter = this.makeActor(batterId, side, 'helmet');
     }
     const batter = lookupPlayer(state, batterId);
     const pitcher = lookupPlayer(state, state.pitcher.playerId);
@@ -488,15 +595,18 @@ export class GameWorld {
     });
 
     this.ensureUmpire();
-    this.umpire!.setVisible(true);
-    this.umpire!.update(dt, {
-      x: -0.66,
-      z: -3.45,
-      speed: 0,
-      facing: 0.12,
-      pose: 'fieldReady',
-      poseT: 0,
-    });
+    const atThePlate = nearPlateShot(state);
+    this.umpire!.setVisible(!atThePlate);
+    if (!atThePlate) {
+      this.umpire!.update(dt, {
+        x: -0.66,
+        z: -3.45,
+        speed: 0,
+        facing: 0.12,
+        pose: 'fieldReady',
+        poseT: 0,
+      });
+    }
   }
 
   private syncRunners(dt: number, state: GameState): void {
@@ -505,7 +615,7 @@ export class GameWorld {
     const live = state.runners.filter((r) => !r.out && !r.scored);
 
     while (this.runners.length < live.length) {
-      this.runners.push(this.makeActor(live[this.runners.length].playerId, side));
+      this.runners.push(this.makeActor(live[this.runners.length].playerId, side, 'helmet'));
     }
     for (let i = 0; i < this.runners.length; i++) {
       const slot = this.runners[i];
@@ -516,7 +626,7 @@ export class GameWorld {
       const r = live[i];
       if (slot.playerId !== r.playerId) {
         slot.actor.dispose();
-        this.runners[i] = this.makeActor(r.playerId, side);
+        this.runners[i] = this.makeActor(r.playerId, side, 'helmet');
       }
       const s = this.runners[i];
       s.actor.setVisible(true);
@@ -562,11 +672,23 @@ export class GameWorld {
     }
 
     if (b.mode === 'pitch' && state.currentPitch) {
-      this.ball.setTrailColor(0xffffff, 0.35);
+      const info = state.currentPitch;
+      // Spin recognition, difficulty-gated exactly like the plate view's
+      // tracker: the trail flashes the pitch's own colour once the hitter has
+      // earned the read. A human on the mound always sees their own pitch.
+      const u = clamp01(b.t / Math.max(0.001, info.T));
+      const reveal = humanIsPitching(state) ? 0 : PITCH_TELL_REVEAL[state.difficulty];
+      const tell = u >= reveal;
+      this.ball.setTrailColor(tell ? PITCHES[info.type].color : 0xffffff, tell ? 0.9 : 0.4);
+      // Grows as it comes: the size cue is what sells the closing distance
+      // through a long lens.
+      this.ball.setScale(1.45 + u * 0.5);
     } else if (b.mode === 'batted') {
       this.ball.setTrailColor(0xffe14d, 0.6);
+      this.ball.setScale(1.15);
     } else {
       this.ball.setTrailColor(0xffffff, 0.28);
+      this.ball.setScale(1);
     }
 
     if (state.phase === 'preplay' || state.phase === 'windup' || state.phase === 'deadball') {
@@ -654,10 +776,15 @@ export class GameWorld {
     return this.crowdEnergy;
   }
 
-  /** Projects a world point to normalised screen coordinates for HUD markers. */
+  /**
+   * Projects a world point to normalised screen coordinates for HUD markers.
+   * The plate view calls this ~50 times a frame, so it reuses one scratch
+   * vector rather than allocating; the returned object is a fresh literal
+   * because callers keep them.
+   */
   project(x: number, y: number, z: number): { x: number; y: number; behind: boolean } {
-    const v = new THREE.Vector3(x, y, z).project(this.director.camera);
-    return { x: (v.x * 0.5 + 0.5), y: (-v.y * 0.5 + 0.5), behind: v.z > 1 };
+    const v = PROJECT_SCRATCH.set(x, y, z).project(this.director.camera);
+    return { x: v.x * 0.5 + 0.5, y: -v.y * 0.5 + 0.5, behind: v.z > 1 };
   }
 
   /**
@@ -672,7 +799,8 @@ export class GameWorld {
 
     if (!this.batter || this.batter.playerId !== player.id) {
       this.batter?.actor.dispose();
-      const actor = new PlayerActor(actorColorsFor(player, team), player.body);
+      const actor = new PlayerActor(actorColorsFor(player, team), player.body, 'helmet');
+      actor.setShadows(this.quality.shadows);
       this.scene.add(actor.group);
       this.batter = { actor, playerId: player.id, pose: 'batStance', poseT: 0, lastX: 0, lastZ: 0 };
     }
@@ -699,6 +827,7 @@ export class GameWorld {
         { jersey: 0x3a4152, trim: 0x20242f, accent: 0xc9c6dd, skin: 0xe0ac69 },
         'average',
       );
+      this.derbyPitcher.setShadows(this.quality.shadows);
       this.scene.add(this.derbyPitcher.group);
     }
     this.derbyPitcher.update(dt, {

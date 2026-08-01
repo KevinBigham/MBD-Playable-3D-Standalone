@@ -83,19 +83,47 @@ drift and small inputs still register.
 
 **How contact works.** The bat arrives at the plate a fixed time after you press
 — 0.125 s for a contact swing, 0.165 s for a power swing. You are predicting
-where and when the ball will be, not reacting to where it is. Two errors decide
+where and when the ball will be, not reacting to where it is. The Meridian
+Circuit pitches from 68 feet rather than 60 feet 6 inches, which is a deliberate
+design choice: it gives you roughly half a second from release instead of four
+tenths, and the radar reading is still the ball's true speed. Two errors decide
 everything: how far the cursor is from where the ball crossed, and how far your
 timing was from the ball's arrival. Being under the ball lifts it; being over it
-beats it into the ground. Swinging early pulls; swinging late goes the other
-way. The feedback pip after every swing tells you which one got you.
+beats it into the ground. Swinging early pulls; swinging late goes the other way.
+
+Square one up and the result is close to predictable. Catch it off the end of the
+bat and it genuinely can go anywhere — the randomness in the model scales with
+how badly you missed, so aiming and timing are the whole game.
+
+### Reading the plate
+
+Everything you need is drawn on and around the strike zone.
+
+| What you see | What it means |
+|---|---|
+| **The white box** | The strike zone for *this* hitter — taller hitters get a taller one. Marked in thirds so you can work a spot rather than a vibe. |
+| **The yellow oval** | Your contact cursor, drawn at the true size of your hitter's sweet spot. It turns orange on a power swing (smaller) and green dashed on a bunt. |
+| **Numbered dots** | Every pitch of this at-bat, where it crossed. Colour says what it did — the legend at the bottom of the screen names all five. Three pitches in, you can see the pattern being worked on you. |
+| **The bright arc** | The ball's flight path. On Rookie and Pro it fills in from the pitcher's hand part-way through the pitch, in that pitch's own colour; on Ace you get a short tail and nothing else. |
+| **The ring on the zone** | Where the pitch is going to cross. Same assist, same timing — Rookie sees it early, Pro sees it late, Ace never sees it. |
+| **The needle under the zone** | Where your bat actually arrived. Green band = contact, amber = you foul it off, past that you missed. Two words say it plainly: EARLY or LATE, UNDER IT or OVER IT. |
+
+All of it can be switched off in **Settings → Plate view**. The game plays
+identically either way; you just do it blind.
 
 ### Pitching
 
 | Input | Effect |
 |---|---|
-| Move (before the pitch) | Moves the aim reticle. It marks **where the ball will cross the plate**, break included. |
+| Move (before the pitch) | Moves the aim bracket. It marks **where the ball will cross the plate**, break included. |
 | Diamond left / down / right / up | Throws pitch 1 / 2 / 3 / 4 from this pitcher's repertoire. The four chips at bottom-left show the pitch, its speed, and a warning when you have leaned on it too heavily. |
 | Move (during the flight) | Steers the ball. The effect saturates, so mashing a direction bends the pitch — it cannot teleport it. A pitcher with high Movement steers more. |
+
+While you are setting up, a coloured dashed arc runs into the target for **every
+pitch in your repertoire** — the colours match the chips at bottom-left, which
+carry the keys. Because you aim at the crossing point rather than the release
+point, you pick the spot first and the shape second: you can see that the slider
+arrives from your arm side while the curve falls into the same spot from above.
 
 Execution error comes from the pitcher's Control rating, his fatigue, the
 pitch's own wildness and how far outside you aimed. A tired pitcher loses both
@@ -105,6 +133,14 @@ The CPU hitter tracks how often you use each pitch. Lean on one and it starts
 sitting on it: your best pitch gets worse the more you love it.
 
 ### Fielding
+
+**You are always attached to the fielder chasing the ball.** Let go of the
+controls for half a second and that fielder carries on doing its job by itself;
+the prompt bar changes to **AUTO — MOVE TO TAKE OVER** so you can see it happen.
+Push any direction and you have it back instantly. Hold the ball without
+throwing for a little over a second and the throw gets made for you too. Nothing
+on the field ever waits for you.
+
 
 | Input | Effect |
 |---|---|

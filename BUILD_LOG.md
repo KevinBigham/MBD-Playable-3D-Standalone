@@ -15,7 +15,7 @@ Complete and playable end to end.
 - Local two-player on one keyboard, or with two gamepads
 - CPU plays complete games unassisted at three genuinely different difficulties
 - Seasons save automatically, survive a page reload and resume correctly
-- 148 automated tests pass; 100 CPU-versus-CPU games complete with zero
+- 159 automated tests pass; 120 CPU-versus-CPU games complete with zero
   anomalies and zero forced play resolutions
 - Two independent evaluators attacked the running build; every blocker and major
   finding is fixed and covered by a regression test
@@ -253,12 +253,150 @@ Final measured balance is in [GAME_DESIGN.md](GAME_DESIGN.md).
 
 ---
 
+## The plate upgrade
+
+The first release was reported as unreadable at the plate: too random, and
+impossible to tell what was happening where. Both halves of that were true, and
+they had different causes.
+
+### It was too random
+
+Every batted-ball term carried a fixed random component regardless of how well
+the ball was struck, so a perfectly squared-up swing and a mishit off the end of
+the bat were equally unpredictable. Aiming carefully and timing well bought
+nothing you could feel.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Identical swings gave visibly different results | Exit velocity, launch angle and spray each carried a fixed-σ draw | Noise now scales `0.3 + 0.7·(1 − quality)`: a barrel is near-deterministic, a mishit is not |
+| A given vertical miss was a coin flip between a line drive and a foul | The foul-back rule was a probability ramp from 0.5 to 1.0 sweet-spot radii | A threshold at 0.66 radii with a narrow jitter band that shrinks with Contact rating |
+| Removing the noise made squaring up pay too well — AVG .261 → .298, BABIP .316 → .356 | Every good swing now produced the same optimal line drive | Paid back with deterministic spread, not dice: launch angle now moves with timing (`−11°·timing`), and contact off the end of the bat loses up to 30% of exit velocity |
+
+The foul threshold was swept at 0.60 / 0.66 / 0.72 against `scripts/simulate.ts`;
+0.66 was the value that returned strikeout rate and foul rate to baseline. Final
+numbers, with a before-and-after column, are in [TEST_REPORT.md](TEST_REPORT.md).
+
+### It was impossible to read
+
+The strike zone existed, but as a thin outline occupying **6% of screen height**,
+drawn from a camera 13 m behind the plate through a 40° lens. There was no
+feedback after a swing beyond a one-line pip, no record of what had already been
+thrown, and a 40 m/s ball approaching head-on was a few pixels wide.
+
+| Problem | Fix |
+|---|---|
+| Zone at 6% of screen height | Rebuilt the shot around it: 25° lens, 2.6 m up, 5.4 m back, aimed so the zone sits at two thirds height with the release point inside the top of frame. Zone is now **21%** — 3.5× bigger |
+| The zone swam around the screen | The batting camera used to drift with the hitter's cursor. It is now dead centre and completely static |
+| The catcher and umpire covered the zone | At that focal length a 1.4 m figure three metres from the lens is a wall, not a character. Both are hidden for this shot only and drawn in every other one. The catcher also gained a proper crouch pose |
+| No sense of what the pitcher was doing | A numbered, colour-coded tracker dot for every pitch of the plate appearance, at its real crossing point, with a legend |
+| The ball was untrackable | Oversized pitched ball that grows as it closes, plus the flight path traced in the overlay from the same closed form the engine flies |
+| No idea why a swing failed | A timing needle and two words under the zone — EARLY/LATE, UNDER IT/OVER IT — with the bands drawn to that hitter's own tolerances |
+| Pitching was aim-and-hope | Every pitch in the repertoire draws its own preview arc into the target, in the colour of its HUD chip |
+| Unclear who controls what in two-player | The matchup panel now leads with YOU BAT / YOU PITCH |
+
+Three assists — the colour tell, the full flight arc and the crossing marker —
+are gated together on difficulty (34% of flight on Rookie, 62% on Pro, never on
+Ace) so information cannot leak at three different moments. The CPU receives none
+of them and the ball physics are identical on every setting. The whole overlay is
+switchable under Settings → Plate view.
+
+The zone position, the framing and the occlusion clearances were derived from the
+projection rather than eyeballed, then verified by screenshot at each step; the
+first two camera attempts put the zone at the bottom edge and the release point
+off the top of frame respectively, which is what the arithmetic in
+`camera.ts` now documents.
+
+---
+
+## The graphics pass
+
+Reported as still looking rough after the plate upgrade. The models were the
+problem, and the stands were the second problem.
+
+| Problem | Fix |
+|---|---|
+| Players were scarecrows — one box per limb, no shoulder, elbow or knee, so every pose read as a mannequin being rotated | Jointed skeleton: hips → knees → feet, torso → arms → elbows → hands, plus a shoulder yoke. All fourteen poses rewritten to drive the new joints |
+| A hip turn left the shoulders behind | Arms and head reparented from the root onto the torso, so the upper body rotates as one piece |
+| Trousers were derived from the club's trim colour, giving pink and lilac legs on half the league | Near-white trousers faintly tinted with the club accent; trim moved to stirrup socks and undersleeves |
+| Two bare forearms were the loudest blocks on the model | Undershirt sleeves, with skin only at the wrist and hand |
+| Everyone wore the same cap | Ear-flapped batting helmet for batters and runners, cap for everybody else |
+| Flat blob shadows under everyone | Real cast shadows from a 1024² map framed tightly on the infield. Blobs are now the fallback, never a second layer — except on the ball, where the blob is a gameplay aid for judging fly-ball height and the shadow volume does not reach the deep outfield |
+| The seating bowl was one flat dark slab with confetti scattered on it | Every tier gained a lit horizontal deck above its shaded riser, the crowd is four times denser with aisles, and a pale facade band caps the bowl |
+| Nothing beyond the outfield wall said "ballpark" | A centre-field scoreboard sized and coloured per park, emissive under the lights |
+| The outfield was one undifferentiated sheet of green | Warning track, on-deck circles |
+| The sky was a flat wall of paint | Vertical gradient dome, recoloured per park by rewriting vertex colours in place |
+| A ball in the corner could put the chase camera in row 20, watching the play through a screen of spectators | Both ball-chasing shots clamp their position back inside the fence, against the same fence curve the ball is tested against |
+
+Everything above is procedural. The repository still contains **no binary art
+asset of any kind** — the only binaries are the screenshots and the recording in
+`docs/`.
+
+The cost was measured, not assumed: frame rate is unchanged (min 73.0, mean 82.9
+against 76.0 / 81.9 before), the heap is flat across eight consecutive games, and
+the GPU geometry count moved from ~130 to ~220 and then stayed there. Cast
+shadows are the one genuinely expensive addition, so the Performance graphics
+setting drops them.
+
+---
+
+## Reported by a player, and what it turned out to be
+
+A batted ball simply stopped. The play hung for most of half a minute on a
+camera showing nothing but seats, and then the half-inning jumped. Three
+separate defects, and they compounded into one another.
+
+| Defect | Class | Cause | Fix |
+|---|---|---|---|
+| The play deadlocked after a hit | **Blocker** | The human on defence *is* the chaser, and everybody else is covering a base. A human who does not steer means nothing at all is pursuing the ball, so the play burned the full 26-second guard | Auto-fielding: 0.55 s idle and the fielder resumes chasing itself, 1.2 s holding the ball and the throw is made. Any input takes control straight back. `autofield.test.ts` plays whole games with a defence input frame that never moves |
+| The chase camera framed only crowd | **Major** | The eye sat *below* a high fly and looked up at it, putting the entire outfield behind the lens. A fielder cannot be steered to a ball they cannot see | The eye is now always above the ball, and the look point is pulled toward where the ball is coming down |
+| The batter's cap and helmet peak pointed backwards | Minor | The model's forward axis is +Z; the brim was authored at −Z | Flipped, and the helmet ear flap now mirrors with the batter's handedness so it is always on the side facing the pitcher |
+
+The first two are the interesting pair: a camera bug that on its own is cosmetic
+became a deadlock, because the thing it hid was the thing the player had to act
+on. The guard did its job — the game never actually broke — but a 26-second
+backstop firing is a failure, not a save.
+
+---
+
+## Pitch timing
+
+Also reported: too little time between release and the plate to do anything with.
+
+The mound moved from 60 ft 6 in to **68 ft**. A fastball now takes 0.48 s instead
+of 0.42 s. The two alternatives were both dishonest — stretching the flight clock
+while claiming 95 mph, or slowing the ball while the scoreboard still printed 95
+— and moving the rubber keeps the radar readout exactly true.
+
+The CPU is unaffected by construction: its read is budgeted in seconds *before
+arrival*, so a longer trip moves its decision point later by the same amount.
+Measured over 120 nine-inning games the whole change is inside the noise — .275
+average against .273, 21.5% strikeouts against 21.8%, zero anomalies.
+
+---
+
+## Models, second pass
+
+Pelvis so the legs attach to something, deltoid caps so the arms are not floating
+off the yoke, batting gloves (bare hands on the handle were the palest thing on
+the model and sat exactly where the eye goes), a jersey placket, a shadowed brow,
+shoe soles, bat grip tape, and a belly on the two heaviest builds so `stocky` and
+`huge` read as different men rather than the same man at two scales.
+
+That took a player to ~34 meshes and cost real frames: minimum fps fell from 73.0
+to **54.6**. The cause was the shadow pass running over every one of them — a
+button, a placket stripe, a shoe sole — for no visible pixel. Restricting casters
+to the fourteen big masses brought it back to **75.9 min / 86.0 mean**, better
+than before the pass started.
+
+---
+
 ## Tests performed
 
-- **Automated:** 136 Vitest tests across 11 files — RNG determinism, ball-flight
-  calibration and frame-rate independence, the swing model, baseball rules
-  driven through the real engine, runner invariants, season and cup integrity,
-  the derby, box-score bookkeeping, the player creator, and a 100-game batch.
+- **Automated:** 159 Vitest tests across 13 files — RNG determinism, ball-flight
+  calibration and frame-rate independence, the swing model, the plate upgrade's
+  noise ratio and overlay honesty, baseball rules driven through the real engine,
+  runner invariants, season and cup integrity, the derby, box-score bookkeeping,
+  the player creator, and a 100-game batch.
 - **Batch simulation:** repeated runs of `scripts/simulate.ts` at 3 and 9
   innings across all three difficulties, checking for deadlocks, invalid states
   and statistical drift.
@@ -274,8 +412,8 @@ Final measured balance is in [GAME_DESIGN.md](GAME_DESIGN.md).
   volume setters take effect, and that firing forty sounds in one frame throws
   nothing.
 
-Evidence: `docs/screenshots/` (14 stills) and `docs/recordings/gameplay.webm`,
-all produced by `scripts/capture.ts` from the production build.
+Evidence: `docs/screenshots/` and `docs/recordings/gameplay.webm`, all produced by
+`scripts/capture.ts` from the production build.
 
 ---
 

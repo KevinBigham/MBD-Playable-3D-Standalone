@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { MOUND_Z, clamp, clamp01 } from '../core/constants';
+import { MOUND_Z, clamp, clamp01, lerp } from '../core/constants';
+import { fenceAt } from '../data/stadiums';
 import type { GameState } from '../sim/state';
 import { horizontalDist } from '../sim/physics';
 
@@ -28,6 +29,27 @@ interface Shot {
   fov: number;
   /** 0..1 per second blend rate; higher snaps faster. */
   rate: number;
+}
+
+/**
+ * Pulls a camera position back inside the outfield wall.
+ *
+ * The chase shots are derived from the ball, and a ball in the corner or up
+ * against the fence can put the eye behind the wall — which used to mean the
+ * play was watched from somewhere in row 20, through a screen of spectators.
+ * Clamping the radius against the same fence curve the ball is tested against
+ * means it can never happen, in any of the eight parks.
+ */
+function keepInsideYard(eye: THREE.Vector3, state: GameState): void {
+  const r = horizontalDist(eye.x, eye.z);
+  if (r < 1) return;
+  const deg = (Math.atan2(eye.x, Math.max(0.0001, eye.z)) * 180) / Math.PI;
+  // Behind the plate the limit is the backstop rather than the outfield wall.
+  const limit = eye.z > 0 && Math.abs(deg) <= 45 ? fenceAt(state.stadium, deg).dist - 7 : 40;
+  if (r <= limit) return;
+  const k = limit / r;
+  eye.x *= k;
+  eye.z *= k;
 }
 
 export class CameraDirector {
@@ -146,15 +168,26 @@ export class CameraDirector {
       }
 
       case 'batting': {
-        // Classic behind-the-plate framing. High enough that the catcher and
-        // umpire sit low in frame instead of covering the strike zone, and
-        // shifted a touch with the hitter's cursor so the bat stays clear.
-        const side = state.batter.cx * 0.35;
+        // THE DUEL SHOT. Everything about this framing exists to make the
+        // strike zone big and stationary:
+        //
+        //   * a long lens (25deg) from just behind and above the catcher, which
+        //     is the real broadcast framing for exactly this reason — it puts
+        //     the zone at ~21% of screen height where a wide angle gave ~6%;
+        //   * aimed so the zone sits at about two thirds height, leaving the
+        //     release point comfortably inside the top of frame. Both ends of
+        //     the pitch have to be visible or the hitter cannot time anything;
+        //   * dead centre and completely static. The camera used to drift with
+        //     the hitter's cursor, which made the zone swim around the screen
+        //     and defeated the point of drawing one.
+        //
+        // The catcher crouches and the umpire is not drawn for this shot; see
+        // world.ts. Both of them stand inside the lens's near field.
         return {
-          eye: new THREE.Vector3(side + 0.35, 5.15, -13.4),
-          look: new THREE.Vector3(0, 1.15, 9.2),
-          fov: 40,
-          rate: 0.14,
+          eye: new THREE.Vector3(0, 2.6, -5.4),
+          look: new THREE.Vector3(0, 1.32, 0.62),
+          fov: 25,
+          rate: 0.22,
         };
       }
 
@@ -170,20 +203,33 @@ export class CameraDirector {
       }
 
       case 'outfield': {
-        // Trail the ball at a fixed distance rather than sitting near home, so
-        // the ball and the fielders converging on it fill the frame instead of
-        // a field of empty grass.
+        // Trail the ball rather than sitting near home, so the ball and the
+        // fielders converging on it fill the frame instead of empty grass.
+        //
+        // Two rules keep the grass in shot, and they exist because without them
+        // a high fly to the gap framed nothing but seats — the camera sat below
+        // the ball, looked up at it, and put the entire outfield behind the
+        // lens. A fielder cannot be steered to a ball they cannot see.
+        //
+        //   1. the eye is always ABOVE the ball, so the view angle is downward
+        //   2. the look point is pulled toward where the ball is coming DOWN,
+        //      which is the thing a fielder actually has to run to
         const d = Math.max(1, horizontalDist(ball.x, ball.z));
         const ux = ball.x / d;
         const uz = ball.z / d;
         const back = Math.min(42, d * 0.62);
+        const eye = new THREE.Vector3(
+          ball.x - ux * back,
+          Math.max(15, ball.y + 11),
+          ball.z - uz * back - 6,
+        );
+        keepInsideYard(eye, state);
+        const landing = state.predictT > 0.2;
+        const lx = landing ? lerp(ball.x, state.predictX, 0.4) : ball.x;
+        const lz = landing ? lerp(ball.z, state.predictZ, 0.4) : ball.z;
         return {
-          eye: new THREE.Vector3(
-            ball.x - ux * back,
-            Math.max(13, ball.y * 0.5 + 15),
-            ball.z - uz * back - 6,
-          ),
-          look: new THREE.Vector3(ball.x, Math.max(1.2, ball.y * 0.75), ball.z),
+          eye,
+          look: new THREE.Vector3(lx, Math.max(1.2, ball.y * 0.35), lz),
           fov: 52,
           rate: 0.1,
         };
@@ -192,8 +238,14 @@ export class CameraDirector {
       case 'homerun': {
         // Stay inside the park, behind and above the flight, so the shot reads
         // as the ball leaving the yard rather than a close-up of the seats.
+        const eye = new THREE.Vector3(
+          ball.x * 0.22 - 6,
+          Math.max(16, ball.y * 0.45 + 14),
+          ball.z * 0.2 - 30,
+        );
+        keepInsideYard(eye, state);
         return {
-          eye: new THREE.Vector3(ball.x * 0.22 - 6, Math.max(16, ball.y * 0.45 + 14), ball.z * 0.2 - 30),
+          eye,
           look: new THREE.Vector3(ball.x * 0.92, Math.max(3, ball.y * 0.85), ball.z * 0.94),
           fov: 50,
           rate: 0.08,

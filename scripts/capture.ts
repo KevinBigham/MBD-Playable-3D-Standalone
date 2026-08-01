@@ -26,8 +26,8 @@ const H = 900;
 mkdirSync(SHOT_DIR, { recursive: true });
 mkdirSync(VIDEO_DIR, { recursive: true });
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.waitForTimeout(380);
+async function shot(page: Page, name: string, settleMs = 380): Promise<void> {
+  if (settleMs > 0) await page.waitForTimeout(settleMs);
   await page.screenshot({ path: join(SHOT_DIR, `${name}.png`) });
   console.log(`  captured ${name}.png`);
 }
@@ -38,6 +38,63 @@ async function choose(page: Page, text: string): Promise<void> {
   await row.waitFor({ state: 'visible', timeout: 8000 });
   await row.click();
   await page.waitForTimeout(360);
+}
+
+/** Blocks until the engine reaches one of `phases`, or the timeout expires. */
+async function waitPhase(page: Page, phases: string[], maxMs = 15000): Promise<void> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) {
+    const p = await page.evaluate(
+      () => (window as unknown as { moonshot: { game?: { phase: string } } }).moonshot.game?.phase,
+    );
+    if (p && phases.includes(p)) return;
+    await page.waitForTimeout(30);
+  }
+}
+
+/** Fraction of the current pitch's flight already elapsed, or 0 if none. */
+async function flightProgress(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const g = (
+      window as unknown as {
+        moonshot: {
+          game?: { phase: string; ball: { t: number }; currentPitch: { T: number } | null };
+        };
+      }
+    ).moonshot.game;
+    if (!g || g.phase !== 'pitch' || !g.currentPitch) return 0;
+    return g.ball.t / g.currentPitch.T;
+  });
+}
+
+/**
+ * Captures a frame with a pitch in flight.
+ *
+ * A pitch lasts about 0.4 s and the game does not stop for the camera, so the
+ * naive "wait for the right moment, then screenshot" races the shutter and
+ * usually lands after the ball has already crossed. This fires early, then
+ * checks afterwards whether the ball really was still in the air; if it was
+ * not, it waits for the next pitch and tries again. Bounded, and it reports
+ * when it gives up rather than quietly shipping the wrong frame.
+ */
+async function shotInFlight(page: Page, name: string, target = 0.68, attempts = 14): Promise<void> {
+  // The first screenshot after an idle period is much slower than the rest, so
+  // one is thrown away before the timing matters.
+  await page.screenshot();
+  for (let i = 0; i < attempts; i++) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 20000 && (await flightProgress(page)) < target) {
+      await page.waitForTimeout(6);
+    }
+    await page.screenshot({ path: join(SHOT_DIR, `${name}.png`) });
+    const after = await flightProgress(page);
+    if (after > target && after <= 1) {
+      console.log(`  captured ${name}.png (ball ${Math.round(after * 100)}% to the plate)`);
+      return;
+    }
+    await page.waitForTimeout(120);
+  }
+  console.log(`  captured ${name}.png (WARNING: could not land the shutter mid-flight)`);
 }
 
 async function menu(page: Page): Promise<void> {
@@ -145,7 +202,10 @@ async function main(): Promise<void> {
     night: false,
     seed: 31337,
   });
-  await page.waitForTimeout(4400);
+  // Held until the pitcher is set, so the shot shows the aim bracket and the
+  // preview arc for every pitch in the repertoire rather than an empty zone.
+  await waitPhase(page, ['preplay']);
+  await page.waitForTimeout(700);
   await shot(page, '15-at-bat-pitching');
 
   await startGame(page, {
@@ -161,6 +221,10 @@ async function main(): Promise<void> {
   });
   await page.waitForTimeout(4600);
   await shot(page, '16-at-bat-night');
+
+  // A pitch on its way to the plate: the flight path, the crossing marker and
+  // the tracker dots from earlier in the at-bat all on screen together.
+  await shotInFlight(page, '21-plate-view-pitch');
 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(550);
@@ -179,30 +243,59 @@ async function main(): Promise<void> {
     night: false,
     seed: 5137,
   });
-  for (let i = 0; i < 60; i++) {
-    await page.waitForTimeout(350);
-    const inPlay = await page.evaluate(() => {
+  // A ball actually in the air and out into the outfield, so the shot shows the
+  // chase camera and the fielders converging rather than whatever happened to
+  // be on screen when a timeout expired.
+  let airborne = false;
+  for (let i = 0; i < 2200; i++) {
+    await page.waitForTimeout(35);
+    airborne = await page.evaluate(() => {
       const s = (
         window as unknown as {
-          moonshot: { game: { phase: string; ball: { mode: string; y: number } } };
+          moonshot: {
+            game: { phase: string; ball: { mode: string; x: number; y: number; z: number } };
+          };
         }
       ).moonshot.game;
-      return s.phase === 'inplay' && s.ball.mode === 'batted' && s.ball.y > 5;
+      const d = Math.hypot(s.ball.x, s.ball.z);
+      return s.phase === 'inplay' && s.ball.mode === 'batted' && s.ball.y > 6 && d > 28;
     });
-    if (inPlay) break;
+    if (airborne) break;
   }
-  await shot(page, '18-ball-in-play');
+  if (!airborne) console.log('  (warning: never caught a fly ball for 18-ball-in-play)');
+  await shot(page, '18-ball-in-play', 0);
 
-  for (let i = 0; i < 400; i++) {
-    await page.waitForTimeout(200);
-    const hr = await page.evaluate(
-      () =>
-        (window as unknown as { moonshot: { game?: { play?: { homeRunCelebration?: boolean } } } })
-          .moonshot.game?.play?.homeRunCelebration ?? false,
-    );
-    if (hr) break;
+  // Home runs are ~2 per nine innings, so a three-inning game can easily finish
+  // without one. Keep restarting hitter-friendly matchups until a ball actually
+  // leaves the yard, rather than shipping whatever was on screen when a timer
+  // ran out and calling the file 19-home-run.
+  let sawHomeRun = false;
+  const hrSeeds = [5137, 424242, 90210, 31415, 271828, 8675309];
+  for (const seed of hrSeeds) {
+    if (sawHomeRun) break;
+    await startGame(page, {
+      awayTeamId: 'prairierock',
+      homeTeamId: 'redwoodgrove',
+      stadiumId: 'the-foundry',
+      innings: 3,
+      difficulty: 'allstar',
+      awayControl: 'cpu',
+      homeControl: 'cpu',
+      night: false,
+      seed,
+    });
+    for (let i = 0; i < 600; i++) {
+      await page.waitForTimeout(80);
+      sawHomeRun = await page.evaluate(
+        () =>
+          (window as unknown as { moonshot: { game?: { play?: { homeRunCelebration?: boolean } } } })
+            .moonshot.game?.play?.homeRunCelebration ?? false,
+      );
+      if (sawHomeRun) break;
+    }
   }
-  await shot(page, '19-home-run');
+  if (!sawHomeRun) console.log('  (warning: no home run was hit for 19-home-run)');
+  await shot(page, '19-home-run', 0);
 
   for (let i = 0; i < 2600; i++) {
     await page.waitForTimeout(140);

@@ -142,3 +142,22 @@ export const ALL_PITCH_TYPES = Object.keys(PITCHES) as PitchType[];
 export function isChaotic(type: PitchType): boolean {
   return type === 'knuckler';
 }
+
+/**
+ * World-space break for a specific pitcher's version of a pitch, in metres at
+ * the plate. Shared by the engine (which launches the ball) and the plate view
+ * (which draws the shape before it is thrown) so the preview can never drift
+ * away from what the pitch actually does.
+ *
+ * `movement01` is the pitcher's movement rating on a 0..1 scale.
+ */
+export function pitchBreak(
+  type: PitchType,
+  throws: 'L' | 'R' | 'S',
+  movement01: number,
+): { breakX: number; breakY: number } {
+  const prof = PITCHES[type];
+  const armSign = throws === 'L' ? 1 : -1;
+  const scale = 0.7 + movement01 * 0.6;
+  return { breakX: prof.breakX * armSign * scale, breakY: prof.breakY * scale };
+}

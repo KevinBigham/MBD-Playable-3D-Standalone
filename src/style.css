@@ -885,7 +885,8 @@ body {
 .hud-feedback {
   position: absolute;
   left: 50%;
-  top: 46%;
+  /* Above the strike zone, which starts at ~55% of screen height. */
+  top: 38%;
   transform: translate(-50%, -50%);
   font-size: clamp(16px, 2.2vw, 30px);
   font-weight: 800;
@@ -895,9 +896,291 @@ body {
   pointer-events: none;
 }
 
-.hud-zone {
+/* ---------------------------------------------------------- plate view -- */
+
+/*
+ * The strike-zone overlay. Every stroke here is drawn twice — a dark casing
+ * under a bright line — because this sits on top of grass, dirt, a crowd or a
+ * night sky, and it has to read identically over all four.
+ */
+
+.plate-view {
   position: absolute;
+  inset: 0;
   pointer-events: none;
+}
+
+.plate-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.plate-view.spectating {
+  opacity: 0.55;
+}
+
+.pv-zone-shadow {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 9;
+  stroke-linejoin: miter;
+}
+
+.pv-zone-fill {
+  fill: rgba(120, 190, 255, 0.09);
+  stroke: none;
+}
+
+.pv-zone-edge {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 3;
+  stroke-linejoin: miter;
+}
+
+.pv-grid {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 6;
+}
+
+.pv-brackets {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 5;
+  stroke-linecap: square;
+  paint-order: stroke;
+}
+
+.pv-break {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 8 5;
+  opacity: 0.88;
+}
+
+.pv-dot circle {
+  stroke-width: 2.5;
+}
+
+.pv-dot text {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.pv-tracker-ring {
+  fill: none;
+  stroke-width: 3;
+}
+
+/* The live pitch path: a bright line inside a dark casing so it survives grass,
+   dirt and a night sky without changing colour. */
+.pv-flight-case {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.68);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pv-flight {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pv-aim-box {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 4.5;
+  stroke-linecap: square;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.9));
+}
+
+.pv-aim-dot {
+  fill: #ffffff;
+}
+
+.pv-cursor {
+  fill: rgba(255, 209, 92, 0.14);
+  stroke: var(--gold);
+  stroke-width: 3.5;
+}
+
+.pv-cursor[data-kind='power'] {
+  fill: rgba(255, 107, 61, 0.16);
+  stroke: #ff6b3d;
+  stroke-width: 4.5;
+}
+
+.pv-cursor[data-kind='bunt'] {
+  fill: rgba(126, 224, 129, 0.14);
+  stroke: #7ee081;
+  stroke-dasharray: 8 5;
+}
+
+.pv-cursor-cross {
+  stroke: #fff;
+  stroke-width: 2;
+  opacity: 0.85;
+}
+
+/* The verdict panel: what the bat actually did, anchored under the zone. */
+
+.pv-verdict {
+  position: absolute;
+  transform: translateX(-50%);
+  width: 210px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.pv-word {
+  font-size: clamp(17px, 1.9vw, 25px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.7);
+  color: var(--gold);
+}
+
+.pv-verdict[data-tone='good'] .pv-word {
+  color: #7ee081;
+}
+
+.pv-verdict[data-tone='bad'] .pv-word {
+  color: #ff5f6d;
+}
+
+.pv-sub {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #e8e2d5;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+}
+
+.pv-timing {
+  margin-top: 5px;
+}
+
+.pv-track {
+  position: relative;
+  height: 11px;
+  background: rgba(7, 11, 23, 0.86);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+/*
+ * The bands are the swing's own tolerance drawn to scale: the green centre is
+ * the window that makes contact, the amber shoulders are the window that fouls
+ * one off, and past that the bat is nowhere near the ball.
+ */
+.pv-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+/* +-1.184 windows = the foul threshold, on a bar that spans +-1.5. */
+.pv-band-late {
+  left: 10.5%;
+  right: 10.5%;
+  background: rgba(255, 209, 92, 0.5);
+}
+
+/* +-0.80 windows = the threshold for putting the ball in play. */
+.pv-band-good {
+  left: 23.3%;
+  right: 23.3%;
+  background: rgba(126, 224, 129, 0.62);
+}
+
+.pv-needle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+.pv-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* Legend for the tracker dots, so the colours never carry meaning alone. */
+
+.hud-legend {
+  position: absolute;
+  /* Clear of the prompt bar, which is centred, up to 92vw wide and wraps to
+     three lines on a small laptop screen. */
+  bottom: 124px;
+  left: 14px;
+  display: none;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 11px;
+  background: rgba(7, 11, 23, 0.84);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-left: 6px solid var(--gold);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.hud-legend.on {
+  display: flex;
+}
+
+.hud-legend b {
+  color: var(--ink-dim);
+  letter-spacing: 0.2em;
+}
+
+.hud-legend .lg::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  vertical-align: -1px;
+}
+
+.hud-legend .lg[data-r='ball']::before {
+  background: rgba(18, 26, 40, 0.55);
+  border-color: #8fd8ff;
+}
+.hud-legend .lg[data-r='called']::before {
+  background: #ff4d5e;
+  border-color: #ffd7dc;
+}
+.hud-legend .lg[data-r='swinging']::before {
+  background: #ff8a3d;
+  border-color: #ffe3c8;
+}
+.hud-legend .lg[data-r='foul']::before {
+  background: #ffd15c;
+  border-color: #fff4d2;
+}
+.hud-legend .lg[data-r='inplay']::before {
+  background: #7ee081;
+  border-color: #e2ffe3;
 }
 
 .hud-linescore {
@@ -1127,6 +1410,46 @@ body {
 
 .high-contrast .hud-linescore th {
   color: #e6e2d8;
+}
+
+.high-contrast .hud-legend {
+  background: #000000;
+  border-color: #ffffff;
+  border-width: 3px;
+}
+
+/* The zone is the one thing that must survive every background, so in high
+   contrast it goes to a solid white line over a solid black casing. */
+.high-contrast .pv-zone-shadow {
+  stroke: #000000;
+  stroke-width: 11;
+}
+
+.high-contrast .pv-zone-edge {
+  stroke: #ffffff;
+  stroke-width: 4;
+}
+
+.high-contrast .pv-zone-fill {
+  fill: rgba(0, 0, 0, 0.34);
+}
+
+.high-contrast .pv-grid {
+  stroke: rgba(255, 255, 255, 0.55);
+}
+
+.high-contrast .pv-verdict[data-tone='good'] .pv-word {
+  color: #9dff9f;
+}
+
+.high-contrast .pv-word,
+.high-contrast .pv-sub {
+  -webkit-text-stroke: 3px #000000;
+  paint-order: stroke fill;
+}
+
+.high-contrast .plate-view.spectating {
+  opacity: 0.8;
 }
 
 .high-contrast .hud-banner .big,

@@ -193,8 +193,12 @@ export class App implements AppApi {
       // nothing at all. This is what makes Performance mode actually help.
       renderScale:
         this.settings.quality === 'high' ? 1 : this.settings.quality === 'balanced' ? 0.8 : 0.6,
+      // Cast shadows are the single most expensive thing on the field — an
+      // extra depth pass over every player — so Performance drops them.
+      shadows: this.settings.quality !== 'performance',
     });
     this.hud.setLineScoreVisible(this.settings.showLineScore);
+    this.hud.setPlateViewEnabled(this.settings.plateView);
     this.uiRoot.classList.toggle('high-contrast', this.settings.highContrast);
     document.body.classList.toggle('reduced-motion', this.settings.reducedFlashing);
   }
@@ -376,7 +380,12 @@ export class App implements AppApi {
       this.hud.noteContact(text ?? '');
       return;
     }
-    if (kind === 'swingmiss' && text) this.hud.flashFeedback(text, '#ff5f6d');
+    // With the plate view on, the verdict panel already names the miss, in
+    // better words and right under the zone. Flashing "Way out in front" across
+    // the middle of the screen at the same time is the same sentence twice.
+    if (kind === 'swingmiss' && text && !this.settings.plateView) {
+      this.hud.flashFeedback(text, '#ff5f6d');
+    }
     if (kind === 'denied') {
       this.audio.playSfx('menuDenied');
       if (text) this.hud.flashFeedback(text, '#a9a294');
@@ -1611,6 +1620,10 @@ export class App implements AppApi {
     this.audio.playMusic('gameplay');
     this.uiRoot.appendChild(this.hud.root);
     this.hud.setLineScoreVisible(this.settings.showLineScore);
+    // The HUD outlives any one game, so its last-pitch readout has to be told
+    // the previous one is over or it opens the next game quoting a pitch that
+    // was thrown to somebody else.
+    this.hud.resetReadout();
   }
 
   private showPostgame(): void {

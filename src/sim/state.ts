@@ -146,6 +146,52 @@ export interface PitchInFlight {
   inZone: boolean;
   /** Total flight time. */
   T: number;
+  /**
+   * Where the pitch was *released* toward before break and steering, so the
+   * plate view can draw the shape the ball is going to take.
+   */
+  entryX: number;
+  entryY: number;
+}
+
+/** What a pitch did, once it is over. Presentation only — never read by rules. */
+export type PitchLogResult =
+  | 'ball'
+  | 'called'
+  | 'swinging'
+  | 'foul'
+  | 'inplay'
+  | 'hitbypitch';
+
+export interface PitchLogEntry {
+  type: PitchType;
+  /** Plate crossing point. */
+  x: number;
+  y: number;
+  speedMs: number;
+  inZone: boolean;
+  result: PitchLogResult;
+  /** The count *before* this pitch, so the log reads like a scorecard. */
+  balls: number;
+  strikes: number;
+}
+
+/**
+ * The last swing, kept alive for a second or so purely so the HUD can explain
+ * what went wrong. Nothing in the rules or the physics reads this.
+ */
+export interface SwingFeedback {
+  kind: SwingKind;
+  grade: string;
+  /** Signed, in units of the swing's own tolerance. */
+  timingNorm: number;
+  vertNorm: number;
+  horizNorm: number;
+  timingLabel: string;
+  planeLabel: string;
+  note: string;
+  /** Seconds of display life remaining. */
+  t: number;
 }
 
 export type PlayOutcome =
@@ -280,6 +326,10 @@ export interface GameState {
   batter: BatterState;
   pitcher: PitcherRuntime;
   currentPitch: PitchInFlight | null;
+  /** Every pitch of the current plate appearance, oldest first. Display only. */
+  pitchLog: PitchLogEntry[];
+  /** Display-only readout of the most recent swing; see SwingFeedback. */
+  lastSwing: SwingFeedback | null;
   play: PlayContext;
 
   events: GameEvent[];
@@ -300,6 +350,10 @@ export interface GameState {
   cpuSwingAt: number | null;
   /** Slot of the fielder currently pursuing the ball. */
   chaseSlot: number;
+  /** Seconds the human on defence has given no movement input. */
+  defenseIdleT: number;
+  /** True while the CPU is pursuing on the human's behalf; see updateDefense. */
+  autoFielding: boolean;
   /** Cached landing prediction, shared by fielder AI and the catch marker. */
   predictX: number;
   predictZ: number;
@@ -457,6 +511,8 @@ export function createGameState(setup: GameSetup, away: Team, home: Team): GameS
       ready: 0,
     },
     currentPitch: null,
+    pitchLog: [],
+    lastSwing: null,
     play: makePlayContext('', 'away'),
     events: [],
     eventSeq: 0,
@@ -468,6 +524,8 @@ export function createGameState(setup: GameSetup, away: Team, home: Team): GameS
     cpuRead: null,
     cpuSwingAt: null,
     chaseSlot: 0,
+    defenseIdleT: 0,
+    autoFielding: false,
     predictX: 0,
     predictZ: 0,
     predictT: 0,

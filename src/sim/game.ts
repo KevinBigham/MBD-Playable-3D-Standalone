@@ -10,7 +10,7 @@ import {
   dist,
 } from '../core/constants';
 import { FIELD_SLOTS, type PitchType, type Player } from '../core/types';
-import { PITCHES } from '../data/pitches';
+import { PITCHES, pitchBreak } from '../data/pitches';
 import { playerById } from '../data/teams';
 import {
   BALL_RADIUS,
@@ -71,6 +71,7 @@ import type { InputFrame, InputPair } from './input';
 import { emptyInput } from './input';
 import {
   type GameState,
+  type PitchLogResult,
   type PlayContext,
   type RunnerState,
   type Side,
@@ -109,6 +110,9 @@ export function stepGame(state: GameState, inputs: InputPair): void {
   state.clock += dt;
   state.phaseT += dt;
   if (state.banner.t > 0) state.banner.t = Math.max(0, state.banner.t - dt);
+  if (state.lastSwing && state.lastSwing.t > 0) {
+    state.lastSwing.t = Math.max(0, state.lastSwing.t - dt);
+  }
 
   switch (state.phase) {
     case 'lineup':
@@ -241,6 +245,10 @@ export function startAtBat(state: GameState): void {
   state.balls = 0;
   state.strikes = 0;
   state.currentPitch = null;
+  // The pitch tracker is per plate appearance: it should show this hitter's
+  // at-bat, not a rolling window across two of them.
+  state.pitchLog = [];
+  state.lastSwing = null;
 
   const pitcher = lookupPlayer(state, state.pitcher.playerId);
   state.batter = {
@@ -466,8 +474,9 @@ function beginWindup(state: GameState, type: PitchType, aimX: number, aimY: numb
 
   const armSign = pitcher.throws === 'L' ? 1 : -1;
   const moveScale = 0.7 + move01 * 0.6;
-  let breakX = prof.breakX * armSign * moveScale;
-  let breakY = prof.breakY * moveScale;
+  const nominal = pitchBreak(type, pitcher.throws, move01);
+  let breakX = nominal.breakX;
+  let breakY = nominal.breakY;
   if (type === 'knuckler') {
     breakX = state.rng.range(-0.42, 0.42) * moveScale;
     breakY = (-0.1 + state.rng.range(-0.3, 0.18)) * moveScale;
@@ -504,6 +513,11 @@ function beginWindup(state: GameState, type: PitchType, aimX: number, aimY: numb
     aimY,
     inZone: inStrikeZone(plateX, plateY, batter),
     T: state.ball.pitch!.T,
+    // Where the ball would cross with no break at all. The gap between this
+    // and (plateX, plateY) is exactly the movement, which is what the plate
+    // view draws as the break arc.
+    entryX: targetX,
+    entryY: targetY,
   };
 
   state.diag.pitches++;
@@ -630,6 +644,28 @@ function updatePitchFlight(state: GameState, dt: number, inputs: InputPair): voi
   idleFielders(state, dt);
 }
 
+/**
+ * Records the pitch that just finished on the at-bat tracker. Display only —
+ * the count, the rules and the box score are all handled elsewhere, and this
+ * deliberately runs before the count is updated so each dot carries the count
+ * it was thrown in.
+ */
+function logPitch(state: GameState, result: PitchLogResult): void {
+  const info = state.currentPitch;
+  if (!info) return;
+  state.pitchLog.push({
+    type: info.type,
+    x: info.plateX,
+    y: info.plateY,
+    speedMs: info.speedMs,
+    inZone: info.inZone,
+    result,
+    balls: state.balls,
+    strikes: state.strikes,
+  });
+  if (state.pitchLog.length > 24) state.pitchLog.shift();
+}
+
 function startSwing(state: GameState, kind: 'contact' | 'power' | 'bunt'): void {
   const bs = state.batter;
   bs.swingT = 0;
@@ -712,24 +748,41 @@ function resolveSwingNow(state: GameState, timingError: number, profile: ReturnT
   });
 
   state.diag.swings++;
+  // Every swing leaves a readable trace of *why* it did what it did.
+  state.lastSwing = {
+    kind: bs.swingKind,
+    grade: res.grade,
+    timingNorm: res.timingNorm,
+    vertNorm: res.vertNorm,
+    horizNorm: res.horizNorm,
+    timingLabel: res.timingLabel,
+    planeLabel: res.planeLabel,
+    note: res.note,
+    t: 1.6,
+  };
+
   if (res.grade === 'miss') {
     state.diag.swingMisses++;
     pushEvent(state, { kind: 'swingmiss', text: res.note });
+    logPitch(state, 'swinging');
     addStrike(state, 'swinging');
     return;
   }
   if (res.grade === 'foul') {
     state.diag.fouls++;
     pushEvent(state, { kind: 'foul', text: res.note, power: 0.25 });
+    logPitch(state, 'foul');
     addStrike(state, 'foul');
     return;
   }
   if (res.grade === 'foultip') {
     state.diag.fouls++;
     pushEvent(state, { kind: 'foul', text: res.note, power: 0.2 });
+    logPitch(state, 'foul');
     addStrike(state, 'foultip');
     return;
   }
+  logPitch(state, 'inplay');
 
   // Ball in play.
   const v = contactVelocity(res);
@@ -803,6 +856,7 @@ function resolveTakenPitch(state: GameState): void {
     info.plateY < 1.65 &&
     !info.inZone
   ) {
+    logPitch(state, 'hitbypitch');
     hitByPitch(state);
     return;
   }
@@ -810,11 +864,14 @@ function resolveTakenPitch(state: GameState): void {
   if (info.inZone && !state.batter.checked) {
     state.diag.calledStrikes++;
     pushEvent(state, { kind: 'strike', text: 'Called strike' });
+    logPitch(state, 'called');
     addStrike(state, 'called');
   } else if (info.inZone && state.batter.checked) {
     pushEvent(state, { kind: 'strike', text: 'Checked — strike' });
+    logPitch(state, 'called');
     addStrike(state, 'called');
   } else {
+    logPitch(state, 'ball');
     addBall(state);
   }
 }
@@ -1214,6 +1271,37 @@ function updateDefense(state: GameState, dt: number, inputs: InputPair): void {
     f.humanControlled = defInput !== null && f.slot === humanSlot;
   }
 
+  /*
+   * AUTO-FIELDING
+   *
+   * The human on defence is always attached to whichever fielder the coverage
+   * solver picked as the chaser — which means that if they stop steering, the
+   * one player who was going to run the ball down stops running. Nobody else
+   * takes over, because everybody else is covering a base. The ball then sits
+   * in the outfield until the 26-second play guard force-resolves it, which is
+   * exactly the deadlock a player hit: a fly ball, a camera they could not read,
+   * and half a minute of nothing.
+   *
+   * So: hands off the stick for half a second and the fielder resumes doing its
+   * job on its own. Touching a direction takes control straight back, with no
+   * cooldown. The HUD says which of the two is happening.
+   */
+  const acting =
+    !!defInput &&
+    (Math.abs(defInput.moveX) + Math.abs(defInput.moveZ) > 0.25 ||
+      defInput.base >= 0 ||
+      defInput.dive ||
+      defInput.switchFielder);
+  if (!defInput || acting) state.defenseIdleT = 0;
+  else state.defenseIdleT += dt;
+
+  // Chasing resumes quickly, because a ball nobody is running toward is dead
+  // time. Throwing waits longer — deciding where to go with it is a real
+  // decision and the player deserves a moment to make it.
+  const autoChase = !holder && !!defInput && state.defenseIdleT > 0.55;
+  const autoThrow = !!holder && !!defInput && state.defenseIdleT > 1.2;
+  state.autoFielding = autoChase || autoThrow;
+
   // --- Movement ------------------------------------------------------------
   for (const f of fielders) {
     if (f.reactDelay > 0 && !f.humanControlled) {
@@ -1221,14 +1309,16 @@ function updateDefense(state: GameState, dt: number, inputs: InputPair): void {
       continue;
     }
     if (f.humanControlled && defInput) {
-      driveFielder(f, dt, defInput.moveX, defInput.moveZ);
       if (defInput.dive && f.diveT <= 0) {
         const dx = ball.x - f.x;
         const dz = ball.z - f.z;
         startDive(f, dx, dz);
         if (ball.y > 1.6) f.jumpT = 0.5;
       }
-      continue;
+      if (!autoChase || f.diveT > 0) {
+        driveFielder(f, dt, defInput.moveX, defInput.moveZ);
+        continue;
+      }
     }
     moveFielderByRole(state, f, dt);
   }
@@ -1244,6 +1334,11 @@ function updateDefense(state: GameState, dt: number, inputs: InputPair): void {
       if (defInput.base >= 0) {
         if (newHolder.transfer > 0) pushEvent(state, { kind: 'denied', text: 'Still gathering it' });
         else executeThrow(state, newHolder, defInput.base);
+      } else if (autoThrow && newHolder.transfer <= 0) {
+        // Fetching the ball and then standing on it is not much better than
+        // never fetching it: the runners simply keep going. If the human is not
+        // going to throw, the CPU finishes the play.
+        cpuThrowDecision(state, newHolder);
       }
     } else if (newHolder.transfer <= 0) {
       cpuThrowDecision(state, newHolder);

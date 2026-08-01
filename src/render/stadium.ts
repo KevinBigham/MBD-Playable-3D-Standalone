@@ -19,6 +19,7 @@ export interface StadiumBuild {
   crowdBase: Float32Array;
   lights: THREE.Group;
   wallHeightAt(angleDeg: number): number;
+  setShadowReceive(on: boolean): void;
   dispose(): void;
 }
 
@@ -28,11 +29,17 @@ export function buildStadium(stadium: Stadium, night: boolean): StadiumBuild {
   const root = new THREE.Group();
   const rng = new Rng(hashString(stadium.id));
 
-  root.add(buildGrass(stadium));
-  root.add(buildDirt(stadium));
-  root.add(buildLines());
-  root.add(buildBases());
-  root.add(buildMound(stadium));
+  // The playing surface is the only thing that needs to receive shadows: the
+  // stands, the skyline and the wall are all either behind the light or far
+  // outside its volume, and marking them would cost a depth test for nothing.
+  const surface = new THREE.Group();
+  surface.add(buildGrass(stadium));
+  surface.add(buildDirt(stadium));
+  surface.add(buildWarningTrack(stadium));
+  surface.add(buildLines());
+  surface.add(buildBases());
+  surface.add(buildMound(stadium));
+  root.add(surface);
 
   const wall = buildWall(stadium);
   root.add(wall);
@@ -40,6 +47,8 @@ export function buildStadium(stadium: Stadium, night: boolean): StadiumBuild {
   const stands = buildStands(stadium, rng);
   root.add(stands.group);
   root.add(buildBackstop(stadium));
+
+  root.add(buildScoreboard(stadium, night));
 
   const skyline = buildSkyline(stadium, rng);
   root.add(skyline);
@@ -56,6 +65,12 @@ export function buildStadium(stadium: Stadium, night: boolean): StadiumBuild {
     crowdBase: stands.base,
     lights,
     wallHeightAt: (a: number) => fenceAt(stadium, a).height,
+    setShadowReceive(on: boolean) {
+      surface.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) m.receiveShadow = on;
+      });
+    },
     dispose() {
       root.traverse((o) => {
         const m = o as THREE.Mesh;
@@ -162,13 +177,49 @@ function buildDirt(stadium: Stadium): THREE.Group {
     g.add(path);
   }
 
-  // Home plate circle and on-deck areas.
+  // Home plate circle and the two on-deck circles down the lines.
   const plateCircle = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24), mat);
   plateCircle.rotateX(-Math.PI / 2);
   plateCircle.position.set(0, 0.026, 0.4);
   g.add(plateCircle);
 
+  for (const sign of [-1, 1]) {
+    const onDeck = new THREE.Mesh(new THREE.CircleGeometry(1.55, 16), mat);
+    onDeck.rotateX(-Math.PI / 2);
+    onDeck.position.set(sign * 9.2, 0.026, -6.2);
+    g.add(onDeck);
+  }
+
   return g;
+}
+
+/**
+ * The dirt apron in front of the wall. Functionally it is the outfielder's cue
+ * that the fence is coming; visually it is the band that stops the outfield
+ * reading as one undifferentiated sheet of green all the way to the seats.
+ */
+function buildWarningTrack(stadium: Stadium): THREE.Mesh {
+  const outline = fenceOutline(stadium, 72);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const WIDTH = 4.6;
+  for (let i = 0; i < outline.length; i++) {
+    const p = outline[i];
+    const d = Math.hypot(p.x, p.z) || 1;
+    const inner = (d - WIDTH) / d;
+    positions.push(p.x * inner, 0, p.z * inner, p.x, 0, p.z);
+  }
+  for (let i = 0; i < outline.length - 1; i++) {
+    const a = i * 2;
+    indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const track = new THREE.Mesh(geo, flatMat(shade(stadium.palette.dirt, -0.06), { flat: false }));
+  track.position.y = 0.009;
+  return track;
 }
 
 function buildLines(): THREE.Group {
@@ -370,13 +421,18 @@ function buildStands(stadium: Stadium, rng: Rng): StandsBuild {
     prevPts.push(ring);
   }
 
-  // Extrude each tier as a ribbon of quads: one mesh per tier, six draw calls.
-  for (let t = 0; t < TIERS; t++) {
+  /** Ribbon of quads between two rings of points. One mesh, one draw call. */
+  const ribbon = (
+    lo: (i: number) => { x: number; y: number; z: number },
+    hi: (i: number) => { x: number; y: number; z: number },
+    color: number,
+  ) => {
     const pos: number[] = [];
     const idx: number[] = [];
     for (let i = 0; i <= STEPS; i++) {
-      const p = prevPts[i][t];
-      pos.push(p.x, 0, p.z, p.x, p.y + TIER_RISE, p.z);
+      const a = lo(i);
+      const b = hi(i);
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
     }
     for (let i = 0; i < STEPS; i++) {
       const a = i * 2;
@@ -386,29 +442,94 @@ function buildStands(stadium: Stadium, rng: Rng): StandsBuild {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
+    return new THREE.Mesh(
+      geo,
+      new THREE.MeshLambertMaterial({
+        color,
+        side: THREE.DoubleSide,
+        flatShading: true,
+      }),
+    );
+  };
+
+  /*
+   * Each tier is a dark vertical riser plus a lighter horizontal deck on top of
+   * it. The decks are what turn the bowl from one flat dark slab — which is
+   * exactly what it read as — into a flight of steps: every tier now has a lit
+   * top edge catching the sun and a shaded face below it.
+   */
+  const riserCol = shade(pal.stands, -0.2);
+  const deckCol = shade(pal.stands, 0.16);
+  for (let t = 0; t < TIERS; t++) {
+    const topY = (i: number) => prevPts[i][t].y + TIER_RISE;
     g.add(
-      new THREE.Mesh(
-        geo,
-        new THREE.MeshLambertMaterial({
-          color: t % 2 === 0 ? pal.stands : shade(pal.stands, -0.14),
-          side: THREE.DoubleSide,
-          flatShading: true,
+      ribbon(
+        (i) => ({ x: prevPts[i][t].x, y: 0, z: prevPts[i][t].z }),
+        (i) => ({ x: prevPts[i][t].x, y: topY(i), z: prevPts[i][t].z }),
+        t % 2 === 0 ? riserCol : shade(riserCol, -0.08),
+      ),
+    );
+    // The deck runs back from the top of this riser to the foot of the next.
+    const outer = t + 1 < TIERS ? t + 1 : t;
+    const outR = t + 1 < TIERS ? 1 : 1.35;
+    g.add(
+      ribbon(
+        (i) => ({ x: prevPts[i][t].x, y: topY(i), z: prevPts[i][t].z }),
+        (i) => ({
+          x: prevPts[i][outer].x * outR,
+          y: topY(i),
+          z: prevPts[i][outer].z * outR,
         }),
+        t % 2 === 0 ? deckCol : shade(deckCol, -0.07),
       ),
     );
 
-    // Seat the crowd on top of the riser.
-    for (let i = 0; i < STEPS; i += 1) {
-      if ((i + t) % 2 !== 0) continue;
+    // Seat the crowd on the deck: two staggered rows per step position, which
+    // is roughly four times the old density and stops the stands looking like
+    // confetti scattered on a wall.
+    for (let i = 0; i < STEPS; i++) {
       const p = prevPts[i][t];
-      seats.push({
-        x: p.x,
-        y: p.y + TIER_RISE + 0.45,
-        z: p.z,
-        color: new THREE.Color().setHSL(rng.next(), 0.4 + rng.next() * 0.4, 0.32 + rng.next() * 0.4),
-      });
+      // Two gaps per bowl read as aisles without needing any extra geometry.
+      const aisle = i % 24 === 0 || i % 24 === 1;
+      if (aisle) continue;
+      for (let row = 0; row < 2; row++) {
+        const push = 1 + row * (TIER_DEPTH * 0.42) / Math.max(1, Math.hypot(p.x, p.z));
+        seats.push({
+          x: p.x * push,
+          y: p.y + TIER_RISE + 0.45,
+          z: p.z * push,
+          color: new THREE.Color().setHSL(
+            rng.next(),
+            0.35 + rng.next() * 0.45,
+            0.34 + rng.next() * 0.4,
+          ),
+        });
+      }
     }
   }
+
+  // Facade above the top deck: a pale concrete band with a bright cap. It is
+  // the horizon line of the whole park, and without it the bowl just stops.
+  const topT = TIERS - 1;
+  const facadeBase = (i: number) => ({
+    x: prevPts[i][topT].x * 1.35,
+    y: prevPts[i][topT].y + TIER_RISE,
+    z: prevPts[i][topT].z * 1.35,
+  });
+  g.add(
+    ribbon(
+      facadeBase,
+      (i) => ({ ...facadeBase(i), y: facadeBase(i).y + 4.2 }),
+      shade(pal.stands, 0.34),
+    ),
+  );
+  g.add(
+    ribbon(
+      (i) => ({ ...facadeBase(i), y: facadeBase(i).y + 4.2 }),
+      (i) => ({ ...facadeBase(i), y: facadeBase(i).y + 5.0 }),
+      shade(pal.wall, 0.3),
+    ),
+  );
   const crowd = new THREE.InstancedMesh(crowdGeo, crowdMat, Math.max(1, seats.length));
   const colorAttr = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, seats.length) * 3), 3);
   const base = new Float32Array(Math.max(1, seats.length) * 3);
@@ -427,6 +548,57 @@ function buildStands(stadium: Stadium, rng: Rng): StandsBuild {
   g.add(crowd);
 
   return { group: g, crowd, count: seats.length, base };
+}
+
+/**
+ * The centre-field scoreboard. No text on it — the real scoreboard is the HUD —
+ * but as a silhouette it is the single strongest "this is a ballpark" cue
+ * available, and every park gets one sized and coloured to its own palette.
+ */
+function buildScoreboard(stadium: Stadium, night: boolean): THREE.Group {
+  const g = new THREE.Group();
+  const pal = stadium.palette;
+  const dist = fenceAt(stadium, 0).dist + 9;
+  const W = 26;
+  const H = 12;
+  const baseY = fenceAt(stadium, 0).height + 5;
+
+  const frame = new THREE.Mesh(
+    new THREE.BoxGeometry(W, H, 1.2),
+    flatMat(shade(pal.wall, -0.25)),
+  );
+  frame.position.set(0, baseY + H / 2, dist);
+  g.add(frame);
+
+  const face = new THREE.Mesh(
+    new THREE.BoxGeometry(W - 2.4, H - 2.4, 0.4),
+    flatMat(0x11151f, { flat: false }),
+  );
+  face.position.set(0, baseY + H / 2, dist - 0.6);
+  g.add(face);
+
+  // A block of "pixels" so the face is not a dead rectangle. Deterministic:
+  // driven by the park's own geometry, not by a random number.
+  // Under the lights the board is the brightest thing in the park, so the
+  // cells carry their own emissive rather than relying on the scene lighting.
+  const lit = flatMat(shade(pal.wallTrim, 0.3), {
+    emissive: night ? shade(pal.wallTrim, 0.1) : 0x000000,
+  });
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 9; col++) {
+      if ((row * 7 + col * 3) % 4 === 0) continue;
+      const cell = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 0.2), lit);
+      cell.position.set(-9 + col * 2.3, baseY + 3 + row * 3, dist - 0.85);
+      g.add(cell);
+    }
+  }
+
+  for (const sign of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(1.1, baseY, 1.1), flatMat(shade(pal.wall, -0.4)));
+    post.position.set(sign * (W / 2 - 2), baseY / 2, dist);
+    g.add(post);
+  }
+  return g;
 }
 
 function buildBackstop(stadium: Stadium): THREE.Group {

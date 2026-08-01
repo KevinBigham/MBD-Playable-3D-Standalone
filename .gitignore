@@ -4,3 +4,4 @@ dist/
 .DS_Store
 .vite/
 test-results/
+.claude/settings.local.json
