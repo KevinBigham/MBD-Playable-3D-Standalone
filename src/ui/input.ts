@@ -91,9 +91,19 @@ interface PadSnapshot {
 /** Which simulation context the player is in; decides how the diamond reads. */
 export type ControlContext = 'batting' | 'pitching' | 'fielding' | 'baserunning' | 'menu';
 
+/**
+ * The largest press age worth reporting, in seconds. Anything older is not the
+ * lag this is correcting for — it is a frame that took 80 ms, and crediting it
+ * would move a swing further than the delay ever did.
+ */
+const MAX_REPORTED_AGE = 0.05;
+
 export class InputManager {
   private keys = new Set<string>();
-  private keyEdges = new Set<string>();
+  /** Key code -> event timestamp, so a press can be aged. See InputFrame.pressAge. */
+  private keyEdges = new Map<string, number>();
+  /** The rAF timestamp of the frame being assembled. */
+  private frameNow = 0;
   private bindings: Bindings;
   private padPrev: PadSnapshot[] = [];
   private padEdges: boolean[][] = [];
@@ -179,7 +189,10 @@ export class InputManager {
     // Stop the page scrolling out from under the game.
     if (SCROLL_KEYS.has(e.code)) e.preventDefault();
     this.keys.add(e.code);
-    this.keyEdges.add(e.code);
+    // The browser stamps every input event with the moment it happened, on the
+    // same clock rAF uses. That stamp is the only record of when the player
+    // actually pressed, and the whole point of keeping it.
+    this.keyEdges.set(e.code, e.timeStamp);
     this.lastDeviceWasPad = false;
 
     switch (e.code) {
@@ -224,8 +237,35 @@ export class InputManager {
     return this.bindings[player][action].some((c) => this.keyEdges.has(c));
   }
 
-  /** Reads pads and keyboard into the two InputFrames. Call once per render frame. */
-  poll(): void {
+  /**
+   * Seconds between the press that raised this edge and the start of the frame
+   * now being assembled. Zero when nothing was pressed, or when the platform
+   * gave a timestamp that does not make sense.
+   */
+  private pressAge(player: 'p1' | 'p2', action: ActionId): number {
+    let stamp = -1;
+    if (player === 'p1') {
+      const touched = this.touch?.pressedAt(action);
+      if (touched !== undefined) stamp = touched;
+    }
+    for (const code of this.bindings[player][action]) {
+      const t = this.keyEdges.get(code);
+      // Newest wins: if a key and a thumb both fired, the later one is the one
+      // the player would say they pressed.
+      if (t !== undefined && t > stamp) stamp = t;
+    }
+    if (stamp < 0) return 0;
+    const age = (this.frameNow - stamp) / 1000;
+    return age > 0 && age < MAX_REPORTED_AGE ? age : 0;
+  }
+
+  /**
+   * Reads pads and keyboard into the two InputFrames. Call once per render
+   * frame, passing the rAF timestamp — it is the reference the press ages are
+   * measured against, and it must come from the same clock the events use.
+   */
+  poll(now = typeof performance !== 'undefined' ? performance.now() : 0): void {
+    this.frameNow = now;
     const pads = readGamepads();
     if (pads.length) this.gamepadSeen = true;
 
@@ -341,6 +381,16 @@ export class InputManager {
     frame.returnAll = special && modifier;
     frame.switchFielder = switchF;
     frame.turbo = modifier;
+
+    // Only the swing has a timing window narrow enough for this to matter, so
+    // only the two buttons that swing are aged. A gamepad is polled rather than
+    // evented and carries no timestamp; it reports nothing and loses nothing it
+    // was not already losing.
+    frame.pressAge = dDown
+      ? this.pressAge(player, 'diamondDown')
+      : dRight
+        ? this.pressAge(player, 'diamondRight')
+        : 0;
   }
 
   /** Called by the app after the first simulation step consumes the frame. */

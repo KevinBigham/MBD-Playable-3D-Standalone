@@ -68,8 +68,33 @@ button is captioned with what it does *in the situation you are in*: `SWING`,
 the four buttons, so `DEFENCE` turns the diamond into `DP` / `IN` / `CORNERS` /
 `NO XBH` in front of you.
 
-Play in landscape. Portrait puts up a card asking for a turn, with a button to
-play in portrait anyway. Add it to your home screen and it opens fullscreen.
+The diamond is hit-tested as **one control**: a press anywhere in its square —
+including the gap in the middle and the corners, which used to do nothing at all
+— takes whichever button lies in that direction. The circles are labels, not
+targets, which is the only sensible arrangement for a target your own thumb is
+sitting on top of.
+
+Everything else the phone does to a game is handled rather than ignored:
+
+- **A locked phone does not cost you the game.** The game writes itself down
+  when the page is hidden, on every route out of the tab and once per
+  half-inning; **Resume Game** is the first row on the main menu when there is
+  one. What comes back is the same game — same generator position, same count,
+  same runners — not an approximation of it.
+- **Backgrounding pauses.** A call or a notification used to leave a pitch in
+  the air.
+- **The screen stays awake** during a game, and is allowed to sleep in the menus.
+- **Graphics move themselves.** Phones throttle as they warm up, so a fixed
+  quality setting is wrong for part of every game. `AUTO` watches the frame
+  clock and walks the settings up and down; it gives up climbing once the device
+  has punished two attempts, because a visible pulse in image quality every few
+  seconds is worse than simply being one step lower.
+- **It plays with no signal** once installed to the home screen.
+- **Left-handed layout** and **vibration** are in Settings.
+
+Play in landscape. Portrait puts up a card offering to **turn the game instead**
+— for a phone with rotation locked, the whole game rotates a quarter turn and
+fills the screen, controls and all — or to play in portrait anyway.
 
 See [CONTROLS.md](CONTROLS.md) for the full table.
 
@@ -230,6 +255,20 @@ These are documented deliberately; none of them blocks a complete game.
   a long lens standing roughly where the umpire's head would be, and a figure
   that close to it covers the strike zone rather than framing it. Both are drawn
   in every other shot.
+- **Vibration is Android-only.** Safari on iPhone has no vibration API and the
+  workarounds for it depend on undocumented behaviour, so the setting reports
+  itself unsupported there instead of pretending.
+- **iPhone Safari has no Fullscreen API either**, so that setting reads OFF
+  there. The layout already keeps clear of the browser toolbars.
+- **A rotated game reads the safe-area insets from the phone, not from itself.**
+  When the game turns itself a quarter turn for a rotation-locked phone, the
+  notch and home indicator are on edges the layout now calls something else.
+  There is no way to map them individually without knowing which way the phone
+  was turned, so the rotated layout keeps clear of the largest inset on every
+  side — slightly wasteful, never wrong.
+- **An offline copy needs one online visit first**, and picks up an update on
+  the visit after it is deployed. The page itself is fetched from the network
+  first so a bad deploy cannot pin itself.
 
 ## Documentation
 

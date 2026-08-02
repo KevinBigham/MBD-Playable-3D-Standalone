@@ -56,6 +56,37 @@ export function isPortrait(): boolean {
   return h > w;
 }
 
+/**
+ * TURNING THE GAME INSTEAD OF THE PHONE.
+ *
+ * A lot of people keep rotation locked, and a game that answers "turn your
+ * phone" to someone who has deliberately told their phone not to turn is
+ * telling them to go and change a system setting for a game of baseball. They
+ * will not, and they should not have to.
+ *
+ * So the game can rotate itself: the whole application box is laid out
+ * landscape — width from the viewport's height, height from its width — and
+ * then spun a quarter turn to fill a portrait screen. Everything inside is
+ * unchanged, including the renderer, which is simply told it has a landscape
+ * canvas.
+ *
+ * The cost is that pointer coordinates arrive in the *screen's* frame while
+ * every element lives in the *game's* frame, and the two are now ninety degrees
+ * apart. Nothing else in the codebase has to know that — this flag is read in
+ * exactly one place, the touch layer, which is the only code that turns a pixel
+ * into a control.
+ */
+let rotated = false;
+
+export function setAppRotated(on: boolean): void {
+  rotated = on;
+  document.documentElement.classList.toggle('rotated', on);
+}
+
+export function isAppRotated(): boolean {
+  return rotated;
+}
+
 export async function toggleFullscreen(): Promise<void> {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();

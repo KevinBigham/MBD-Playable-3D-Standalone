@@ -72,6 +72,44 @@ body.touch-mode {
   }
 }
 
+/* The game turned a quarter turn to fill a phone whose rotation is locked in
+   portrait. The box is laid out landscape — its width is the viewport's height
+   and vice versa — and then spun about its top-left corner and pushed back into
+   view. Everything inside is completely unaware; only the touch layer has to
+   know, because it is the only code that turns a screen pixel into a control.
+   See setAppRotated in device.ts. */
+html.rotated,
+html.rotated body {
+  overflow: hidden;
+}
+
+html.rotated #app {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--vh, 100vh);
+  height: var(--vw, 100vw);
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
+}
+
+/* The safe-area insets describe the *phone's* edges, and the game's edges are
+   now ninety degrees away from them: what the pad calls its bottom-right corner
+   is physically the top-left of a portrait handset. There is no way to map them
+   individually without knowing which way the phone was turned, so the rotated
+   layout keeps clear of the largest of them on every side. Slightly wasteful,
+   never wrong. */
+html.rotated #touch {
+  --tinset: calc(
+    clamp(12px, 2.4vw, 26px) + max(
+      env(safe-area-inset-top, 0px),
+      env(safe-area-inset-right, 0px),
+      env(safe-area-inset-bottom, 0px),
+      env(safe-area-inset-left, 0px)
+    )
+  );
+}
+
 #gl {
   position: absolute;
   inset: 0;
@@ -1601,9 +1639,12 @@ body.reduced-motion .boot-bar i {
   pointer-events: none;
   z-index: 8;
   touch-action: none;
-  --tsz: clamp(56px, 11.5vh, 84px);
-  --tgap: clamp(4px, 1.1vh, 10px);
-  --tinset: calc(clamp(10px, 2.2vw, 26px) + env(safe-area-inset-bottom, 0px));
+  /* --gw/--gh are the game box, which is the viewport unless the game has
+     rotated itself to fill a portrait phone — at which point vh is the long
+     edge of the handset and describes the wrong axis entirely. */
+  --tsz: clamp(56px, calc(var(--gh, 100vh) * 0.115), 84px);
+  --tgap: clamp(4px, calc(var(--gh, 100vh) * 0.011), 10px);
+  --tinset: calc(clamp(10px, calc(var(--gw, 100vw) * 0.022), 26px) + env(safe-area-inset-bottom, 0px));
 }
 
 #touch.on {
@@ -1712,18 +1753,38 @@ body.reduced-motion .boot-bar i {
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
 }
 
-/* The literal base diamond the whole control scheme is named after. */
+/* The literal base diamond the whole control scheme is named after.
+
+   The transparent border is a hit target, not decoration. The container owns
+   every press inside its box and resolves it by direction (see diamondAt in
+   touch.ts), so the border widens that box by 12px on every side while the
+   negative margin keeps the layout exactly where it was. A thumb landing just
+   outside the diamond still counts. */
 .t-diamond {
   position: relative;
+  /* Explicitly content-box: with the sheet's border-box default, the border
+     below would eat 24px out of the diamond instead of adding it, and the four
+     buttons would close up on each other. */
+  box-sizing: content-box;
   width: calc(var(--tsz) * 2.55);
   height: calc(var(--tsz) * 2.55);
+  border: 12px solid transparent;
+  /* Every side but the bottom. Below the diamond is the aux row, and slop that
+     reaches over DIVE and SWITCH does not widen a target — it steals one, and a
+     press that fires the wrong call is worse than a press that fires none. */
+  border-bottom-width: 0;
+  margin: -12px -12px 0;
+  touch-action: none;
 }
 
+/* The four circles are labels now, not targets — their container hit-tests for
+   them, and a child that swallowed the press would put the hole back. */
 .t-diamond .t-btn {
   position: absolute;
   width: var(--tsz);
   height: var(--tsz);
   border-radius: 50%;
+  pointer-events: none;
 }
 
 .t-up { left: 50%; top: 0; transform: translateX(-50%); }
@@ -1796,6 +1857,53 @@ body.reduced-motion .boot-bar i {
   height: max(42px, calc(var(--tsz) * 0.62));
   border-radius: 999px;
   padding: 0 12px;
+}
+
+/* ------------------------------------------------------------------ lefty --
+
+   Handedness is not a preference, it is a fact about the person holding the
+   phone, and the pad's whole design assumes the strong thumb is on the buttons
+   and the weak one is on the stick. Getting that backwards is the difference
+   between aiming and flailing. Mirroring costs four rules here and one more for
+   the HUD column, which has to move out of the way of the relocated pad. */
+
+#touch.lefty .t-stickzone {
+  left: auto;
+  right: 0;
+}
+
+#touch.lefty .t-stickhint {
+  left: auto;
+  right: var(--tinset);
+}
+
+#touch.lefty .t-pad {
+  right: auto;
+  left: var(--tinset);
+  align-items: flex-start;
+}
+
+/* The information column lives opposite the pad, whichever side that is. */
+body.lefty #hud.touch .hud-readout,
+body.lefty #hud.touch .hud-defense,
+body.lefty #hud.touch .hud-pitches {
+  left: auto;
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  text-align: right;
+  align-items: flex-end;
+}
+
+body.lefty #hud.touch .hud-defense,
+body.lefty #hud.touch .hud-readout {
+  border-left: 2px solid rgba(255, 255, 255, 0.18);
+}
+
+body.lefty #hud.touch .hud-defense {
+  border-right: 5px solid var(--gold);
+}
+
+body.lefty #hud.touch .hud-readout {
+  border-right: 5px solid var(--hot);
 }
 
 .t-pause {
@@ -2083,12 +2191,16 @@ body.touch-mode .screen-foot {
  * them, and the pad shrinks because 390px of width cannot host a diamond sized
  * for a thumb reaching in from a corner.
  */
+/* Every rule here is about a portrait *game*, and a game that has rotated
+   itself is landscape inside a portrait viewport — the media query still fires,
+   but everything it says is wrong for the box the game is actually in. Media
+   queries cannot see the transform, so the selectors say so instead. */
 @media (orientation: portrait) {
-  body.touch-mode #touch {
+  html:not(.rotated) body.touch-mode #touch {
     --tsz: clamp(52px, 15vw, 76px);
   }
 
-  body.touch-mode #hud .hud-matchup {
+  html:not(.rotated) body.touch-mode #hud .hud-matchup {
     top: 82px;
     left: calc(10px + env(safe-area-inset-left, 0px));
     right: calc(10px + env(safe-area-inset-right, 0px));
@@ -2096,15 +2208,15 @@ body.touch-mode .screen-foot {
     padding-right: 14px;
   }
 
-  #hud.touch .hud-pitches {
+  html:not(.rotated) #hud.touch .hud-pitches {
     top: 156px;
   }
 
-  #hud.touch .hud-defense {
+  html:not(.rotated) #hud.touch .hud-defense {
     top: 262px;
   }
 
-  #hud.touch .hud-readout {
+  html:not(.rotated) #hud.touch .hud-readout {
     top: 296px;
   }
 
@@ -2112,7 +2224,7 @@ body.touch-mode .screen-foot {
      and the top is all scoreboard. The caption is anchored to the bottom of
      this zone, so moving the zone carries it to just above the pad — which is
      the only free strip left. */
-  body.touch-mode .t-stickzone {
+  html:not(.rotated) body.touch-mode .t-stickzone {
     width: 100%;
     height: 40%;
     bottom: auto;
@@ -2152,6 +2264,23 @@ body.touch-mode .screen-foot {
   color: var(--ink-dim);
   line-height: 1.5;
   letter-spacing: 0.04em;
+}
+
+/* The way out for a phone that has been told not to rotate. It leads, because
+   for the people who need it, it is the only one of the two that works. */
+.rot-rotate {
+  margin-top: 12px;
+  padding: 15px 20px;
+  max-width: 88vw;
+  border: 2px solid var(--gold);
+  background: var(--gold);
+  color: #10131f;
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  cursor: pointer;
 }
 
 .rot-dismiss {

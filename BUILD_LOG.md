@@ -14,11 +14,15 @@ Complete and playable end to end.
 - Human control of batting, pitching, fielding, baserunning and the defensive
   alignment
 - Local two-player on one keyboard, or with two gamepads
-- Playable on a phone: on-screen pad with situation-aware captions, landscape
-  layout with a portrait fallback, installable to the home screen
+- Playable on a phone: an on-screen pad with situation-aware captions and
+  direction-based hit-testing, a landscape layout, a portrait fallback that can
+  rotate the game instead of the phone, left-handed mirroring, vibration,
+  automatic graphics, and installation to the home screen with offline play
+- A game in progress survives a locked phone, a backgrounded tab or a discarded
+  one, and comes back bit-identical
 - CPU plays complete games unassisted at three genuinely different difficulties
 - Seasons save automatically, survive a page reload and resume correctly
-- 201 automated tests pass; 120 CPU-versus-CPU games complete with zero
+- 226 automated tests pass; 120 CPU-versus-CPU games complete with zero
   anomalies and zero forced play resolutions
 - Two independent evaluators attacked the running build; every blocker and major
   finding is fixed and covered by a regression test
@@ -631,13 +635,160 @@ exactly as before, and the touch DOM is present but `display: none`.
 
 ---
 
+## The phone, round two
+
+The first phone round made the game *playable* on a handset: a pad, captions, a
+layout, a tempo. This round is about everything a phone does to a game while you
+are playing it — the parts that have nothing to do with controls and everything
+to do with the fact that a phone is not a computer that happens to be small.
+
+### The diamond is one control, not four
+
+Four circles at the points of a square cover 35% of that square. The other 65%
+— the hole in the middle where the bases meet, and the four corners — did
+nothing at all when a thumb landed there. No swing, no throw, no feedback, and
+no way for the player to find out why, because their thumb is on top of the
+evidence.
+
+The diamond is now hit-tested by direction from its centre. Every point of the
+square, plus a 12px transparent margin around it, belongs to exactly one button:
+**2.83× more live area**, measured in the running game at 844×390. The visible
+circles are labels now. That is all a target you cannot see was ever worth.
+
+The margin is on three sides. Below the diamond is the aux row, and the first
+version of this reached 8px over the top of `DIVE` and `SWITCH` and *won* there —
+pressing the top edge of either fired `HOME` instead. The layout sweep did not
+catch it because nothing was overlapping that should not have been; a hit-test
+probe at each button's own top edge did. A press that fires the wrong call is
+strictly worse than a press that fires none, and slop that reaches over another
+button is not slop, it is theft.
+
+### When you pressed, not when we noticed
+
+Input is read once per rendered frame, so a press reaches the engine somewhere
+between zero and one frame after the thumb moved: 0–17 ms on a 60 Hz phone, and
+which one is pure luck about where the frame boundary fell. Against a swing
+tolerance measured in tens of milliseconds that is not a rounding error. It is a
+random handicap on every swing, biased entirely toward late.
+
+The browser stamps every input event with the moment it happened, on the same
+clock `requestAnimationFrame` uses. The presentation layer now reports that age
+on the input frame and the engine backdates the swing by it, capped at two
+frames at 30 Hz. `timing.test.ts` proves the correction is exact rather than
+approximate: pressing four ticks late while declaring four ticks of lag produces
+a timing figure *identical* to pressing on time, to nine decimal places — and the
+same press without the declaration is measurably late, which is the control.
+
+The engine did not gain a clock. `pressAge` is a number on `InputFrame` like
+every other input, zero for the CPU and zero for every test, so the simulation
+is still a pure function of its inputs and a replay of the same frames is still
+the same game.
+
+### A locked phone does not cost you the game
+
+iOS Safari discards backgrounded tabs under memory pressure. A text message
+arrives in the sixth inning and the game is simply gone — not the player's
+fault, and nothing on screen warned them.
+
+`GameState` is plain data plus exactly one class instance, so a snapshot is JSON
+plus one integer for the generator position. It is written when the page hides,
+on `pagehide`, on pause, and once per half-inning; **Resume Game** is the first
+row on the main menu when there is one, captioned with the situation. Measured
+at 26–50 KB.
+
+The claim is strong — not "roughly where you were" but the same game — so the
+test is strong: both copies run six more minutes of simulated baseball after the
+round trip and must serialise byte-identically, including a save taken with the
+ball in the air and a swing pending, on four seeds. `Rng.setState` was fixed
+along the way: it coerced zero to a fallback, which is correct for a seed and
+wrong for a restored snapshot, where all 2³² values are legal positions.
+
+Backgrounding also pauses now, and the game holds a screen wake lock while a
+game is live and releases it in the menus.
+
+### Graphics that move themselves
+
+A quality setting is a promise about a machine that does not change. Phones
+change: the first over renders at full speed and then the case warms, the SoC
+clocks down, and it stays down. Whichever fixed setting the player picks is
+wrong for part of the game.
+
+`AUTO` is a servo, and it is defined by what it refuses to do. It reads the
+*median* of a 90-frame window, so a garbage collection or a texture upload
+cannot move it. It climbs slowly and falls quickly. And it **gives up climbing**
+after two attempts that were immediately punished — a thermally limited phone is
+not going to recover while you keep playing on it, and a governor that keeps
+testing produces a visible pulse in image quality every few seconds, which is
+far more annoying than being one rung lower. Eight tests, all of them about
+restraint. Verified end to end in the running game: Full → Lean under a
+simulated 30 fps, back to Full at 100.
+
+A 120 Hz phone panel is also asked for 60 drawn frames rather than 120 — twice
+the GPU work and heat for a game whose simulation runs on a fixed clock and
+whose ball is a few pixels across. The decision is *measured*, not assumed from
+a device string: only a display running at roughly double the target is capped,
+because on a 90 Hz Android panel "cap to 60" silently means 45.
+
+### Turning the game instead of the phone
+
+Plenty of people keep rotation locked on purpose. Answering them with "turn your
+phone" is telling them to change a system setting for a game of baseball.
+
+The portrait card now leads with an offer to rotate the *game*: the application
+box is laid out landscape and spun a quarter turn about its top-left corner. The
+renderer is simply told it has a landscape canvas and is otherwise unaware.
+
+The cost is that pointer events arrive in the screen's frame while every element
+lives in the game's frame, ninety degrees apart, and that is confined to two
+functions in the touch layer. Verified with synthesised drags: screen-right of
+the diamond centre selects the game's UP button, a drag down the glass reads as
+the stick going right, and all four axes and all four quadrants map correctly.
+
+Two things the trick does not fix, both documented rather than hidden: media
+queries and `vh`/`vw` describe the phone, not the game. The portrait media block
+is now gated on `html:not(.rotated)` — it was firing and giving a landscape game
+a portrait stick zone — and the pad's sizing reads `--gw`/`--gh`, which the app
+writes from the game box. Safe-area insets cannot be mapped individually without
+knowing which way the phone was turned, so the rotated layout clears the largest
+of them on every side.
+
+### Vibration, and left thumbs
+
+Glass cannot click. A press ticks; contact thumps in proportion to how well the
+ball was struck, so you know you got it before the camera says so. Never twice
+inside 40 ms, never longer than 200 ms in total, and only for events involving
+the human's own half-inning.
+
+`navigator.vibrate` is an Android/Chromium feature. Safari on iOS does not
+implement it and the workarounds depend on undocumented behaviour of a form
+control, so the setting reads `UNSUPPORTED` there rather than offering a switch
+that does nothing.
+
+**Left-handed pad** mirrors the whole layout — stick right, buttons left — and
+moves the information column to the opposite side so it does not end up under
+the pad. Swept for collisions in both handednesses at every viewport.
+
+### Offline
+
+The game has no server: no account, no matchmaking, no telemetry. Once the files
+are on the device there is nothing left for the network to do, and without a
+service worker the browser does not know that. A ~90-line worker fixes it. The
+page itself is fetched network-first — cache-first on the HTML is how a broken
+deploy becomes permanent — and the content-hashed assets are cache-first,
+because a hashed URL can never mean two different things.
+
+---
+
 ## Tests performed
 
-- **Automated:** 201 Vitest tests across 17 files — RNG determinism, ball-flight
+- **Automated:** 226 Vitest tests across 21 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,
-  the player creator, and a 100-game batch.
+  the player creator, a 100-game batch, and the phone work: a restored game
+  proven identical over six further minutes of play, input-lag correction proven
+  exact to nine decimals, the graphics servo proven not to oscillate against a
+  thermally limited phone, and the vibration patterns proven short and quiet.
 - **Batch simulation:** repeated runs of `scripts/simulate.ts` at 3 and 9
   innings across all three difficulties, checking for deadlocks, invalid states
   and statistical drift.
@@ -667,15 +818,33 @@ Evidence: `docs/screenshots/` and `docs/recordings/gameplay.webm`, all produced 
   API; `AudioContext` is created with the standard constructor and the renderer
   uses WebGL 1-compatible features via Three.js. Safari remains formally
   unverified.
-- **No real phone or tablet was available.** The touch build was verified at
-  handset viewport sizes in a desktop Chromium, with the pad driven by synthesised
-  `PointerEvent`s — which is enough to prove the layout, the label wiring and
-  that a press reaches the engine, and is *not* the same as a thumb on glass.
-  Three things in particular are unverified on hardware: multi-touch (stick and
-  a button at once, which the code supports by tracking pointer ids but which was
-  only ever exercised one pointer at a time), real touch latency, and frame rate
-  on a phone GPU. The mobile default is Balanced rather than High for that last
-  reason, but the number behind it is a guess, not a measurement.
+- **No real phone or tablet was available, in either phone round.** The touch
+  build was verified at handset viewport sizes in a desktop Chromium, with the
+  pad driven by synthesised `PointerEvent`s and the screenshots taken in a real
+  handset browser context — which proves layout, hit-testing, label wiring,
+  coordinate mapping under rotation and that a press reaches the engine, and is
+  *not* the same as a thumb on glass. Unverified on hardware: multi-touch under
+  real load (the code tracks pointer ids and was only ever exercised one pointer
+  at a time), true touch latency, frame rate on a phone GPU, the wake lock, tab
+  discard and recovery, and the graphics servo against a genuine thermal
+  throttle rather than a synthetic frame-time sequence. The servo replaced a
+  fixed mobile default precisely because that default was a guess; the servo
+  measures instead, but it has still only measured a laptop.
+- **The vibration code has never physically run.** No browser available here
+  implements `navigator.vibrate`, so every haptics test drives an injected sink.
+  The patterns are proven short, rate-limited and correctly varied by contact
+  quality; whether they *feel* right on an Android motor is unknown.
+- **A rotated game reads safe-area insets from the phone, not from itself.**
+  When the game turns itself for a rotation-locked phone, the notch and home
+  indicator sit on edges the layout now calls something else, and they cannot be
+  mapped individually without knowing which way the phone was turned. The
+  rotated layout clears the largest inset on all four sides instead: wasteful,
+  never wrong, and untested against a real notch.
+- **The service worker was not tested offline.** It is registered only in
+  production builds and the capture harness runs against `vite preview` with a
+  live network. The strategy is deliberately the conservative one — the page
+  itself is network-first so a bad deploy cannot pin itself — but "install it,
+  turn off the wifi, open it" has not been performed.
 - **iOS Safari has no Fullscreen API**, so the fullscreen setting will do nothing
   there. The layout does not depend on it — safe-area insets and `visualViewport`
   keep the controls clear of the browser chrome either way — but the row will

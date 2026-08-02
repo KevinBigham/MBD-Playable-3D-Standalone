@@ -50,6 +50,24 @@ function boot(): void {
   );
 }
 
+/**
+ * Offline support, and only in a real build.
+ *
+ * A service worker in front of the dev server is a way to spend an afternoon
+ * wondering why an edit did nothing, so it is registered from production builds
+ * only. Failure is silent by design: a browser without service workers, a page
+ * served over plain http, or a user who has blocked them all end up in exactly
+ * the state the game was in before this existed — online-only, and fine.
+ */
+function registerOffline(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err) => {
+      console.warn('[MOONSHOT NINE] offline support unavailable', err);
+    });
+  });
+}
+
 window.addEventListener('error', (e) => {
   if (!document.getElementById('boot')?.classList.contains('hidden')) {
     fail('Something went wrong while starting up.', e.error);
@@ -64,3 +82,5 @@ if (document.readyState === 'loading') {
 } else {
   boot();
 }
+
+registerOffline();

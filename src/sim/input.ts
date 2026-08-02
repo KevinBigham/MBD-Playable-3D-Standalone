@@ -31,6 +31,27 @@ export interface InputFrame {
   returnAll: boolean;
   /** Held: runner turbo / pitcher extra effort. */
   turbo: boolean;
+
+  /**
+   * How long ago, in seconds, the button that raised this frame's edges was
+   * actually pressed.
+   *
+   * Input is read once per rendered frame, so a press is discovered somewhere
+   * between zero and one frame after it happened — 0 to 17 ms on a 60 Hz phone,
+   * randomly. For everything except swinging that is irrelevant. For swinging
+   * it is a third of the difference between a home run and a fly out, and it is
+   * *noise*: the same press, made at the same instant, is scored differently
+   * depending on where the frame boundary fell.
+   *
+   * The presentation layer knows the real press time, because the browser
+   * stamps it on the event. It reports the age here, the engine backdates the
+   * swing by it, and the timing you get is the timing you had. The engine stays
+   * a pure function of these frames — nothing reads a clock — so a replay of the
+   * same frames is still the same game.
+   *
+   * Zero for the CPU, for tests, and for any front end that does not measure it.
+   */
+  pressAge: number;
 }
 
 export function emptyInput(): InputFrame {
@@ -50,6 +71,7 @@ export function emptyInput(): InputFrame {
     advanceAll: false,
     returnAll: false,
     turbo: false,
+    pressAge: 0,
   };
 }
 
@@ -64,6 +86,7 @@ export function clearEdges(f: InputFrame): void {
   f.switchFielder = false;
   f.advanceAll = false;
   f.returnAll = false;
+  f.pressAge = 0;
 }
 
 export interface InputPair {

@@ -1,5 +1,7 @@
 import type { ActionId } from './input';
 import type { ControlLabels } from './controls';
+import { type Buzz, getHaptics } from './haptics';
+import { isAppRotated } from './device';
 
 /**
  * ON-SCREEN CONTROLS.
@@ -13,6 +15,8 @@ import type { ControlLabels } from './controls';
  *   - the four action buttons are laid out as the literal base diamond the
  *     control scheme is built on, and each one is captioned with what it does
  *     in the situation you are actually in — SWING, or 2ND, or PITCH 2.
+ *   - the diamond is hit-tested as ONE control, by direction from its centre,
+ *     rather than as four separate circles. See `diamondAt`.
  *   - the modifier LATCHES rather than being held. Holding a shoulder button
  *     with one thumb while pressing a face button with the other is a
  *     two-handed gamepad idiom that does not survive contact with a phone. Tap
@@ -41,6 +45,8 @@ export class TouchControls {
 
   private held = new Set<ActionId>();
   private edges = new Set<ActionId>();
+  /** Action -> the event timestamp of the press. See InputFrame.pressAge. */
+  private edgeAt = new Map<ActionId, number>();
   private buttons = new Map<ActionId, HTMLButtonElement>();
   /** pointerId -> which button it is holding, for multi-touch release. */
   private pointerButton = new Map<number, ActionId>();
@@ -51,6 +57,7 @@ export class TouchControls {
   private stickHint: HTMLDivElement;
   private padEl: HTMLDivElement;
   private verbEl: HTMLDivElement;
+  private diamondEl: HTMLDivElement;
 
   /** Latched modifier: armed by a tap, spent by the next action press. */
   private modifierLatched = false;
@@ -89,17 +96,26 @@ export class TouchControls {
     this.stickHint = this.root.querySelector('.t-stickhint') as HTMLDivElement;
     this.padEl = this.root.querySelector('.t-pad') as HTMLDivElement;
     this.verbEl = this.root.querySelector('.t-verb') as HTMLDivElement;
+    this.diamondEl = this.root.querySelector('.t-diamond') as HTMLDivElement;
 
     for (const el of this.root.querySelectorAll<HTMLButtonElement>('.t-btn')) {
       const action = el.dataset.a as ActionId;
       this.buttons.set(action, el);
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      // The four diamond buttons do not listen for themselves — their container
+      // owns the whole square and decides which of them a press meant.
+      if (this.diamondEl.contains(el)) continue;
       el.addEventListener('pointerdown', (e) => this.onButtonDown(e, action, el));
       el.addEventListener('pointerup', (e) => this.onButtonUp(e));
       el.addEventListener('pointercancel', (e) => this.onButtonUp(e));
       // A thumb that slides off a button must release it, or the pad latches on.
       el.addEventListener('lostpointercapture', (e) => this.onButtonUp(e));
-      el.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+
+    this.diamondEl.addEventListener('pointerdown', this.onDiamondDown);
+    this.diamondEl.addEventListener('pointerup', (e) => this.onButtonUp(e));
+    this.diamondEl.addEventListener('pointercancel', (e) => this.onButtonUp(e));
+    this.diamondEl.addEventListener('lostpointercapture', (e) => this.onButtonUp(e));
 
     const pause = this.root.querySelector('.t-pause') as HTMLButtonElement;
     pause.addEventListener('pointerdown', (e) => {
@@ -140,9 +156,21 @@ export class TouchControls {
     this.available = true;
   }
 
+  /** Glass cannot click, so the motor says the press landed. */
+  private feedback(kind: Buzz): void {
+    getHaptics().fire(kind);
+  }
+
+  /** Mirrors the whole pad for a player whose strong thumb is the left one. */
+  setLefty(on: boolean): void {
+    this.root.classList.toggle('lefty', on);
+    document.body.classList.toggle('lefty', on);
+  }
+
   private reset(): void {
     this.held.clear();
     this.edges.clear();
+    this.edgeAt.clear();
     this.pointerButton.clear();
     this.stick = null;
     this.modifierLatched = false;
@@ -159,19 +187,71 @@ export class TouchControls {
     this.markAvailable();
     if (el.classList.contains('empty')) return;
     capture(el, e.pointerId);
-    this.pointerButton.set(e.pointerId, action);
+    this.press(action, el, e.pointerId, e.timeStamp);
+  }
+
+  /**
+   * A press on the diamond, resolved by direction rather than by which circle
+   * happened to be under the thumb.
+   *
+   * Drawn as four circles at the points of a square, the buttons cover slightly
+   * less than half of it: there is a hole in the middle where the bases meet
+   * and a hole in each corner. A thumb landing in one of those holes did
+   * nothing at all — no swing, no throw — and the player has no way to know
+   * why, because their thumb is over the evidence. Reading the *direction* from
+   * the centre instead means every point of the square, plus a margin outside
+   * it, belongs to exactly one button. The visible circles stop being targets
+   * and become labels, which is all a target you cannot see was ever worth.
+   */
+  private onDiamondDown = (e: PointerEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    this.markAvailable();
+    const action = this.diamondAt(e.clientX, e.clientY);
+    if (!action) return;
+    const el = this.buttons.get(action);
+    // An unlabelled direction means nothing here, and picking its neighbour
+    // instead would be worse than doing nothing: it would be a call the player
+    // did not make.
+    if (!el || el.classList.contains('empty')) return;
+    capture(this.diamondEl, e.pointerId);
+    this.press(action, el, e.pointerId, e.timeStamp);
+  };
+
+  private diamondAt(clientX: number, clientY: number): ActionId | null {
+    const r = this.diamondEl.getBoundingClientRect();
+    const [dx, dy] = toGameDelta(
+      clientX - (r.left + r.width / 2),
+      clientY - (r.top + r.height / 2),
+    );
+    if (dx === 0 && dy === 0) return null;
+    // The 45-degree split of a d-pad: whichever axis the thumb is further along.
+    if (Math.abs(dy) >= Math.abs(dx)) return dy < 0 ? 'diamondUp' : 'diamondDown';
+    return dx < 0 ? 'diamondLeft' : 'diamondRight';
+  }
+
+  private press(
+    action: ActionId,
+    el: HTMLButtonElement,
+    pointerId: number,
+    at: number,
+  ): void {
+    this.pointerButton.set(pointerId, action);
 
     if (action === 'modifier') {
       // A latch, not a hold. Tapping it again puts it away.
       this.modifierLatched = !this.modifierLatched;
       this.spendLatch = false;
       el.classList.toggle('latched', this.modifierLatched);
+      this.feedback('modifier');
       return;
     }
 
     el.classList.add('down');
     this.edges.add(action);
+    this.edgeAt.set(action, at);
     this.held.add(action);
+    this.feedback('press');
     // Anything that is not the modifier itself spends an armed modifier — that
     // is what makes "tap MOD, tap 2ND" mean steal second.
     if (this.modifierLatched) this.spendLatch = true;
@@ -192,14 +272,8 @@ export class TouchControls {
     e.preventDefault();
     this.markAvailable();
     capture(e.currentTarget as HTMLElement, e.pointerId);
-    const rect = this.root.getBoundingClientRect();
-    this.stick = {
-      id: e.pointerId,
-      originX: e.clientX - rect.left,
-      originY: e.clientY - rect.top,
-      x: 0,
-      y: 0,
-    };
+    const p = this.toGamePoint(e.clientX, e.clientY);
+    this.stick = { id: e.pointerId, originX: p.x, originY: p.y, x: 0, y: 0 };
     this.stickEl.classList.add('on');
     this.stickEl.style.left = `${this.stick.originX}px`;
     this.stickEl.style.top = `${this.stick.originY}px`;
@@ -210,9 +284,9 @@ export class TouchControls {
     const s = this.stick;
     if (!s || s.id !== e.pointerId) return;
     e.preventDefault();
-    const rect = this.root.getBoundingClientRect();
-    let dx = e.clientX - rect.left - s.originX;
-    let dy = e.clientY - rect.top - s.originY;
+    const p = this.toGamePoint(e.clientX, e.clientY);
+    let dx = p.x - s.originX;
+    let dy = p.y - s.originY;
     const len = Math.hypot(dx, dy);
     if (len > STICK_RADIUS) {
       // Drag past the edge and the stick base follows the thumb, so a long
@@ -238,6 +312,14 @@ export class TouchControls {
 
   // ----------------------------------------------------------------- output
 
+  /** A screen point in the coordinates the pad's own elements are laid out in. */
+  private toGamePoint(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.root.getBoundingClientRect();
+    const vx = clientX - rect.left;
+    const vy = clientY - rect.top;
+    return isAppRotated() ? { x: vy, y: rect.width - vx } : { x: vx, y: vy };
+  }
+
   /** -1..1, positive right. */
   stickX(): number {
     return applyDeadzone(this.stick?.x ?? 0);
@@ -257,9 +339,15 @@ export class TouchControls {
     return this.edges.has(action);
   }
 
+  /** When the press happened, on the clock rAF uses, or undefined. */
+  pressedAt(action: ActionId): number | undefined {
+    return this.edgeAt.get(action);
+  }
+
   /** Called once per render frame, after the simulation has consumed the frame. */
   endFrame(): void {
     this.edges.clear();
+    this.edgeAt.clear();
     if (this.spendLatch) {
       this.spendLatch = false;
       this.modifierLatched = false;
@@ -319,6 +407,21 @@ export class TouchControls {
       this.buttons.get('modifier')?.classList.remove('latched');
     }
   }
+}
+
+/**
+ * A pointer event arrives in the screen's coordinates. When the game has
+ * rotated itself to fill a portrait phone (see setAppRotated), everything on
+ * screen is a quarter turn away from that, and a thumb sliding "up the screen"
+ * is sliding left across the game. These two convert.
+ *
+ * The forward transform is `rotate(90deg) translateY(-100%)` about the top-left
+ * corner, which sends a game point (x, y) to the screen point (H - y, x), where
+ * H is the game box's own height — and that, after rotation, is the width of
+ * the bounding rectangle. Inverting gives what is below.
+ */
+function toGameDelta(dx: number, dy: number): [number, number] {
+  return isAppRotated() ? [dy, -dx] : [dx, dy];
 }
 
 /**

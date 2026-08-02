@@ -6,6 +6,7 @@ import { DIFFICULTY } from '../sim/ai';
 import { cssColor } from '../render/palette';
 import { escapeHtml } from './hud';
 import { ACTION_LABELS, type ActionId, type MenuAction, prettyKey } from './input';
+import { Haptics } from './haptics';
 import {
   SEASON_LENGTHS,
   type SeasonLength,
@@ -66,6 +67,8 @@ export interface AppApi {
   toggleFullscreen(): void;
   /** True once the on-screen pad has taken over — the settings list adapts. */
   isTouch(): boolean;
+  /** Which rung the automatic graphics servo is currently sitting on. */
+  qualityNow(): string;
 }
 
 export interface GameSettings {
@@ -78,9 +81,17 @@ export interface GameSettings {
   plateView: boolean;
   highContrast: boolean;
   muted: boolean;
-  quality: 'high' | 'balanced' | 'performance';
+  /**
+   * `auto` is not a preset — it is a servo that moves between them while you
+   * play, which is the only setting that stays right on a phone that heats up.
+   */
+  quality: 'auto' | 'high' | 'balanced' | 'performance';
   /** Stretch on the pitch clock. Copied into every GameSetup the app starts. */
   pitchTempo: PitchTempo;
+  /** Vibration feedback on the on-screen pad. Android only; see haptics.ts. */
+  haptics: boolean;
+  /** Mirrors the on-screen pad: stick right, buttons left. */
+  lefty: boolean;
   lastDifficulty: Difficulty;
   lastInnings: number;
 }
@@ -96,6 +107,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
   muted: false,
   quality: 'high',
   pitchTempo: DEFAULT_PITCH_TEMPO,
+  haptics: true,
+  lefty: false,
   lastDifficulty: 'pro',
   lastInnings: 9,
 };
@@ -971,19 +984,58 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
     {
       id: 'quality',
       label: 'Graphics',
-      value: () => s.quality.toUpperCase(),
-      hint: 'Balanced renders at 80% resolution, Performance at 60% and stops the crowd animating. Use them on older laptops.',
+      value: () => (s.quality === 'auto' ? `AUTO — ${app.qualityNow()}` : s.quality.toUpperCase()),
+      hint: 'Auto watches the frame clock and moves the settings itself, which is what a phone needs — they throttle as they warm up, so any fixed choice is wrong for part of a game. Balanced renders at 80% resolution, Performance at 60% and stops the crowd animating.',
       onLeft: () => {
-        s.quality = s.quality === 'high' ? 'performance' : s.quality === 'balanced' ? 'high' : 'balanced';
+        s.quality = cycleQuality(s.quality, -1);
         app.saveSettings();
       },
       onRight: () => {
-        s.quality = s.quality === 'high' ? 'balanced' : s.quality === 'balanced' ? 'performance' : 'high';
+        s.quality = cycleQuality(s.quality, 1);
         app.saveSettings();
       },
     },
     ...(app.isTouch()
       ? [
+          {
+            id: 'lefty',
+            label: 'Left-handed pad',
+            value: () => (s.lefty ? 'ON' : 'OFF'),
+            hint: 'Mirrors the on-screen controls — stick under the right thumb, buttons under the left. The information panels move with them.',
+            onSelect: () => {
+              s.lefty = !s.lefty;
+              app.saveSettings();
+            },
+            onLeft: () => {
+              s.lefty = !s.lefty;
+              app.saveSettings();
+            },
+            onRight: () => {
+              s.lefty = !s.lefty;
+              app.saveSettings();
+            },
+          } as MenuRow,
+          {
+            id: 'haptics',
+            label: 'Vibration',
+            value: () => (!hapticsSupported() ? 'UNSUPPORTED' : s.haptics ? 'ON' : 'OFF'),
+            disabled: () => !hapticsSupported(),
+            hint: hapticsSupported()
+              ? 'The pad ticks when a button lands and thumps on contact, harder the better the ball was hit. Glass gives no feedback of its own, so this is the only way to know a press registered without looking down.'
+              : 'This browser has no vibration API. Safari on iPhone does not implement one, and the workarounds for it rely on undocumented behaviour, so the game does not pretend otherwise.',
+            onSelect: () => {
+              s.haptics = !s.haptics;
+              app.saveSettings();
+            },
+            onLeft: () => {
+              s.haptics = !s.haptics;
+              app.saveSettings();
+            },
+            onRight: () => {
+              s.haptics = !s.haptics;
+              app.saveSettings();
+            },
+          } as MenuRow,
           {
             id: 'fullscreen',
             label: 'Fullscreen',
@@ -997,6 +1049,17 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
       : []),
     { id: 'back', label: 'Back', onSelect: () => app.back() },
   ];
+}
+
+function hapticsSupported(): boolean {
+  return Haptics.supported();
+}
+
+const QUALITY_ORDER: GameSettings['quality'][] = ['auto', 'high', 'balanced', 'performance'];
+
+function cycleQuality(q: GameSettings['quality'], dir: number): GameSettings['quality'] {
+  const i = QUALITY_ORDER.indexOf(q);
+  return QUALITY_ORDER[(i + dir + QUALITY_ORDER.length) % QUALITY_ORDER.length];
 }
 
 /** Live summary of the whole configuration, shown beside the settings list. */

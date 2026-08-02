@@ -93,4 +93,5 @@ export const SLOT = {
   championship: 'championship',
   customPlayers: 'customPlayers',
   records: 'records',
+  resume: 'resume',
 } as const;

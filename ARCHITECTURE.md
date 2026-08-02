@@ -154,6 +154,50 @@ laptop with a touchscreen keeps its keyboard until somebody uses the glass —
 and `detectDevice()` in `ui/device.ts` only chooses opening defaults, never
 capabilities.
 
+Two additions keep that property while making the pad behave like hardware.
+
+**The diamond is one control.** Its container owns every press inside its box —
+including a 12px transparent border, and the gaps between the four circles — and
+resolves it by direction from the centre, the 45-degree split of a d-pad. The
+buttons themselves are `pointer-events: none`; they are labels. The border is on
+three sides only: below the diamond is the aux row, and slop that reaches over
+`DIVE` or `SWITCH` would not widen a target, it would steal one.
+
+**`InputFrame.pressAge` carries measured input lag.** Input is sampled once a
+frame, so a press is discovered up to a frame after it happened — 17 ms of
+random, always-late error on a 60 Hz phone, which is a third of a swing
+tolerance. `ui/input.ts` reads `event.timeStamp` (the same clock rAF uses),
+reports the age, and `sim/game.ts` backdates `swingT` by it under a hard cap.
+The engine still reads no clock: the age is an input like any other, zero for
+the CPU and zero in every test, so determinism and replayability are untouched.
+
+## What a phone does to a game while you play it
+
+Four modules exist only because a phone is not a small computer:
+
+| Module | The problem it exists for |
+|---|---|
+| `save/resume.ts` | iOS discards backgrounded tabs. `GameState` is plain data plus one `Rng`, so a snapshot is JSON plus one integer — and the restored game is bit-identical, not approximate. |
+| `ui/lifecycle.ts` | The screen sleeps mid-pitch; a notification hides the page mid-swing; the tab can be discarded without warning. Wake lock, auto-pause, and a synchronous `pagehide` write. |
+| `render/governor.ts` | Phones throttle as they warm. A fixed quality setting is wrong for part of every game, so `quality: 'auto'` is a servo on the median frame time. |
+| `ui/haptics.ts` | Glass gives no feedback. Android only; iOS Safari has no vibration API and the module says so rather than pretending. |
+
+None of them is reachable from `sim/`, and `save/resume.ts` is the only one that
+touches `GameState` at all — read-only, through one destructure.
+
+`setAppRotated()` in `ui/device.ts` is the one piece of global state the touch
+layer reads. When a rotation-locked phone takes the game up on its offer to turn
+itself, `#app` is laid out landscape and rotated a quarter turn; pointer events
+then arrive ninety degrees away from the coordinate system every element lives
+in. `toGamePoint`/`toGameDelta` in `ui/touch.ts` are the only two places that
+know. Everything else — the renderer, the HUD, the menus, the simulation — is
+unaware, which is the property that makes the trick affordable.
+
+The two things a CSS rotation cannot fix are handled explicitly rather than left
+to break: media queries and `vh`/`vw` describe the *phone*, so the portrait
+media block is gated on `html:not(.rotated)` and the pad sizes itself from
+`--gw`/`--gh`, which `App.onResize` writes from the game box.
+
 ## Determinism
 
 `GameSetup.seed` seeds one `Rng`. Every stochastic decision in a game draws from

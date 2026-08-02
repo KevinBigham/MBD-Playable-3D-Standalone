@@ -112,6 +112,13 @@ const CURSOR_Y_MAX = 1.46;
 /** Max seconds a single play may stay live before it is force-resolved. */
 const PLAY_TIME_LIMIT = 26;
 
+/**
+ * The most a swing may be backdated by InputFrame.pressAge. Two rendered frames
+ * at 30 Hz — generous for the delay this is meant to remove, and far too small
+ * to be worth gaming even if a front end tried to.
+ */
+const MAX_PRESS_AGE = 1 / 15;
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -730,9 +737,13 @@ function updatePitchFlight(state: GameState, dt: number, inputs: InputPair): voi
       moveCursor(state, batInput, dt);
       if (batInput.bunt) bs.bunting = !bs.bunting;
       if (batInput.swing || batInput.power || (bs.bunting && batInput.take === false && false)) {
-        startSwing(state, batInput.power ? 'power' : bs.bunting ? 'bunt' : 'contact');
+        startSwing(
+          state,
+          batInput.power ? 'power' : bs.bunting ? 'bunt' : 'contact',
+          batInput.pressAge,
+        );
       } else if (bs.bunting && batInput.swing) {
-        startSwing(state, 'bunt');
+        startSwing(state, 'bunt', batInput.pressAge);
       }
     } else {
       bs.swingT += dt;
@@ -802,9 +813,19 @@ function logPitch(state: GameState, result: PitchLogResult): void {
   if (state.pitchLog.length > 24) state.pitchLog.shift();
 }
 
-function startSwing(state: GameState, kind: 'contact' | 'power' | 'bunt'): void {
+/**
+ * `age` backdates the swing to when the button was actually pressed rather than
+ * when the engine found out about it — see InputFrame.pressAge. It is capped
+ * hard: a plausible age is one rendered frame, and anything past a couple of
+ * frames is a stalled tab or a lying clock, not a human being early.
+ */
+function startSwing(
+  state: GameState,
+  kind: 'contact' | 'power' | 'bunt',
+  age = 0,
+): void {
   const bs = state.batter;
-  bs.swingT = 0;
+  bs.swingT = clamp(age, 0, MAX_PRESS_AGE);
   bs.swingKind = kind;
   bs.animT = 0;
   bs.swingResolved = false;

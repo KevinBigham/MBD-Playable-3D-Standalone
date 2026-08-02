@@ -11,7 +11,7 @@ shown. Nothing here is an estimate.
 npx vitest run
 ```
 
-**Result: 17 files, 201 tests, 201 passed, 0 failed. 65 s wall clock.**
+**Result: 21 files, 226 tests, 226 passed, 0 failed. 65 s wall clock.**
 
 | File | Tests | What it protects |
 |---|---|---|
@@ -32,6 +32,10 @@ npx vitest run
 | `tempo.test.ts` | 7 | The pitch clock: flight time grows strictly with the tempo, the ball's path through space is bit-identical at every setting to 1e-9 m, it crosses the plate on the same spot, the pitcher gains no extra steering authority from the extra seconds, the default lands in a window a person can think inside, and full games complete cleanly at all three settings |
 | `commands.test.ts` | 6 | What the player pressed versus what the game did: the advertised steal actually sends the runner instead of retreating him, going back still works on a live ball, and the captions on the buttons match the situation — including the modifier re-labelling the diamond, the pitching diamond naming real pitches, and the alignment reset staying reachable |
 | `situational.test.ts` | 22 | Situational baseball: every alignment moves the right people in the right direction and never moves the pitcher or catcher; the manager's priority order across seven situations; the intentional walk fires only when it buys something; and over 24 full games — double plays turn, runners score from third on fly balls, stolen bases come back neither 0% nor 100% safe, balls get past the catcher at a plausible rate, and more than one alignment is used without the honest one stopping being the common one |
+| `resume.test.ts` | 5 | A game restored from storage is the *same* game, not an approximation: the full state round-trips through `JSON.parse(JSON.stringify(...))` and both copies then run six more minutes of simulated baseball and must still serialise identically, including a snapshot taken with the ball in the air and a swing pending on four separate seeds. Also: every malformed, stale-version and already-finished payload returns null rather than a half-restored game, and the snapshot stays comfortably inside a storage quota |
+| `timing.test.ts` | 4 | Input lag correction: pressing four ticks late while declaring four ticks of lag produces a timing figure identical to pressing on time to nine decimals; the same press without the declaration is measurably late (the control); and an implausible declared lag is capped rather than credited |
+| `governor.test.ts` | 8 | The automatic graphics servo, tested mostly for what it refuses to do: silent until enabled, deaf to a catastrophic single frame inside an otherwise healthy window, motionless in the band between its thresholds, slow to climb and quick to fall, and — fed the frame times of a thermally limited phone that is comfortable at one rung and drowning at the next — it settles instead of oscillating forever |
+| `haptics.test.ts` | 8 | Vibration restraint: silent until enabled, refuses to enable where the platform has no API, never fires twice inside 40 ms, every pattern under 200 ms total, and contact genuinely varies with how well the ball was struck |
 
 ---
 
@@ -471,6 +475,17 @@ Stated plainly rather than implied:
 - **Audio was verified functionally** — that it unlocks, that volumes apply,
   that it never throws — but the subjective quality of the synthesis has not
   been judged by a listener in this environment.
+- **No real phone was available, again.** Everything in the touch and phone
+  work below was verified at handset viewports in a desktop Chromium, with the
+  pad driven by synthesised `PointerEvent`s and a real handset browser context
+  (`isMobile`, `hasTouch`, iOS user agent, 2× scale) for the screenshots. That
+  proves layout, hit-testing, label wiring, coordinate mapping under rotation,
+  and that a press reaches the engine. It is not a thumb on glass. Specifically
+  unverified on hardware: multi-touch under real load, actual touch latency,
+  vibration (no vibration API exists in the test browser at all — the motor code
+  has never physically run), the wake lock, tab discard and recovery, and how
+  the graphics servo behaves against a genuine thermal throttle rather than a
+  synthetic frame-time sequence.
 - **The plate view has not been through an independent review.** The two
   evaluators quoted in section 9 attacked the build that preceded it. Its
   measurements here — zone size, resolution sweep, node counts, the noise ratio

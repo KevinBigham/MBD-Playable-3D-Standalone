@@ -4,10 +4,11 @@ import { freshSeed } from '../core/rng';
 import { STADIUMS, getStadium } from '../data/stadiums';
 import { TEAM_IDENTITIES, buildLeague, displayName, playerById, teamById } from '../data/teams';
 import { createGameState, type GameState } from '../sim/state';
-import { changePitcher, stepGame } from '../sim/game';
+import { changePitcher, humanIsBatting, humanIsPitching, stepGame } from '../sim/game';
 import { emptyInputPair } from '../sim/input';
 import { simulateGame } from '../sim/autoplay';
 import { GameWorld } from '../render/world';
+import { FrameGovernor, type QualityStep } from '../render/governor';
 import { CONTACT_Z } from '../core/constants';
 import { swingProfile, zoneBounds } from '../sim/contact';
 import { getAudio, type SfxName } from '../audio/audio';
@@ -15,7 +16,23 @@ import { Hud } from './hud';
 import { InputManager, type ActionId } from './input';
 import { TouchControls } from './touch';
 import type { ControlLabels } from './controls';
-import { detectDevice, isPortrait, toggleFullscreen, viewportSize } from './device';
+import {
+  detectDevice,
+  isAppRotated,
+  isPortrait,
+  setAppRotated,
+  toggleFullscreen,
+  viewportSize,
+} from './device';
+import { Lifecycle } from './lifecycle';
+import { type Buzz, getHaptics } from './haptics';
+import {
+  type ResumeContext,
+  type ResumeSnapshot,
+  describeSituation,
+  restoreGame,
+  snapshotGame,
+} from '../save/resume';
 import {
   type AppApi,
   BracketScreen,
@@ -83,6 +100,29 @@ import { escapeHtml } from './hud';
 
 type Mode = 'menu' | 'game' | 'derby';
 
+/**
+ * Which game events are worth a buzz. Deliberately short: a motor that fires on
+ * everything stops meaning anything, and these are the moments a player would
+ * otherwise have to look at the screen to learn about.
+ */
+const BUZZ_FOR: Record<string, Buzz | undefined> = {
+  contact: 'contact',
+  homerun: 'homerun',
+  swingmiss: 'strike',
+  strike: 'strike',
+  strikeout: 'strike',
+  out: 'out',
+  bigplay: 'bigplay',
+  wall: 'bigplay',
+};
+
+/**
+ * Tolerance on the render-rate cap. A 120 Hz display offers frames 8.3 ms
+ * apart; without slop, floating-point drift turns "every second frame" into
+ * "every second frame, except sometimes the third", which reads as a stutter.
+ */
+const RENDER_SLOP = 0.004;
+
 /** The derby is one situation from first pitch to last, so its pad is fixed. */
 const DERBY_LABELS: ControlLabels = {
   situation: 'batting',
@@ -108,6 +148,7 @@ export class App implements AppApi {
   readonly world: GameWorld;
   readonly input = new InputManager();
   readonly audio = getAudio();
+  readonly haptics = getHaptics();
   readonly hud: Hud;
   settings: GameSettings;
 
@@ -129,9 +170,18 @@ export class App implements AppApi {
   readonly touch: TouchControls;
   readonly device = detectDevice();
   private rotateEl: HTMLDivElement | null = null;
+  private lifecycle: Lifecycle;
+  /** Inning+half of the last resume snapshot, so one is taken per half-inning. */
+  private lastSavedHalf = '';
 
+  private governor = new FrameGovernor((step) => this.applyQualityStep(step));
   private accumulator = 0;
   private lastTime = 0;
+  /** When the last frame was actually drawn, for the render-rate cap. */
+  private lastDrawTime = 0;
+  /** Seconds between drawn frames; 0 means draw whenever the display asks. */
+  private renderInterval = 0;
+  private renderCapDecided = false;
   private running = false;
   private toastEl: HTMLDivElement | null = null;
   private toastT = 0;
@@ -158,9 +208,19 @@ export class App implements AppApi {
     // without ever firing a window resize, so the canvas has to listen to both.
     window.visualViewport?.addEventListener('resize', this.onResize);
     window.visualViewport?.addEventListener('scroll', this.onResize);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.audio.suspend();
-      else this.audio.resume();
+    this.lifecycle = new Lifecycle({
+      onHide: () => {
+        // A phone that hides the page has *already* taken the player out of the
+        // game — a call, a notification, the lock button. Coming back into a
+        // live pitch with a count you did not choose is the game punishing
+        // someone for their phone ringing, so it pauses instead. Pause first:
+        // it wants to make a sound, and the line below takes sound away.
+        if (this.mode !== 'menu' && !this.paused) this.openPause();
+        this.audio.suspend();
+        this.haptics.silence();
+      },
+      onShow: () => this.audio.resume(),
+      onPersist: () => this.persistGame(),
     });
     // The pad appears the moment the device proves it has a finger, whatever
     // the media queries guessed. A laptop with a touchscreen therefore keeps
@@ -186,9 +246,10 @@ export class App implements AppApi {
       // A thumb is slower than a key, and there is no second chance to read a
       // pitch on a 5-inch screen.
       pitchTempo: 'relaxed',
-      // Phone GPUs are not laptop GPUs, and a dropped frame at the plate is a
-      // missed swing.
-      quality: 'balanced',
+      // Phone GPUs are not laptop GPUs, they are not all the same GPU, and the
+      // one in any given phone gets slower as the case warms up. A fixed guess
+      // is wrong for somebody; a servo is wrong for nobody for long.
+      quality: 'auto',
       // The line score is the first thing to go when the screen is 400px wide.
       showLineScore: false,
     };
@@ -199,6 +260,10 @@ export class App implements AppApi {
     this.touch.setEnabled(on);
     this.hud.setTouchMode(on);
     document.body.classList.toggle('touch-mode', on);
+    // Vibration and the mirrored layout only exist for the pad, so they are
+    // decided here rather than at load: a laptop that has just been touched for
+    // the first time gets both, and never before.
+    this.applySettings();
     this.onResize();
   }
 
@@ -222,6 +287,7 @@ export class App implements AppApi {
     );
     this.running = true;
     this.lastTime = performance.now();
+    this.lastDrawTime = this.lastTime;
     requestAnimationFrame(this.frame);
   }
 
@@ -256,25 +322,35 @@ export class App implements AppApi {
     this.audio.setSfxVolume(this.settings.sfxVolume);
     this.audio.setMuted(this.settings.muted);
     this.world.setShakeEnabled(this.settings.cameraShake);
-    this.world.setQuality({
-      particles: !this.settings.reducedFlashing,
-      // Reduced flashing also stops the crowd wave; performance mode stops it
-      // for a different reason, so either switch turns it off.
-      crowdAnimation: this.settings.quality !== 'performance' && !this.settings.reducedFlashing,
-      pixelRatioCap:
-        this.settings.quality === 'high' ? 2 : this.settings.quality === 'balanced' ? 1.5 : 1,
-      // Renders fewer pixels even on a 1x display, where a pixel-ratio cap does
-      // nothing at all. This is what makes Performance mode actually help.
-      renderScale:
-        this.settings.quality === 'high' ? 1 : this.settings.quality === 'balanced' ? 0.8 : 0.6,
-      // Cast shadows are the single most expensive thing on the field — an
-      // extra depth pass over every player — so Performance drops them.
-      shadows: this.settings.quality !== 'performance',
-    });
+    const auto = this.settings.quality === 'auto';
+    this.governor.setEnabled(auto);
+    if (auto) {
+      // The servo owns resolution, shadows and the crowd from here; only the
+      // accessibility switch still has a say.
+      this.applyQualityStep(this.governor.current());
+    } else {
+      this.world.setQuality({
+        particles: !this.settings.reducedFlashing,
+        // Reduced flashing also stops the crowd wave; performance mode stops it
+        // for a different reason, so either switch turns it off.
+        crowdAnimation: this.settings.quality !== 'performance' && !this.settings.reducedFlashing,
+        pixelRatioCap:
+          this.settings.quality === 'high' ? 2 : this.settings.quality === 'balanced' ? 1.5 : 1,
+        // Renders fewer pixels even on a 1x display, where a pixel-ratio cap does
+        // nothing at all. This is what makes Performance mode actually help.
+        renderScale:
+          this.settings.quality === 'high' ? 1 : this.settings.quality === 'balanced' ? 0.8 : 0.6,
+        // Cast shadows are the single most expensive thing on the field — an
+        // extra depth pass over every player — so Performance drops them.
+        shadows: this.settings.quality !== 'performance',
+      });
+    }
     this.hud.setLineScoreVisible(this.settings.showLineScore);
     this.hud.setPlateViewEnabled(this.settings.plateView);
     this.uiRoot.classList.toggle('high-contrast', this.settings.highContrast);
     document.body.classList.toggle('reduced-motion', this.settings.reducedFlashing);
+    this.haptics.setEnabled(this.settings.haptics && this.touch.isEnabled());
+    this.touch.setLefty(this.settings.lefty);
   }
 
   saveSettings(): void {
@@ -282,19 +358,64 @@ export class App implements AppApi {
     this.applySettings();
   }
 
+  /**
+   * One rung of the automatic ladder. Reduced flashing still wins over it: an
+   * accessibility switch is a statement about the player, not about the phone.
+   */
+  private applyQualityStep(step: QualityStep): void {
+    this.world.setQuality({
+      particles: !this.settings.reducedFlashing,
+      crowdAnimation: step.crowdAnimation && !this.settings.reducedFlashing,
+      pixelRatioCap: step.pixelRatioCap,
+      renderScale: step.renderScale,
+      shadows: step.shadows,
+    });
+  }
+
+  qualityNow(): string {
+    return this.governor.describe() || 'FULL';
+  }
+
   private onResize = (): void => {
     const { w, h } = viewportSize();
+    // If the phone ends up genuinely landscape after all — the lock came off,
+    // or it was a tablet all along — the game's own quarter turn is no longer a
+    // fix, it is the problem. Undone before anything is measured.
+    if (isAppRotated() && h <= w) setAppRotated(false);
     // Everything positioned in CSS reads these instead of vh, because vh on
     // mobile means "the page if the toolbars were gone" and the toolbars are
     // usually there.
     const root = document.documentElement;
     root.style.setProperty('--vw', `${w}px`);
     root.style.setProperty('--vh', `${h}px`);
-    root.classList.toggle('portrait', h > w);
-    root.classList.toggle('tiny', Math.min(w, h) < 420);
-    this.world.resize(w, h);
+    // When the game has turned itself, the box it lives in is the other way
+    // round, and every layout decision below has to be made about *that* box
+    // rather than about the phone.
+    const rotated = isAppRotated();
+    const bw = rotated ? h : w;
+    const bh = rotated ? w : h;
+    // The box the *game* lives in, which is the viewport turned on its side
+    // when the game has rotated itself. Anything sized as a fraction of the
+    // screen has to read these rather than vw/vh, because vw and vh describe
+    // the phone and the game is lying across it.
+    root.style.setProperty('--gw', `${bw}px`);
+    root.style.setProperty('--gh', `${bh}px`);
+    root.classList.toggle('portrait', bh > bw);
+    root.classList.toggle('tiny', Math.min(bw, bh) < 420);
+    this.world.resize(bw, bh);
     this.updateRotateGate();
   };
+
+  /**
+   * Turns the whole game a quarter turn, or puts it back. Offered from the
+   * portrait card and never applied on its own — a phone that *can* rotate
+   * should, and this exists for the ones that have been told not to.
+   */
+  private setRotated(on: boolean): void {
+    if (isAppRotated() === on) return;
+    setAppRotated(on);
+    this.onResize();
+  }
 
   /**
    * Portrait on a phone is not a layout problem, it is a framing problem: a
@@ -303,7 +424,7 @@ export class App implements AppApi {
    * of people have rotation locked and are not going to unlock it for this.
    */
   private updateRotateGate(): void {
-    const wanted = this.device.phone && isPortrait() && this.mode !== 'menu';
+    const wanted = this.device.phone && isPortrait() && !isAppRotated() && this.mode !== 'menu';
     if (!wanted) {
       this.rotateEl?.remove();
       this.rotateEl = null;
@@ -312,12 +433,20 @@ export class App implements AppApi {
     if (this.rotateEl) return;
     const el = document.createElement('div');
     el.className = 'rotate-gate';
+    // The middle button is the one that matters. Plenty of people keep rotation
+    // locked on purpose, and telling them to go and change a system setting for
+    // a game of baseball is not an answer — so the game turns instead.
     el.innerHTML = `
       <div class="rot-icon">⟳</div>
       <h2>TURN YOUR PHONE</h2>
       <p>MOONSHOT NINE plays sideways. The field is wide and the strike zone is small.</p>
+      <button class="rot-rotate" type="button">ROTATION LOCKED? TURN THE GAME INSTEAD</button>
       <button class="rot-dismiss" type="button">PLAY IN PORTRAIT ANYWAY</button>
     `;
+    el.querySelector('.rot-rotate')?.addEventListener('click', () => {
+      this.setRotated(true);
+      this.playSfx('menuSelect');
+    });
     el.querySelector('.rot-dismiss')?.addEventListener('click', () => {
       el.remove();
       this.rotateEl = null;
@@ -349,12 +478,27 @@ export class App implements AppApi {
 
     this.frameTimes.push(dt);
     if (this.frameTimes.length > 120) this.frameTimes.shift();
+    this.governor.sample(dt);
+    if (!this.renderCapDecided && this.frameTimes.length >= 90) this.decideRenderCap();
+
+    // A 120 Hz phone display asks for twice the GPU work, twice the heat and
+    // twice the battery to show a game whose simulation runs on a fixed clock
+    // and whose ball is a few pixels across. Sixty drawn frames is the target;
+    // the loop still *runs* at the display rate, so input is still sampled at
+    // 120 Hz and nothing about the timing of a swing gets slower.
+    let drawDt = (now - this.lastDrawTime) / 1000;
+    const drawNow = this.renderInterval <= 0 || drawDt >= this.renderInterval - RENDER_SLOP;
+    if (!Number.isFinite(drawDt) || drawDt < 0) drawDt = dt;
+    drawDt = Math.min(drawDt, MAX_FRAME_DT);
 
     try {
-      this.input.poll();
+      this.input.poll(now);
       this.dispatchInput();
       this.tick(dt);
-      this.draw(dt);
+      if (drawNow) {
+        this.lastDrawTime = now;
+        this.draw(drawDt);
+      }
     } catch (err) {
       // A render or logic fault must not lock the page in a black screen.
       console.error('[MOONSHOT NINE] frame error', err);
@@ -371,6 +515,23 @@ export class App implements AppApi {
       }
     }
   };
+
+  /**
+   * Decides once, from measured frame intervals, whether to cap the draw rate.
+   *
+   * Only a display running at roughly double the target is capped. A 90 Hz
+   * Android panel must be left alone: there is no way to draw 60 frames on it —
+   * frames only exist when the display offers one — so "cap to 60" there would
+   * silently mean 45, which is worse than the 90 it replaced. This is why the
+   * decision is measured rather than assumed from a device string.
+   */
+  private decideRenderCap(): void {
+    this.renderCapDecided = true;
+    if (!this.device.touchPrimary) return;
+    const sorted = [...this.frameTimes].sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    if (median > 0 && median < 0.0095) this.renderInterval = 1 / 60;
+  }
 
   private recoverFromError(): void {
     if (this.mode !== 'menu') {
@@ -415,6 +576,14 @@ export class App implements AppApi {
 
     if (this.mode === 'game' && this.game) {
       this.stepFixed(dt, () => stepGame(this.game!, { p1: this.input.p1, p2: this.input.p2 }));
+      // A snapshot per half-inning. Between them, hiding the page takes one
+      // too, so this only has to cover a hard crash — and it bounds that loss
+      // to the half-inning you are in rather than the whole game.
+      const half = `${this.game.inning}${this.game.half}`;
+      if (half !== this.lastSavedHalf) {
+        this.lastSavedHalf = half;
+        this.persistGame();
+      }
       if (this.game.phase === 'final' && !this.resultShown && this.game.banner.t <= 0.2) {
         this.resultShown = true;
         this.showPostgame();
@@ -481,6 +650,12 @@ export class App implements AppApi {
   }
 
   private onGameEvent(kind: string, power: number, text?: string): void {
+    // The motor only speaks for things that happened to *you*. A CPU half-inning
+    // buzzing in your pocket while you watch is noise, not feedback.
+    if (this.mode === 'game' && this.game && humanInvolved(this.game)) {
+      const buzz = BUZZ_FOR[kind];
+      if (buzz) this.haptics.fire(buzz, power);
+    }
     const map: Record<string, SfxName | undefined> = {
       pitchrelease: 'pitchRelease',
       swingmiss: 'swingMiss',
@@ -507,7 +682,8 @@ export class App implements AppApi {
       defense: 'menuMove',
     };
     if (kind === 'contact') {
-      const name: SfxName = power > 0.72 ? 'contactBarrel' : power > 0.42 ? 'contactSolid' : 'contactWeak';
+      const name: SfxName =
+        power > 0.72 ? 'contactBarrel' : power > 0.42 ? 'contactSolid' : 'contactWeak';
       this.audio.playSfx(name, { power });
       if (text) this.hud.flashFeedback(text, power > 0.72 ? '#ffd15c' : '#f4efe3');
       this.hud.noteContact(text ?? '');
@@ -693,6 +869,10 @@ export class App implements AppApi {
     this.updateRotateGate();
     this.game = null;
     this.derby = null;
+    // Nobody is watching a menu closely enough to justify holding the screen
+    // awake through it, and a phone left on the title screen should be allowed
+    // to go to sleep like any other phone.
+    this.lifecycle.keepAwake(false);
     // Any route back to the menu must take the in-game HUD with it.
     this.hud.root.remove();
     this.detachDerbyHud();
@@ -704,9 +884,22 @@ export class App implements AppApi {
 
     const hasSeason = () => loadSeason() !== null;
     const hasCup = () => loadChampionship() !== null;
+    const saved = this.loadResume();
 
     this.goto(
       new ListScreen(this, 'MOONSHOT NINE', 'Main menu', () => [
+        // Only offered when there is one, and it goes first, because a player
+        // who lost a game to a locked phone is looking for exactly this row.
+        ...(saved
+          ? [
+              {
+                id: 'resume',
+                label: 'Resume Game',
+                hint: describeSituation(saved.state),
+                onSelect: () => this.resumeGame(),
+              } satisfies MenuRow,
+            ]
+          : []),
         {
           id: 'quick',
           label: 'Quick Play',
@@ -1764,14 +1957,25 @@ export class App implements AppApi {
     // through here, so this is the one place the pitch tempo has to be stamped
     // on. Callers build setups without knowing the option exists.
     setup = { ...setup, pitchTempo: this.settings.pitchTempo };
-    this.game = createGameState(setup, away, home);
-    this.world.loadMatch(getStadium(setup.stadiumId), setup.night, away, home);
+    // A new game replaces whatever was resumable; two live games is not a state
+    // this app has, and offering the old one after starting a new one is a trap.
+    clearSlot(SLOT.resume);
+    this.enterGame(createGameState(setup, away, home), away, home);
+  }
+
+  /**
+   * The half of `startGame` that is about *presenting* a game rather than
+   * creating one, so a restored game takes exactly the same path in.
+   */
+  private enterGame(state: GameState, away: Team, home: Team): void {
+    this.game = state;
+    this.world.loadMatch(getStadium(state.setup.stadiumId), state.setup.night, away, home);
     this.clearStack();
-    this.mode = 'menu';
     this.mode = 'game';
     this.paused = false;
     this.resultShown = false;
     this.accumulator = 0;
+    this.lastSavedHalf = `${state.inning}${state.half}`;
     this.audio.unlock();
     this.audio.playMusic('gameplay');
     this.uiRoot.appendChild(this.hud.root);
@@ -1780,7 +1984,71 @@ export class App implements AppApi {
     // the previous one is over or it opens the next game quoting a pitch that
     // was thrown to somebody else.
     this.hud.resetReadout();
+    this.lifecycle.keepAwake(true);
     this.updateRotateGate();
+  }
+
+  // ------------------------------------------------------------ resume a game
+
+  /**
+   * Writes the game in progress where a discarded tab cannot take it. Called on
+   * every route out of the page, on pause, and once per half-inning, so the
+   * worst case a hard crash can cost is the current half-inning.
+   *
+   * Deliberately silent about failure: a full or unavailable localStorage means
+   * the offer will not appear later, which is exactly what happens today, and
+   * a toast about storage quota in the middle of an at-bat helps nobody.
+   */
+  private persistGame(): void {
+    if (this.mode !== 'game' || !this.game || this.game.gameOver) return;
+    saveSlot(SLOT.resume, snapshotGame(this.game, this.gameContext));
+  }
+
+  /**
+   * Puts back whatever the resumed game is supposed to report its result to. If
+   * that save is gone — deleted, or a new season started over it — the game
+   * becomes an exhibition rather than one whose result vanishes on the last out.
+   */
+  private reattachContext(context: ResumeContext): ResumeContext {
+    if (context === 'season' || context === 'playoff') {
+      this.season = this.season ?? loadSeason();
+      return this.season ? context : 'quick';
+    }
+    if (context === 'cup') {
+      this.championship = this.championship ?? loadChampionship();
+      return this.championship ? context : 'quick';
+    }
+    return context;
+  }
+
+  /** The saved game, if there is one and it still loads. */
+  private loadResume(): { state: GameState; context: ResumeContext } | null {
+    const raw = loadSlot<ResumeSnapshot>(SLOT.resume);
+    return raw ? restoreGame(raw) : null;
+  }
+
+  private resumeGame(): void {
+    const restored = this.loadResume();
+    if (!restored) {
+      clearSlot(SLOT.resume);
+      this.toast('That game could not be restored');
+      this.gotoMainMenu();
+      return;
+    }
+    // Cleared *before* entering, not after: if anything about this state is
+    // poisonous enough to throw on the first frame, the player gets the menu
+    // back rather than a save that crashes the game every time they touch it.
+    clearSlot(SLOT.resume);
+    const { state, context } = restored;
+    // A season or cup game resumed straight from the title has no season or cup
+    // loaded behind it — the app only reads those when you walk into their
+    // menus — and the postgame would then quietly fail to record the result.
+    this.gameContext = this.reattachContext(context);
+    this.enterGame(state, state.away, state.home);
+    // Resuming into a live pitch would hand the player a swing decision they
+    // have had no chance to read. Whatever was happening, they get the pause
+    // card and press Resume when they are ready.
+    this.openPause();
   }
 
   private showPostgame(): void {
@@ -1788,6 +2056,10 @@ export class App implements AppApi {
     const result = g.result!;
     this.hud.root.remove();
     this.mode = 'menu';
+    // A finished game is not resumable, and the snapshot from its last
+    // half-inning would otherwise sit on the menu offering the eighth.
+    clearSlot(SLOT.resume);
+    this.lifecycle.keepAwake(false);
     this.audio.playMusic(
       resultIsUserWin(this, result) ? 'victory' : 'menu',
     );
@@ -1929,6 +2201,9 @@ export class App implements AppApi {
   private openPause(): void {
     if (this.paused) return;
     this.paused = true;
+    // The pause card is the last certain moment before a player puts the phone
+    // in a pocket, so it is the right place to write the game down.
+    this.persistGame();
     this.audio.playSfx('menuBack');
     const rows: MenuRow[] = [
       { id: 'resume', label: 'Resume', onSelect: () => this.closePause() },
@@ -1990,6 +2265,9 @@ export class App implements AppApi {
         this.pauseScreen = null;
         this.hud.root.remove();
         this.detachDerbyHud();
+        // "Abandoned" has to mean abandoned. Leaving it resumable would put a
+        // game the player just quit back on the menu they quit to.
+        clearSlot(SLOT.resume);
         this.gotoMainMenu();
       },
     });
@@ -2022,6 +2300,11 @@ export class App implements AppApi {
 }
 
 // ---------------------------------------------------------------------------
+
+/** True when a human is at the plate or on the mound this half-inning. */
+function humanInvolved(state: GameState): boolean {
+  return humanIsBatting(state) || humanIsPitching(state);
+}
 
 function teamLabel(teams: Team[], id: string): string {
   const t = teams.find((x) => x.id === id) ?? teams[0];

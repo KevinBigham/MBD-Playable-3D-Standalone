@@ -75,8 +75,14 @@ export class Rng {
     return this.s >>> 0;
   }
 
+  /**
+   * Restores a snapshot from getState(). Unlike the constructor this does *not*
+   * substitute a fallback for zero: every uint32 is a legal mulberry32 state,
+   * including the one the counter passes through once per cycle, and coercing
+   * it would silently fork the stream on a restored save.
+   */
   setState(s: number): void {
-    this.s = (s >>> 0) || 0x9e3779b9;
+    this.s = s >>> 0;
   }
 
   fork(salt: number): Rng {

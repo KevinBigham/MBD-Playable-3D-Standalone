@@ -57,7 +57,7 @@ not a two-player control scheme.
 | Control | Where it is | What it is |
 |---|---|---|
 | Stick | Anywhere in the left half | **Floating.** There is no circle to hit — put a thumb down and that is where the stick is. Drag past the edge and it follows, so a long swipe never runs out of travel. |
-| The four buttons | Bottom right, laid out as the base diamond | Captioned with what they do *right now* — `SWING`, or `2ND`, or `SL`. A caption you cannot use is not drawn and cannot be pressed. |
+| The four buttons | Bottom right, laid out as the base diamond | Captioned with what they do *right now* — `SWING`, or `2ND`, or `SL`. A caption you cannot use is not drawn and cannot be pressed. **The whole diamond is one control**, not four: a press anywhere in the square — the gap in the middle, a corner, or a little outside the edge — takes the button in that direction from the centre. The circles are labels; the target is the square. |
 | `DEFENCE` / `STEAL` / `BACK` | Below the diamond | The modifier. It **latches** rather than being held: tap it, it lights up, the next press spends it. Tap it again to put it away. |
 | `NORMAL` / `ALL` / `DIVE` | Below the diamond | Special, whatever it means in the situation. |
 | `AROUND` / `SWITCH` | Below the diamond | Switch-fielder. |
@@ -73,13 +73,46 @@ make a seven-button scheme fit under two thumbs:
 - **The pitching diamond names the pitch, not the slot.** You press `SL`, not
   "pitch 3".
 
-The game is built for landscape. In portrait it puts up a card asking for a
-turn, with a button to play in portrait anyway — because plenty of people have
-rotation locked and the portrait layout does work; the field is just narrower.
+### Portrait, and phones that will not turn
 
-Opening defaults on a touch device, all of them changeable in **Settings**:
-pitch tempo **Relaxed**, graphics **Balanced**, line score **off**. A setting
-you have changed yourself is never overwritten, including changing them back.
+The game is built for landscape. In portrait it puts up a card with two ways
+out:
+
+- **Turn the game instead.** For a phone with rotation locked — which is a
+  deliberate setting a lot of people have, and not one worth changing for a
+  game of baseball. The whole game rotates a quarter turn and fills the screen
+  in landscape; hold the phone with its right edge up and you have the full
+  landscape game, controls and all. Nothing is scaled down or left out.
+- **Play in portrait anyway.** The portrait layout does work; the field is just
+  narrower.
+
+Neither choice is remembered. It is a nudge, not a setting, and it should come
+back next game rather than quietly never appearing again.
+
+### Left-handed
+
+**Settings → Left-handed pad** mirrors everything: stick under the right thumb,
+buttons under the left, and the information panels move to the opposite side so
+they stay out from under the pad.
+
+### Vibration
+
+**Settings → Vibration.** The pad ticks when a button lands and thumps on
+contact — harder the better the ball was hit — with distinct patterns for a
+strike, an out and a home run. Glass gives no feedback of its own, so this is
+the only way to know a press registered without looking down at the moment you
+can least afford to.
+
+It only exists where the browser has a vibration API, which in practice means
+Android. **Safari on iPhone does not implement one**, and the workarounds rely
+on undocumented behaviour of a form control, so on an iPhone the row reads
+`UNSUPPORTED` rather than offering a switch that does nothing.
+
+### Opening defaults on a touch device
+
+All changeable in **Settings**: pitch tempo **Relaxed**, graphics **Auto**, line
+score **off**. A setting you have changed yourself is never overwritten,
+including changing it back.
 
 ## Gamepad (either player)
 

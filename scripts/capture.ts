@@ -393,6 +393,67 @@ async function main(): Promise<void> {
   await phone.screenshot({ path: join(SHOT_DIR, '23-phone-at-bat.png') });
   await phoneCtx.close();
 
+  // --- the same game on a phone that will not rotate -----------------------
+  // A portrait handset, rotation locked, taking the game up on its offer to
+  // turn itself instead. Verified to actually be rotated and to be rendering a
+  // landscape canvas before the shot is written.
+  const lockedCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+  const locked = await lockedCtx.newPage();
+  locked.on('console', (m) => {
+    if (m.type() === 'error') errors.push('[portrait] ' + m.text());
+  });
+  locked.on('pageerror', (e) => errors.push('[portrait] ' + String(e)));
+  await locked.goto(BASE, { waitUntil: 'networkidle' });
+  await locked.waitForFunction(
+    () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+    undefined,
+    { timeout: 30000 },
+  );
+  await locked.waitForTimeout(1200);
+  await locked.touchscreen.tap(195, 420);
+  await locked.waitForTimeout(400);
+  await startGame(locked, {
+    awayTeamId: 'coralkey',
+    homeTeamId: 'ironport',
+    stadiumId: 'anchor-yard',
+    innings: 3,
+    difficulty: 'pro',
+    awayControl: 'human1',
+    homeControl: 'cpu',
+    night: false,
+    seed: 8802,
+  });
+  await waitPhase(locked, ['preplay']);
+  // Press the card's own button rather than calling the method: the point of
+  // the shot is that the offer works, not that the method exists.
+  await locked.waitForTimeout(600);
+  const turned = await locked.evaluate(() => {
+    const btn = document.querySelector('.rot-rotate') as HTMLButtonElement | null;
+    btn?.click();
+    return !!btn;
+  });
+  await locked.waitForTimeout(2400);
+  const rotOk = await locked.evaluate(() => {
+    const gl = document.getElementById('gl') as HTMLCanvasElement;
+    return {
+      rotated: document.documentElement.classList.contains('rotated'),
+      canvas: [gl.width, gl.height] as [number, number],
+      pad: document.getElementById('touch')?.className ?? '',
+    };
+  });
+  if (!turned || !rotOk.rotated || rotOk.canvas[0] <= rotOk.canvas[1]) {
+    console.log(`  (warning: rotation not applied for 24-phone-rotation-locked: ${JSON.stringify(rotOk)})`);
+  }
+  await locked.screenshot({ path: join(SHOT_DIR, '24-phone-rotation-locked.png') });
+  await lockedCtx.close();
+
   console.log(`\nconsole errors during screenshot pass: ${errors.length}`);
   for (const e of errors.slice(0, 10)) console.log('  ' + e);
 

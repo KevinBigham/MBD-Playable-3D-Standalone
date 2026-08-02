@@ -624,14 +624,67 @@ the left: scoreboard, pitch chips, alignment, last pitch. On a touch device the
 prompt bar disappears entirely — the buttons are already carrying the legends,
 and a second copy along the bottom is nothing but lost field.
 
-Landscape is the real layout. Portrait puts up a card asking for a turn *with a
-way past it*, because plenty of people play with rotation locked; the portrait
-layout stacks the two header panels, shrinks the pad and moves the stick zone to
-the middle band, and it genuinely works — the field is just narrower.
+Landscape is the real layout. Portrait puts up a card with two ways out, and the
+first one is the interesting one: **turn the game instead of the phone**. Plenty
+of people keep rotation locked deliberately, and answering them with "rotate
+your handset" is asking them to change a system setting for a game of baseball.
+So the whole application box lays itself out landscape and spins a quarter turn
+to fill the screen — the full game, controls and all, nothing scaled down and
+nothing left out. The second way out is still to play in portrait, which stacks
+the header panels, shrinks the pad and moves the stick zone to the middle band,
+and genuinely works; the field is just narrower.
 
-Opening defaults on a touch device are Relaxed tempo, Balanced graphics and no
-line score. All three are ordinary settings, and a value the player has chosen
+Opening defaults on a touch device are Relaxed tempo, Auto graphics and no line
+score. All three are ordinary settings, and a value the player has chosen
 themselves is never overwritten — including choosing them back.
+
+### A target you cannot see is not a target
+
+Four circles at the points of a square cover about a third of it. The rest — the
+hole in the middle where the bases meet, the four corners — did nothing when a
+thumb landed there, and the player has no way to learn that, because their thumb
+is on top of the evidence.
+
+So the diamond stopped being four buttons and became one control, read by
+*direction* from its centre. Every point of the square, plus a margin outside it,
+belongs to exactly one call: 2.83× the live area, measured on a handset viewport.
+The circles are still drawn, because they are how you know what the four calls
+are — but they are labels now, not targets.
+
+The same principle already governed the stick, which floats precisely so there
+is nothing to hit. It is the one rule that separates designing for a thumb from
+shrinking a design meant for a mouse.
+
+### A phone is not a small computer
+
+The rest of the phone work has nothing to do with controls. It is about the ways
+a phone interferes with a game that a desktop never does:
+
+- **The screen sleeps** after thirty seconds without a touch, and watching a
+  pitch involves no touches. The game holds a wake lock while a game is live and
+  gives it back in the menus.
+- **A notification hides the page** mid-pitch. That now pauses the game, because
+  a count you did not choose is the game punishing somebody for their phone
+  ringing.
+- **The tab gets discarded.** iOS reclaims backgrounded tabs under memory
+  pressure, so a text message in the sixth inning used to end the game. The game
+  writes itself down at every point it might be about to be lost, and offers it
+  back. What returns is bit-identical: same generator position, same count, same
+  runners.
+- **The device gets slower while you play.** A phone throttles as the case warms,
+  which means no fixed graphics setting is right for a whole game. Auto is a
+  servo on the median frame time — and, importantly, one that gives up climbing
+  after two punished attempts, because a pulse in image quality every few seconds
+  is worse than sitting one rung lower.
+- **Glass gives no feedback.** A press ticks; contact thumps harder the better
+  the ball was hit. Android only, and the setting says so on an iPhone rather
+  than offering a switch that does nothing.
+- **Input is sampled once a frame**, so a press was scored up to a frame late,
+  at random, always in the same direction. The browser knows when the press
+  actually happened; the engine now backdates the swing by exactly that.
+- **There is no signal in a basement.** The game has no server, so once the files
+  are on the device there is nothing left for the network to do — it just needed
+  to be told.
 
 ### One bug the port found
 
