@@ -56,18 +56,22 @@ come back on a real https origin.
 
 ### A permanent URL
 
-`.github/workflows/deploy.yml` publishes `dist/` to GitHub Pages on every push
-to `main`, gated behind the test suite. It does nothing until Pages is switched
-on for the repository:
+**https://kevinbigham.github.io/MBD-Playable-3D-Standalone/**
+
+`.github/workflows/deploy.yml` publishes `dist/` there on every push to `main`,
+gated behind the test suite — a branch that fails the suite does not become the
+live site. It is https, which is what makes offline play and the wake lock work;
+neither exists over the LAN address above.
+
+On a fork, the workflow does nothing until Pages is switched on for the
+repository, which is deliberate — it makes the repository a public website, and
+that is a decision with an owner:
 
 ```bash
 gh api -X POST repos/:owner/:repo/pages -f build_type=workflow
 ```
 
-or **Settings → Pages → Source → GitHub Actions** on github.com. After that the
-game lives at `https://<user>.github.io/<repo>/`, which is https, which means
-offline play and the wake lock work — and the site is public, so switch it on
-deliberately rather than by accident.
+or **Settings → Pages → Source → GitHub Actions** on github.com.
 
 ### On the home screen
 

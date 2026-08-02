@@ -74,14 +74,26 @@ async function shot(page: Page, name: string, settleMs = 400): Promise<void> {
   await page.screenshot({ path: join(SHOT_DIR, `${name}.png`) });
 }
 
-/** Blocks until the engine reaches one of `phases`, or the timeout expires. */
-async function waitPhase(page: Page, phases: string[], maxMs = 20000): Promise<boolean> {
+/**
+ * Blocks until the engine reaches one of `phases` *with the human at the
+ * plate*, or the timeout expires.
+ *
+ * The half-inning matters, and leaving it out is a subtle way to measure the
+ * wrong thing. Every game here is set up with the human batting away, so the
+ * bottom half is the CPU's — and the CPU hitter drives the same `batter.cx/cy`
+ * the touch controls do. Wait on the phase alone and a probe can land in the
+ * CPU's half, where a touch is correctly ignored and the cursor is correctly
+ * somewhere else, and report a working control scheme as broken by 130 pixels.
+ */
+async function waitPhase(page: Page, phases: string[], maxMs = 25000): Promise<boolean> {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
-    const p = await page.evaluate(
-      () => (window as unknown as { moonshot: { game?: { phase: string } } }).moonshot?.game?.phase,
-    );
-    if (p && phases.includes(p)) return true;
+    const s = await page.evaluate(() => {
+      const g = (window as unknown as { moonshot: { game?: { phase: string; half: string } } })
+        .moonshot?.game;
+      return g ? { phase: g.phase, half: g.half } : null;
+    });
+    if (s && s.half === 'top' && phases.includes(s.phase)) return true;
     await page.waitForTimeout(30);
   }
   return false;
@@ -327,8 +339,31 @@ async function pixelForPlatePoint(
   }, [x, y]);
 }
 
+/**
+ * Blocks until the camera has stopped moving.
+ *
+ * This round trip goes out through one projection and back through another a
+ * few hundred milliseconds later, so it only means something while the two are
+ * the same projection. The game itself has no such problem — it inverts the
+ * live camera at the instant of the touch — but a measurement taken across a
+ * camera that is still easing into place after a quarter-turn reports the
+ * camera's motion as the control scheme's error. Probing the same plate point
+ * twice and waiting for the pixel to stop changing is the cheapest way to ask.
+ */
+async function waitForStillCamera(page: Page, maxMs = 4000): Promise<void> {
+  const deadline = Date.now() + maxMs;
+  let last: { px: number; py: number } | null = null;
+  while (Date.now() < deadline) {
+    const now = await pixelForPlatePoint(page, 0, 0.95);
+    if (last && Math.hypot(now.px - last.px, now.py - last.py) < 0.5) return;
+    last = now;
+    await page.waitForTimeout(150);
+  }
+}
+
 async function auditAim(page: Page): Promise<void> {
   console.log('\n[4] The map — does a real touch land where the finger went?');
+  await waitForStillCamera(page);
 
   // Measured between pitches on purpose. Mid-flight the cursor is a moving part
   // — the swing consumes it and the next hitter resets it — so reading it there
@@ -338,17 +373,30 @@ async function auditAim(page: Page): Promise<void> {
   check('the game settles between pitches', ready);
   if (!ready) return;
 
-  // A brand new browser profile has never swung, so the first-swing coach is on
-  // screen right now. It will not be after this function has tapped three times.
-  const coach = await page.locator('.pv-coach').first();
-  const coaching = await coach.evaluate((el) => ({
-    text: el.textContent ?? '',
-    shown: getComputedStyle(el).opacity !== '0',
-  }));
+  // A brand new browser profile has never swung, so the first-swing coach is due
+  // on screen. It will not be after this function has tapped three times.
+  //
+  // Waited for rather than sampled once, because there are moments when it is
+  // *correctly* absent — it stands down while a swing verdict is up, and it
+  // fades in over a fifth of a second. A single read catches one of those and
+  // reports a working feature as broken, which is the worst kind of test.
+  let coaching = { text: '', shown: false };
+  const coachBy = Date.now() + 2500;
+  while (Date.now() < coachBy && !coaching.shown) {
+    coaching = await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('.pv-coach');
+      if (!el) return { text: '', shown: false };
+      return {
+        text: el.textContent ?? '',
+        shown: parseFloat(getComputedStyle(el).opacity || '0') > 0,
+      };
+    });
+    if (!coaching.shown) await page.waitForTimeout(60);
+  }
   check(
     'a first-time player is told what to touch',
     coaching.shown && /TOUCH/.test(coaching.text),
-    `"${coaching.text}"${coaching.shown ? '' : ' (hidden)'}`,
+    `"${coaching.text}"${coaching.shown ? '' : ' (never appeared)'}`,
   );
   // Settled, because the hint fades in over a fifth of a second and a shot at
   // zero catches it half-transparent and makes it look broken.
@@ -366,38 +414,74 @@ async function auditAim(page: Page): Promise<void> {
   let turned = false;
   const detail: string[] = [];
   for (const [x, y] of probes) {
-    const at = await pixelForPlatePoint(page, x, y);
-    turned = at.turned;
-    // Who would actually receive this touch? A pixel inside the strike zone
-    // that lands on top of a button is not a mapping error — it is a hole in
-    // the control scheme, and it needs to be named as one.
-    const owner = await page.evaluate(
-      ([px, py]) => {
-        const el = document.elementFromPoint(px, py) as HTMLElement | null;
-        if (!el) return 'nothing';
-        return el.getAttribute('data-a') ?? (el.className || el.tagName.toLowerCase());
-      },
-      [at.px, at.py],
-    );
-    await page.touchscreen.tap(at.px, at.py);
-    await page.waitForTimeout(120);
-    const cur = await page.evaluate(() => {
-      const g = (
-        window as unknown as { moonshot: { game?: { batter: { cx: number; cy: number } } } }
-      ).moonshot.game!;
-      return { cx: g.batter.cx, cy: g.batter.cy };
-    });
-    // Measured in PIXELS, not millimetres. A phone held sideways gives the
-    // strike zone about ninety pixels to work with, so one pixel of touch is
-    // worth a centimetre at the plate — quoting the error in millimetres would
-    // make a perfect answer look sloppy on a small screen and a sloppy one look
-    // fine on a big one. The question is whether the game landed on the pixel
-    // that was touched, and that has one right answer at every size.
-    const back = await pixelForPlatePoint(page, cur.cx, cur.cy);
-    const err = Math.hypot(back.px - at.px, back.py - at.py);
-    worst = Math.max(worst, err);
-    detail.push(`(${x}, ${y}) → ${owner}, off ${err.toFixed(2)}px`);
+    // A touch only aims while somebody is standing in the box. Between a
+    // strikeout and the next hitter the game is in `lineup`, where it ignores
+    // the field entirely and correctly — so a probe that lands there measures
+    // the game refusing an input, not the game mapping one, and reports a
+    // working control scheme as 85 pixels wrong.
+    //
+    // Eligibility is therefore checked immediately before the touch AND again
+    // immediately after, and a probe that straddled the boundary is thrown away
+    // and repeated rather than recorded. Four attempts, because at some point
+    // "it never settled" is itself the finding.
+    let recorded = false;
+    for (let attempt = 0; attempt < 4 && !recorded; attempt++) {
+      if (!(await waitPhase(page, ['preplay', 'windup']))) break;
+      const at = await pixelForPlatePoint(page, x, y);
+      turned = at.turned;
+      // Who would actually receive this touch? A pixel inside the strike zone
+      // that lands on top of a button is not a mapping error — it is a hole in
+      // the control scheme, and it needs to be named as one.
+      const owner = await page.evaluate(
+        ([px, py]) => {
+          const el = document.elementFromPoint(px, py) as HTMLElement | null;
+          if (!el) return 'nothing';
+          return el.getAttribute('data-a') ?? (el.className || el.tagName.toLowerCase());
+        },
+        [at.px, at.py],
+      );
+      const before = await page.evaluate(() => {
+        const g = (window as unknown as { moonshot: { game?: { batter: { cx: number; cy: number } } } })
+          .moonshot.game!;
+        return { cx: g.batter.cx, cy: g.batter.cy };
+      });
+      await page.touchscreen.tap(at.px, at.py);
+      await page.waitForTimeout(120);
+      const cur = await page.evaluate(() => {
+        const g = (
+          window as unknown as {
+            moonshot: { game?: { batter: { cx: number; cy: number }; phase: string; half: string } };
+          }
+        ).moonshot.game!;
+        return { cx: g.batter.cx, cy: g.batter.cy, phase: g.phase, half: g.half };
+      });
+      if (cur.half !== 'top' || !['preplay', 'windup', 'pitch'].includes(cur.phase)) continue;
+      // A cursor that did not move at all, when it was asked to move somewhere
+      // it was not, means the touch was refused — the game had already left the
+      // state where the field is an input by the time the finger landed, which
+      // over a network is a race and not a defect. That is a different fact
+      // from "the map is wrong" and must not be reported as one: taking the
+      // reading anyway measures the distance to the cursor's resting place and
+      // calls it a mapping error.
+      const asked = Math.hypot(x - before.cx, y - before.cy);
+      const moved = Math.hypot(cur.cx - before.cx, cur.cy - before.cy);
+      if (asked > 0.01 && moved < 1e-9) continue;
+
+      // Measured in PIXELS, not millimetres. A phone held sideways gives the
+      // strike zone about ninety pixels to work with, so one pixel of touch is
+      // worth a centimetre at the plate — quoting the error in millimetres would
+      // make a perfect answer look sloppy on a small screen and a sloppy one look
+      // fine on a big one. The question is whether the game landed on the pixel
+      // that was touched, and that has one right answer at every size.
+      const back = await pixelForPlatePoint(page, cur.cx, cur.cy);
+      const err = Math.hypot(back.px - at.px, back.py - at.py);
+      worst = Math.max(worst, err);
+      detail.push(`(${x}, ${y}) → ${owner}, off ${err.toFixed(2)}px`);
+      recorded = true;
+    }
+    if (!recorded) detail.push(`(${x}, ${y}) → never got an eligible touch`);
   }
+  check('every probe found a live plate appearance', detail.length === probes.length);
   check(
     `a real touch lands on the pixel it touched${turned ? ' (game turned)' : ''}`,
     // The tap coordinate itself is rounded to a whole pixel on the way in, so a
@@ -580,54 +664,64 @@ async function auditSwing(page: Page): Promise<void> {
 async function auditGapPicture(page: Page): Promise<void> {
   console.log('\n[7] The gap — after a miss, can you see how far off you were?');
 
-  if (!(await waitPhase(page, ['pitch']))) {
-    check('a pitch to miss', false);
-    return;
-  }
-  const pitch = await page.evaluate(() => {
-    const g = (
-      window as unknown as {
-        moonshot: { game?: { currentPitch: { plateX: number; plateY: number } | null } };
-      }
-    ).moonshot.game;
-    return g?.currentPitch ? { x: g.currentPitch.plateX, y: g.currentPitch.plateY } : null;
-  });
-  if (!pitch) {
-    check('a pitch to miss', false);
-    return;
-  }
-  // Thirty-five centimetres over the top of it: a clean swing and miss by the
-  // measured curve in tap.test.ts, which is exactly what should be explained.
-  const at = await pixelForPlatePoint(page, pitch.x, Math.min(1.42, pitch.y + 0.35));
-  await page.waitForFunction(
-    () => {
+  // Three pitches, because one is not a fair test of this particular thing.
+  // The marks are supposed to be visible after a swing that did NOT put the
+  // ball in play — a fair ball takes the camera to the field and the whole
+  // plate overlay goes with it, correctly. Aiming 35 cm high is a miss on the
+  // measured curve in tap.test.ts most of the time, and a pop-up occasionally,
+  // and over a network the extra latency on the touch shifts the odds again.
+  // Retrying is the difference between testing the drawing and testing the luck.
+  let seen = false;
+  let attempts = 0;
+  for (; attempts < 3 && !seen; attempts++) {
+    if (!(await waitPhase(page, ['pitch']))) break;
+    const pitch = await page.evaluate(() => {
       const g = (
         window as unknown as {
-          moonshot: {
-            game?: { phase: string; ball: { t: number }; currentPitch: { T: number } | null };
-          };
+          moonshot: { game?: { currentPitch: { plateX: number; plateY: number } | null } };
         }
       ).moonshot.game;
-      if (!g || g.phase !== 'pitch' || !g.currentPitch) return false;
-      return g.currentPitch.T - g.ball.t <= 0.2;
-    },
-    undefined,
-    { polling: 'raf', timeout: 8000 },
-  );
-  await page.touchscreen.tap(at.px, at.py);
-
-  let seen = false;
-  const deadline = Date.now() + 2500;
-  while (Date.now() < deadline && !seen) {
-    seen = await page.evaluate(() => {
-      const g = document.querySelector<SVGGElement>('.pv-miss');
-      if (!g || g.style.display === 'none') return false;
-      return parseFloat(g.style.opacity || '0') > 0.5;
+      return g?.currentPitch ? { x: g.currentPitch.plateX, y: g.currentPitch.plateY } : null;
     });
-    if (!seen) await page.waitForTimeout(30);
+    if (!pitch) continue;
+    const at = await pixelForPlatePoint(page, pitch.x, Math.min(1.42, pitch.y + 0.35));
+    try {
+      await page.waitForFunction(
+        () => {
+          const g = (
+            window as unknown as {
+              moonshot: {
+                game?: { phase: string; ball: { t: number }; currentPitch: { T: number } | null };
+              };
+            }
+          ).moonshot.game;
+          if (!g || g.phase !== 'pitch' || !g.currentPitch) return false;
+          return g.currentPitch.T - g.ball.t <= 0.2;
+        },
+        undefined,
+        { polling: 'raf', timeout: 8000 },
+      );
+    } catch {
+      continue;
+    }
+    await page.touchscreen.tap(at.px, at.py);
+
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline && !seen) {
+      seen = await page.evaluate(() => {
+        const g = document.querySelector<SVGGElement>('.pv-miss');
+        if (!g || g.style.display === 'none') return false;
+        // The overlay's own root hides between plays, and a mark inside a
+        // hidden overlay is not a mark somebody can see.
+        const root = document.querySelector<HTMLElement>('.plate-view');
+        if (!root || root.style.display === 'none') return false;
+        return parseFloat(g.style.opacity || '0') > 0.5;
+      });
+      if (!seen) await page.waitForTimeout(30);
+    }
+    if (seen) await shot(page, '30-phone-swing-gap', 0);
   }
-  check('the miss is drawn on the zone', seen);
-  await shot(page, '30-phone-swing-gap', 0);
+  check('the miss is drawn on the zone', seen, `after ${attempts} swing(s)`);
 }
 
 async function auditRotation(page: Page): Promise<void> {

@@ -892,10 +892,11 @@ by specification, and neither is a bug that can be fixed in the game.
 So `.github/workflows/deploy.yml` publishes `dist/` to GitHub Pages on push to
 `main`, gated behind the suite — a red branch should not also be live. The game
 has no server, no account and no telemetry; it is a folder of static files, so a
-static host is not a compromise, it is the correct shape. The workflow ships
-inert: nothing deploys until Pages is switched on for the repository, because
-turning a private prototype into a public website is a decision with an owner
-and the owner is not the build system.
+static host is not a compromise, it is the correct shape. Pages was switched on
+deliberately rather than by the build system — turning a repository into a
+public website is a decision with an owner — and the game now lives at
+https://kevinbigham.github.io/MBD-Playable-3D-Standalone/. On a fork the
+workflow is inert until somebody makes the same decision.
 
 ### An icon that is not a screenshot of the loading card
 
@@ -932,7 +933,7 @@ places the two engines differ are exactly the places a phone game breaks.
 
 `scripts/phone-check.ts` runs the production build in **WebKit**, Safari's
 engine, with a touchscreen instead of a mouse, at an iPhone's size and pixel
-density, in both orientations. It is an auditor rather than a screenshotter: 52
+density, in both orientations. It is an auditor rather than a screenshotter: 55
 checks and a non-zero exit. It found two real bugs on its first run.
 
 **Double-tap-to-zoom was live over the whole game.** The viewport tag says
@@ -968,7 +969,31 @@ belong to the zone.
 Finally, the production build was served over the LAN and opened in **actual
 Mobile Safari** on an iOS 26.4 iPhone 17 simulator. Real WebKit, real iOS, real
 Safari chrome. It boots and lays out correctly under the Dynamic Island and
-above the floating address bar.
+above the floating address bar — and so does the deployed https site.
+
+Running the audit over the internet rather than over localhost then failed three
+times in a row, each failure looking exactly like a product bug and each one
+being a hole in the harness. Worth writing down because the pattern is the same
+every time: **a probe that does not state the conditions under which its
+measurement is meaningful will eventually take a reading under some other
+conditions and blame the product.**
+
+The first waited for a phase but not a half-inning — and the CPU hitter drives
+the same `batter.cx/cy` the touch controls do, so a probe landing in the bottom
+half measured the CPU's cursor: 130 px "wrong". The second measured across a
+camera still easing into place after the quarter-turn, so the round trip left
+through one projection and returned through another; the game has no such
+problem, because it inverts the live camera at the instant of the touch. The
+third took a reading from a touch the game had correctly refused — between a
+strikeout and the next hitter the phase is `lineup` and the field is not an
+input, so the cursor stays put and the distance to it gets reported as a mapping
+error.
+
+The last one is the one worth keeping in mind: "the touch did nothing" and "the
+map is wrong" produce the same number and are completely different findings. The
+probe now checks that the cursor actually moved and retries if it did not. The
+map itself was never in question — tapping one plate point six times in the
+rotated layout gives 0.50 px, every time.
 
 ### Making the scheme visible, and then shutting up
 
@@ -1037,7 +1062,8 @@ That is the right bias: nobody needs telling why the double was a double.
   Playwright at 1600×900. Zero console errors across the whole capture run.
 - **WebKit phone audit:** `npm run test:phone` — the production build driven in
   Safari's own engine with real touches, at an iPhone's size and pixel density,
-  in both orientations. 52 checks, all passing, zero console errors. It covers
+  in both orientations. 55 checks, all passing, zero console errors, locally and
+  five consecutive times against the live site. It covers
   the things only Safari gets wrong (double-tap and pinch zoom), the things only
   a real touch proves (that `touchstart` turns the pad on and that touching the
   crossing point grades a hit), and one thing nobody had checked in any engine:
@@ -1089,11 +1115,12 @@ Evidence: `docs/screenshots/` and `docs/recordings/gameplay.webm`, all produced 
   mapped individually without knowing which way the phone was turned. The
   rotated layout clears the largest inset on all four sides instead: wasteful,
   never wrong, and untested against a real notch.
-- **The service worker still has not been tested offline, and now cannot be
-  locally.** It is registered only in production builds *and only over HTTPS*,
-  which `vite preview` on a LAN address is not — so the one route to exercising
-  it is the Pages deploy, which has not been switched on. "Install it, turn off
-  the wifi, open it" remains unperformed. The strategy is deliberately the conservative one — the page
+- **The service worker still has not been tested offline.** It is registered
+  only in production builds *and only over HTTPS*, which `vite preview` on a LAN
+  address is not — so the only place it can be exercised is the Pages deploy,
+  which now exists but has not been used for that. "Install it, turn off the
+  wifi, open it" remains unperformed, and so does the wake lock, for the same
+  reason. The strategy is deliberately the conservative one — the page
   itself is network-first so a bad deploy cannot pin itself — but "install it,
   turn off the wifi, open it" has not been performed.
 - **iOS Safari has no Fullscreen API**, so the fullscreen setting will do nothing

@@ -509,7 +509,7 @@ iOS 10.
 `scripts/phone-check.ts` (`npm run test:phone`) therefore drives the production
 build in **WebKit** with a touchscreen instead of a mouse, at an iPhone 15's
 size and pixel density, in both orientations. It is an auditor rather than a
-screenshotter: **52 checks, non-zero exit on any failure.**
+screenshotter: **55 checks, non-zero exit on any failure.**
 
 | Stage | What it establishes |
 |---|---|
@@ -524,8 +524,30 @@ screenshotter: **52 checks, non-zero exit on any failure.**
 
 Also checked there: that a first-time player is actually told what to touch.
 
-Run against this round's build: **all 52 checks pass, zero console errors, both
-orientations.**
+Run against this round's build: **all 55 checks pass, zero console errors, both
+orientations** — locally, and five consecutive times against the live https
+site at https://kevinbigham.github.io/MBD-Playable-3D-Standalone/.
+
+Getting to five clean runs over the internet took three fixes to the *harness*,
+all of the same kind and worth naming because each one first looked like a
+product bug:
+
+- A probe waited for a phase but not for a half-inning. The CPU hitter drives
+  the same `batter.cx/cy` the touch controls do, so a probe that landed in the
+  bottom half measured the CPU's cursor and reported the map as 130 px wrong.
+- A probe measured across a camera that was still easing into place after the
+  quarter-turn, so the round trip went out through one projection and came back
+  through another. The game has no such problem — it inverts the live camera at
+  the instant of the touch — but the measurement did.
+- A probe took a reading from a touch the game had correctly refused. Between a
+  strikeout and the next hitter the phase is `lineup`, where the field is not an
+  input; the cursor stays where it was, and measuring the distance to it reports
+  a refusal as a mapping error. The probe now checks that the cursor actually
+  moved, and retries rather than recording, because "the touch did nothing" and
+  "the map is wrong" are different findings.
+
+None of the three was a defect in the game — verified by tapping the same plate
+point six times in the rotated layout and getting 0.50 px every time.
 
 ### Two bugs it found that Chromium could not
 
