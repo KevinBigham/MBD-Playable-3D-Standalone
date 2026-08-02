@@ -11,7 +11,7 @@ shown. Nothing here is an estimate.
 npx vitest run
 ```
 
-**Result: 15 files, 188 tests, 188 passed, 0 failed. 64 s wall clock.**
+**Result: 17 files, 201 tests, 201 passed, 0 failed. 65 s wall clock.**
 
 | File | Tests | What it protects |
 |---|---|---|
@@ -29,6 +29,8 @@ npx vitest run
 | `foulout.test.ts` | 3 | The ten seeds an evaluator used to reproduce the caught-foul-fly blocker: zero seconds of live play with three outs recorded, batting order stays strictly cyclical, and extra innings stay bounded |
 | `autofield.test.ts` | 7 | The hands-off defence deadlock a player reported: whole games driven with a defence input frame that is present but never moves, asserting the play guard never fires, that plays resolve within 4 s of what the same games take with a full CPU defence, that one frame of steering takes control back with no cooldown, and that a pitch takes longer to reach the plate than a regulation mound would allow |
 | `plate.test.ts` | 11 | The plate upgrade: outcome noise measured across 200 seeds is at least twice as tight on a barrel as on a mishit, timing changes launch angle deterministically, off-the-end contact costs exit velocity, every label and normalised error matches the swing it was given, the pitch tracker agrees with the count and with the zone on 30 games, and the break preview reports exactly what the engine applies |
+| `tempo.test.ts` | 7 | The pitch clock: flight time grows strictly with the tempo, the ball's path through space is bit-identical at every setting to 1e-9 m, it crosses the plate on the same spot, the pitcher gains no extra steering authority from the extra seconds, the default lands in a window a person can think inside, and full games complete cleanly at all three settings |
+| `commands.test.ts` | 6 | What the player pressed versus what the game did: the advertised steal actually sends the runner instead of retreating him, going back still works on a live ball, and the captions on the buttons match the situation — including the modifier re-labelling the diamond, the pitching diamond naming real pitches, and the alignment reset staying reachable |
 | `situational.test.ts` | 22 | Situational baseball: every alignment moves the right people in the right direction and never moves the pitcher or catcher; the manager's priority order across seven situations; the intentional walk fires only when it buys something; and over 24 full games — double plays turn, runners score from third on fly balls, stolen bases come back neither 0% nor 100% safe, balls get past the catcher at a plausible rate, and more than one alignment is used without the honest one stopping being the common one |
 
 ---
@@ -36,11 +38,16 @@ npx vitest run
 ## 2. Batch CPU-versus-CPU simulation
 
 ```
-npx tsx scripts/simulate.ts 120 9 pro
+npx tsx scripts/simulate.ts 120 9 pro brisk
 ```
 
 **120 of 120 games completed. 0 anomalies. 0 forced play resolutions.**
-77.6 s wall clock, 0.65 s per nine-inning game.
+75.7 s wall clock, 0.63 s per nine-inning game.
+
+Run at **Brisk** tempo deliberately, because that is the pitch clock the
+"before" column was measured at — comparing a balance change against a batch
+that also changed the clock would confound the two. The default-tempo run is in
+[Pitch tempo](#pitch-tempo) below and completes just as cleanly.
 
 Every game is validated every 30 ticks against the full invariant set: outs
 0–3, balls 0–3, strikes 0–2, no negative runs, inning within range, at most four
@@ -97,6 +104,45 @@ back. Two 60-game batches of the identical final build returned 9.37 and 10.30
 runs per game, so the run-to-run noise here is around ±0.5 and the 120-game
 figure of 10.06 should be read with that in mind rather than as a precise
 number.
+
+### Pitch tempo
+
+```
+npx tsx scripts/simulate.ts 120 9 pro brisk
+npx tsx scripts/simulate.ts 120 9 pro standard
+```
+
+The harness takes a tempo argument so the pitch-clock stretch can be run against
+the same seeds. 120 nine-inning games each, same parks, same seeds:
+
+| | Brisk (1.0×) | Standard (1.3×, new default) |
+|---|---|---|
+| Runs per game | 10.06 | 10.13 |
+| Batting average | .282 | .273 |
+| BABIP | .339 | .326 |
+| Home runs per game | 2.09 | 2.31 |
+| Strikeout rate | 21.3% | 21.5% |
+| Errors per game | 0.92 | 1.30 |
+| Anomalies / forced resolutions | 0 / 0 | 0 / 0 |
+
+**Read the "same seeds" carefully — it does not mean the same games.** The CPU
+rolls for pitch steering once per simulation tick during the flight, so a longer
+flight consumes a different number of draws and the random stream diverges from
+the first pitch onward. Two tempos on one seed are two independent games, not a
+controlled A/B, and the table above is therefore two samples rather than a
+before-and-after.
+
+That is exactly what it looks like. A separate 60-game batch on a single park
+put Standard *above* Brisk (.267 to .262) while this 120-game batch puts it
+below (.273 to .282), and Brisk and Relaxed landed on the identical .262/21.3%
+in that same run. A real effect does not change sign between samples. The
+conclusion is that tempo does not systematically move the CPU game — which is
+what the design predicts, because the CPU commits a fixed number of seconds
+before arrival — and that this harness's sampling noise on batting average is
+roughly ±10 points at 120 games, which is worth knowing on its own.
+
+Determinism is unaffected: `pitchTempo` lives on `GameSetup`, so the same setup
+and seed still replay byte-identically, which `simulation.test.ts` checks.
 
 This batch is also the check on the deeper mound: moving the rubber from 60 ft
 6 in to 68 ft changed the CPU-versus-CPU line by less than the run-to-run noise,
@@ -350,15 +396,23 @@ Verified in the running product:
 | Audio unlock after a gesture, volume setters, 40 sounds in one frame | Works, nothing thrown |
 | Browser refresh on a menu | Clean restart, save intact |
 
-Evidence: 22 screenshots in `docs/screenshots/` and
-`docs/recordings/gameplay.webm`, all captured from the production build.
-`21-plate-view-pitch.png` is a genuinely mid-flight frame — the capture script
-fires the shutter early, then checks afterwards where the ball actually was and
-retries on the next pitch if it missed, rather than shipping a frame that only
-looks like the one it claims to be. `22-defensive-card.png` holds the real
-modifier key and asserts the card is on screen with INFIELD IN selected before
-the shutter fires, for the same reason: a screenshot of an empty corner would
-otherwise pass silently.
+Evidence: 23 screenshots in `docs/screenshots/` and
+`docs/recordings/gameplay.webm`, all captured from the production build with
+**zero console errors in both the screenshot pass and the recording pass**.
+
+Three of the shots verify themselves rather than trusting the frame:
+`21-plate-view-pitch.png` fires the shutter early, then checks afterwards where
+the ball actually was and retries on the next pitch if it missed;
+`22-defensive-card.png` holds the real modifier key and asserts the card is on
+screen with INFIELD IN selected first; and `23-phone-at-bat.png` asserts the
+touch pad is present, playing and captioned `SWING` before it shoots. A picture
+of an empty corner, or of the desktop layout at a small size, would otherwise
+pass silently.
+
+`23-phone-at-bat.png` is taken in a real handset browser context — `isMobile`,
+`hasTouch`, an iOS user agent and a 844×390 viewport at 2× — so the pad in it
+turned itself on the same way it does on a phone. The `0.73s` in its last-pitch
+readout is the Relaxed tempo that a touch device opens with.
 
 ## 9. Independent review
 

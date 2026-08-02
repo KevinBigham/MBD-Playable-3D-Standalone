@@ -46,8 +46,19 @@ export interface Ball {
 }
 
 export interface PitchFlight {
-  /** Total flight time from release to the contact plane. */
+  /**
+   * Total flight time from release to the contact plane, as the game clock
+   * measures it — the physical time multiplied by the tempo scale.
+   */
   T: number;
+  /**
+   * The unstretched flight time the release velocity would actually produce.
+   * The trajectory's arc is shaped by this and not by `T`, so raising the tempo
+   * slows the ball down along its path instead of lofting it into an eephus.
+   */
+  arcT: number;
+  /** `T / arcT`. 1 means the pitch clock is running at world speed. */
+  timeScale: number;
   x0: number;
   y0: number;
   z0: number;
@@ -100,10 +111,14 @@ export function launchPitch(
     breakY: number;
     lateness: number;
     releaseX: number;
+    /** Pitch-clock stretch; see PITCH_TEMPO. 1 = real time. */
+    timeScale?: number;
   },
 ): void {
   const dz = RELEASE_Z - CONTACT_Z;
-  const T = dz / Math.max(12, opts.speed);
+  const arcT = dz / Math.max(12, opts.speed);
+  const timeScale = Math.max(0.25, opts.timeScale ?? 1);
+  const T = arcT * timeScale;
   ball.mode = 'pitch';
   ball.t = 0;
   ball.spin = 0;
@@ -114,6 +129,8 @@ export function launchPitch(
   ball.apex = 0;
   ball.pitch = {
     T,
+    arcT,
+    timeScale,
     x0: opts.releaseX,
     y0: RELEASE_Y,
     z0: RELEASE_Z,
@@ -145,7 +162,10 @@ function breakShape(u: number, lateness: number): number {
 export function pitchPositionAt(p: PitchFlight, t: number): { x: number; y: number; z: number } {
   const u = clamp(t / p.T, 0, 1.35);
   const s = breakShape(u, p.lateness);
-  const gravSag = 0.5 * GRAVITY * p.T * p.T * (u - u * u);
+  // Shaped by the *physical* flight time. Using the stretched clock here would
+  // make a slow tempo balloon the arc into a rainbow rather than simply take
+  // longer to travel the same line.
+  const gravSag = 0.5 * GRAVITY * p.arcT * p.arcT * (u - u * u);
   return {
     x: p.x0 + (p.px - p.x0) * u + p.breakX * s + p.steerX * s,
     y: p.y0 + (p.py - p.y0) * u + gravSag + p.breakY * s + p.steerY * s,
@@ -171,14 +191,19 @@ export function stepPitch(ball: Ball, dt: number, steerX: number, steerY: number
   const p = ball.pitch!;
   // Steering is an acceleration on an offset that saturates, so mashing a
   // direction cannot teleport the ball; it bends it.
+  //
+  // It integrates on the pitch's own clock, not the wall clock: a slower tempo
+  // hands the hitter more time to read, and it must not quietly hand the
+  // pitcher more time to steer as well.
+  const sdt = dt / p.timeScale;
   const accel = 2.6 * steerPower;
-  p.steerVX = clamp(p.steerVX + steerX * accel * dt, -0.9, 0.9);
-  p.steerVY = clamp(p.steerVY + steerY * accel * dt, -0.9, 0.9);
-  p.steerVX *= Math.pow(0.02, dt);
-  p.steerVY *= Math.pow(0.02, dt);
+  p.steerVX = clamp(p.steerVX + steerX * accel * sdt, -0.9, 0.9);
+  p.steerVY = clamp(p.steerVY + steerY * accel * sdt, -0.9, 0.9);
+  p.steerVX *= Math.pow(0.02, sdt);
+  p.steerVY *= Math.pow(0.02, sdt);
   const maxSteer = 0.34 * steerPower;
-  p.steerX = clamp(p.steerX + p.steerVX * dt, -maxSteer, maxSteer);
-  p.steerY = clamp(p.steerY + p.steerVY * dt, -maxSteer, maxSteer);
+  p.steerX = clamp(p.steerX + p.steerVX * sdt, -maxSteer, maxSteer);
+  p.steerY = clamp(p.steerY + p.steerVY * sdt, -maxSteer, maxSteer);
 
   ball.t += dt;
   evaluatePitchAt(ball, ball.t);

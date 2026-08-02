@@ -1,5 +1,6 @@
 import { type InputFrame, clearEdges, emptyInput } from '../sim/input';
 import { loadSlot, saveSlot } from '../save/storage';
+import type { TouchControls } from './touch';
 
 /**
  * Input layer.
@@ -98,6 +99,11 @@ export class InputManager {
   private padEdges: boolean[][] = [];
   private menuQueue: MenuAction[] = [];
   private capture: ((code: string) => void) | null = null;
+  /**
+   * The on-screen pad, when one is mounted. It only ever drives player one —
+   * two thumbs on one phone is not a two-player control scheme.
+   */
+  private touch: TouchControls | null = null;
   /** True whenever any gamepad reported input this session. */
   gamepadSeen = false;
   lastDeviceWasPad = false;
@@ -119,6 +125,10 @@ export class InputManager {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+  }
+
+  attachTouch(touch: TouchControls): void {
+    this.touch = touch;
   }
 
   getBindings(): Bindings {
@@ -205,10 +215,12 @@ export class InputManager {
   }
 
   private held(player: 'p1' | 'p2', action: ActionId): boolean {
+    if (player === 'p1' && this.touch?.isHeld(action)) return true;
     return this.bindings[player][action].some((c) => this.keys.has(c));
   }
 
   private pressed(player: 'p1' | 'p2', action: ActionId): boolean {
+    if (player === 'p1' && this.touch?.isPressed(action)) return true;
     return this.bindings[player][action].some((c) => this.keyEdges.has(c));
   }
 
@@ -270,6 +282,11 @@ export class InputManager {
     if (this.held(player, 'right')) mx += 1;
     if (this.held(player, 'down')) my -= 1;
     if (this.held(player, 'up')) my += 1;
+
+    if (player === 'p1' && this.touch) {
+      mx += this.touch.stickX();
+      my += this.touch.stickY();
+    }
 
     if (pad) {
       const ax = applyDeadzone(pad.axes[0] ?? 0);
@@ -335,6 +352,7 @@ export class InputManager {
   /** Called at the very end of a render frame. */
   endFrame(): void {
     this.keyEdges.clear();
+    this.touch?.endFrame();
   }
 
   takeMenuActions(): MenuAction[] {

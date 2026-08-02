@@ -1,5 +1,9 @@
 /** Shared data model for MOONSHOT NINE. */
 
+import type { PitchTempo } from './constants';
+
+export type { PitchTempo };
+
 export type Handedness = 'L' | 'R' | 'S';
 
 export type PositionCode = 'P' | 'C' | '1B' | '2B' | '3B' | 'SS' | 'LF' | 'CF' | 'RF' | 'DH';
@@ -177,6 +181,12 @@ export interface GameSetup {
   contextId?: string;
   /** When set, the game runs as an endless drill instead of a real contest. */
   practice?: PracticeDrill;
+  /**
+   * How long the ball hangs between release and the mitt. Part of the setup
+   * rather than a render option because it changes the simulation, so a replay
+   * of the same seed has to carry it. Omitted means DEFAULT_PITCH_TEMPO.
+   */
+  pitchTempo?: PitchTempo;
 }
 
 export interface BattingLine {

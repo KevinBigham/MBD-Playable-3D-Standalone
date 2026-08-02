@@ -158,7 +158,7 @@ box; left-handers mirror it. Switch hitters take the opposite side to the arm.
 Difficulty gives the **human** hitter a wider timing window — ×1.3 on Rookie,
 ×1.1 on Pro, ×1.0 on Ace. The CPU never receives it and no ball physics change.
 
-### The mound is 68 feet
+### The mound is 68 feet, and the pitch clock is stretched
 
 Regulation is 60 ft 6 in. This league plays deeper, and that is a design decision
 rather than an error.
@@ -166,20 +166,73 @@ rather than an error.
 A real hitter gets about 0.42 s from release and has spent two decades training
 for it. A player at a keyboard has to read the pitch, move a cursor onto it *and*
 commit a swing in the same window, and at regulation depth that is not a decision
-— it is a reflex test you keep failing. At 68 feet a fastball takes 0.48 s and
-the slowest breaking stuff floats near 0.7 s.
+— it is a reflex test you keep failing. At 68 feet a fastball takes 0.48 s.
 
-The alternative fixes were both dishonest. Stretching the flight clock while the
-ball still "travels" at 95 mph, or slowing the ball while the scoreboard still
-prints 95, would each mean the radar readout is lying. Moving the rubber back
-keeps the physics exactly true: the ball goes the speed it says, over a longer
-path.
+**It was not enough, and the fix reverses a decision this document used to
+defend.** The earlier version of this section said that stretching the flight
+clock, or slowing the ball while the scoreboard printed 95, would each make the
+radar readout a lie — and moving the rubber back was the honest answer. Moving
+the rubber back *is* honest. It is also finished: the mound cannot go to 90 feet
+without the ballpark becoming a different shape. And 0.48 s is still not a
+window a person makes a decision inside, which is the thing the whole batting
+model is about. On a phone, where the cursor is a thumb, it is hopeless.
+
+So the pitch's flight from release to the contact plane is now stretched by a
+**pitch tempo** factor, and the setting is on the options screen:
+
+| Tempo | Factor | Fastball | Curveball |
+|---|---|---|---|
+| Brisk | 1.00 | 0.45 s | 0.54 s |
+| Standard *(default)* | 1.30 | 0.59 s | 0.70 s |
+| Relaxed *(default on touch)* | 1.60 | 0.72 s | 0.86 s |
+
+What is and is not slowed matters:
+
+- **The path through space is identical.** Same release point, same break, same
+  arc, same spot at the plate — only the clock along it is slower. The gravity
+  term is shaped by the *physical* flight time rather than the stretched one; if
+  it were not, a relaxed tempo would loft every pitch into an eephus. A test
+  walks both trajectories point-for-point and holds them to 1e-9 m.
+- **Nothing else is dilated.** The bat, the batted ball, the fielders and the
+  runners all live in real seconds.
+- **The pitcher gains nothing from the extra time either.** Steering integrates
+  on the pitch's own clock, so a slow tempo does not quietly hand back to the
+  mound the advantage it just gave the plate.
+
+**What it costs, stated plainly:** the ball on screen is not moving at the speed
+the radar prints. That is a stylisation, and doing it quietly is what the older
+text called a lie. It is not quiet. The tempo is a labelled setting, and the
+last-pitch readout prints the **real flight time in seconds** next to the speed
+— `97 HEATER · 0.55s` — so the number a hitter actually needs is the one that is
+never fudged.
 
 **The CPU hitter gains nothing from it.** Its read is budgeted in seconds before
 arrival, not as a fraction of the flight, so a longer trip moves its decision
-point later by precisely the same amount. Measured across 120 nine-inning games
-the change is invisible: .275 average against .273, 21.5% strikeouts against
-21.8%.
+point later by precisely the same amount.
+
+Measuring that is harder than it looks, and the measurement is worth stating
+because it is easy to get wrong. The CPU rolls for pitch steering once per
+simulation tick during the flight, so a longer flight consumes a different
+number of random draws and the stream diverges from the first pitch. **Two
+tempos on the same seed are two different games, not the same game slower.**
+Every tempo comparison is therefore two samples, never a controlled A/B.
+
+Two batches, and they disagree about the direction:
+
+| | AVG | K% | R/g |
+|---|---|---|---|
+| 60 games, one park — Brisk | .262 | 21.3 | 7.95 |
+| 60 games, one park — Standard | .267 | 22.9 | 8.43 |
+| 60 games, one park — Relaxed | .262 | 21.3 | 8.00 |
+| 120 games, all parks — Brisk | .282 | 21.3 | 10.06 |
+| 120 games, all parks — Standard | .273 | 21.5 | 10.13 |
+
+Standard is above Brisk in one sample and below it in the other, and in the
+first Brisk and Relaxed — the two extremes — land on the identical average and
+strikeout rate. A real effect does not change sign between samples. The honest
+conclusion is that the tempo does not systematically move the CPU game, and that
+this harness's noise on batting average is about ±10 points at 120 games. Every
+batch finished with zero anomalies and zero forced resolutions.
 
 ---
 
@@ -528,6 +581,71 @@ the catcher.
 
 A three-inning game takes about four and a half minutes; a nine-inning game
 about fifteen.
+
+---
+
+## Playing it on a phone
+
+The control scheme was built around a mnemonic — *the four action buttons are
+the bases* — and that turns out to be the thing that makes it survive a
+touchscreen, because a base diamond is a shape you can draw under a thumb.
+
+Four decisions carry the whole port:
+
+**The stick floats.** There is no circle to hit, because you cannot see what is
+under your own thumb. Put a finger down anywhere in the left half and that is
+where the stick is; drag past its edge and the base follows so a long swipe
+never runs out of travel. Nothing to aim at means nothing to miss.
+
+**Every button says what it does right now.** Not `A` and `B` — `SWING`,
+`POWER`, `BUNT`, `TAKE`, and then `2ND`, `3RD`, `HOME`, `1ST` the moment the
+ball is in play. The pitching diamond names the pitch rather than the slot: you
+press `SL`, not "pitch 3". A caption that has no meaning in the current
+situation is not drawn *and* cannot be pressed, so there are never dead buttons
+to learn to ignore. The keyboard prompt bar and the touch captions are generated
+from one function, so the two can never disagree about what a button does.
+
+**The modifier latches.** Holding a shoulder button with one thumb while
+pressing a face button with the other is a two-handed gamepad idiom and it does
+not survive a phone. Tap it, it lights up, the next press spends it. Tapping it
+again puts it away, and it disarms itself if the situation stops having a use
+for it.
+
+**Arming it re-labels the diamond.** This is the part that earns the latch. Tap
+`DEFENCE` on the mound and the four buttons become `DP` / `IN` / `CORNERS` /
+`NO XBH`; tap `STEAL` at the plate and they become the four bases. A player
+discovers the modifier by pressing it and watching four words change, rather
+than by being told. The keyboard build does the same thing now — holding Shift
+re-labels the prompt bar — which is a straight improvement it got for free.
+
+The layout follows from the grip. Thumbs own the two bottom corners, the ball
+owns the middle, so every information panel moves into one stacked column down
+the left: scoreboard, pitch chips, alignment, last pitch. On a touch device the
+prompt bar disappears entirely — the buttons are already carrying the legends,
+and a second copy along the bottom is nothing but lost field.
+
+Landscape is the real layout. Portrait puts up a card asking for a turn *with a
+way past it*, because plenty of people play with rotation locked; the portrait
+layout stacks the two header panels, shrinks the pad and moves the stick zone to
+the middle band, and it genuinely works — the field is just narrower.
+
+Opening defaults on a touch device are Relaxed tempo, Balanced graphics and no
+line score. All three are ordinary settings, and a value the player has chosen
+themselves is never overwritten — including choosing them back.
+
+### One bug the port found
+
+Wiring `STEAL` onto a button meant checking that it worked, and it did not. The
+modifier is what tells the engine "this diamond press is a baserunning command,
+not a swing selection" — and the command handler then read the same flag a
+second time as "go back", so a called steal routed into the retreat branch and
+sent the runner to the base he was already standing on. A human could not call a
+steal at any point in the game.
+
+It survived every simulated game because the CPU calls its own steals through a
+different path, and it survived the HUD because the prompt bar was advertising
+the intent rather than the behaviour. Before the pitch, the modifier no longer
+selects "go back"; going back is a live-ball decision and stays one.
 
 ---
 

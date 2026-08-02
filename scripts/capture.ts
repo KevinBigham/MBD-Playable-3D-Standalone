@@ -336,9 +336,65 @@ async function main(): Promise<void> {
   }
   await shot(page, '20-postgame');
 
+  await context.close();
+
+  // --- the phone build -----------------------------------------------------
+  // A real handset context: coarse pointer, touch events, handset viewport. The
+  // shot is verified to contain a labelled pad before it is written, so this
+  // can never quietly ship a picture of the desktop layout at a small size.
+  const phoneCtx = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+  const phone = await phoneCtx.newPage();
+  phone.on('console', (m) => {
+    if (m.type() === 'error') errors.push('[phone] ' + m.text());
+  });
+  phone.on('pageerror', (e) => errors.push('[phone] ' + String(e)));
+  await phone.goto(BASE, { waitUntil: 'networkidle' });
+  await phone.waitForFunction(
+    () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+    undefined,
+    { timeout: 30000 },
+  );
+  await phone.waitForTimeout(1200);
+  // The pad turns itself on for a coarse pointer; a tap on the field settles
+  // any doubt and is also the gesture that unlocks audio on a real device.
+  await phone.touchscreen.tap(422, 195);
+  await phone.waitForTimeout(400);
+  await startGame(phone, {
+    awayTeamId: 'coralkey',
+    homeTeamId: 'ironport',
+    stadiumId: 'anchor-yard',
+    innings: 3,
+    difficulty: 'pro',
+    awayControl: 'human1',
+    homeControl: 'cpu',
+    night: false,
+    seed: 8802,
+  });
+  await waitPhase(phone, ['preplay']);
+  await phone.waitForTimeout(2800);
+  const padOk = await phone.evaluate(() => {
+    const t = document.getElementById('touch');
+    const labels = [...document.querySelectorAll('#touch .t-btn b')].map((b) => b.textContent);
+    return {
+      on: !!t && t.classList.contains('on') && t.classList.contains('playing'),
+      labels,
+    };
+  });
+  if (!padOk.on || !padOk.labels.includes('SWING')) {
+    console.log(`  (warning: touch pad not ready for 23-phone-at-bat: ${JSON.stringify(padOk)})`);
+  }
+  await phone.screenshot({ path: join(SHOT_DIR, '23-phone-at-bat.png') });
+  await phoneCtx.close();
+
   console.log(`\nconsole errors during screenshot pass: ${errors.length}`);
   for (const e of errors.slice(0, 10)) console.log('  ' + e);
-  await context.close();
 
   // --- gameplay recording --------------------------------------------------
   // Recorded smaller and shorter than the screenshots: this is evidence of the

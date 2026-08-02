@@ -1,6 +1,13 @@
-import type { Player, Stadium, Team } from '../core/types';
+import type { PitchTempo, Player, Stadium, Team } from '../core/types';
 import { Rng } from '../core/rng';
-import { CONTACT_Z, TICK_DT, ZONE_CENTER_Y, clamp } from '../core/constants';
+import {
+  CONTACT_Z,
+  DEFAULT_PITCH_TEMPO,
+  PITCH_TEMPO,
+  TICK_DT,
+  ZONE_CENTER_Y,
+  clamp,
+} from '../core/constants';
 import { getStadium } from '../data/stadiums';
 import { playerById } from '../data/teams';
 import {
@@ -73,12 +80,15 @@ export interface DerbyState {
   events: string[];
   /** Player ids still alive in the contest; a swing-off narrows this list. */
   contenders: string[];
+  timeScale: number;
 }
 
 export interface DerbySetup {
   stadiumId: string;
   entrants: { playerId: string; teamId: string; controller: 'p1' | 'p2' | null }[];
   seed: number;
+  /** Same pitch-clock stretch the main game uses; see PITCH_TEMPO. */
+  pitchTempo?: PitchTempo;
 }
 
 export function createDerby(setup: DerbySetup): DerbyState {
@@ -108,6 +118,7 @@ export function createDerby(setup: DerbySetup): DerbyState {
     swingKind: 'contact',
     swingResolved: false,
     pitchT: 0,
+    timeScale: PITCH_TEMPO[setup.pitchTempo ?? DEFAULT_PITCH_TEMPO],
     lastResult: null,
     banner: 'MOONSHOT DERBY',
     bannerSub: 'TEN OUTS EACH',
@@ -151,6 +162,7 @@ function throwBP(state: DerbyState): void {
     breakY: 0.04,
     lateness: 0.2,
     releaseX: -0.3,
+    timeScale: state.timeScale,
   });
   state.pitchT = state.ball.pitch!.T;
   state.swingT = -1;

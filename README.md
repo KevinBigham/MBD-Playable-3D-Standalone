@@ -1,6 +1,6 @@
 # MOONSHOT NINE
 
-**An original arcade baseball game for the desktop browser.**
+**An original arcade baseball game for the browser — on a laptop or a phone.**
 
 Ten fictional clubs, eight fictional ballparks and about two hundred fictional
 ballplayers make up the Meridian Circuit. Games are fast, contact is loud, and
@@ -57,6 +57,21 @@ they point at:
 **Player 2** uses the arrow keys with `; . ' [` as the diamond (`;`=3rd, `.`=home,
 `'`=1st, `[`=2nd), `/` for Special and Right-Shift as the modifier. Numpad
 aliases (`4 5 6 8`, `0`, `7`) work too.
+
+### On a phone
+
+Touch the screen and an on-screen pad appears: a floating stick in the left half
+— put a thumb down anywhere and that is where the stick is — and the four action
+buttons laid out as the literal base diamond in the bottom-right corner. Every
+button is captioned with what it does *in the situation you are in*: `SWING`,
+`2ND`, `SL`. The modifier latches instead of being held, and arming it re-labels
+the four buttons, so `DEFENCE` turns the diamond into `DP` / `IN` / `CORNERS` /
+`NO XBH` in front of you.
+
+Play in landscape. Portrait puts up a card asking for a turn, with a button to
+play in portrait anyway. Add it to your home screen and it opens fullscreen.
+
+See [CONTROLS.md](CONTROLS.md) for the full table.
 
 **Gamepad:** left stick or D-pad moves; the face buttons are the same diamond
 (A = down/home, B = right/1st, X = left/3rd, Y = up/2nd); RB is Special, LB

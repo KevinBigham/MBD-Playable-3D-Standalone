@@ -13,6 +13,7 @@ import { cssColor } from '../render/palette';
 import type { GameWorld } from '../render/world';
 import type { InputManager } from './input';
 import { PlateView } from './plateview';
+import { type ControlLabels, type PromptAction, controlLabels, promptPairs } from './controls';
 
 /**
  * In-game HUD.
@@ -25,6 +26,9 @@ import { PlateView } from './plateview';
  */
 
 const MPH = 1 / 0.44704;
+
+/** Roughly the height of the on-screen pad, in CSS pixels. */
+const TOUCH_PAD_RESERVE = 210;
 
 export class Hud {
   readonly root: HTMLDivElement;
@@ -45,13 +49,24 @@ export class Hud {
   private feedbackText = '';
   private lastPitchLabel = '';
   private lastPitchSpeed = 0;
+  private lastPitchFlight = 0;
   private lastContact = '';
   private showLineScore = true;
+  /** Last rendered prompt-bar signature; the bar changes a few times per at-bat. */
+  private promptKey = '';
+  /** When true the on-screen pad is carrying the legends instead of the bar. */
+  private touchMode = false;
 
   constructor(private input: InputManager) {
     this.root = document.createElement('div');
     this.root.id = 'hud';
     this.build();
+  }
+
+  /** Told by the app when the on-screen pad is driving the game. */
+  setTouchMode(v: boolean): void {
+    this.touchMode = v;
+    this.root.classList.toggle('touch', v);
   }
 
   setLineScoreVisible(v: boolean): void {
@@ -139,26 +154,36 @@ export class Hud {
     this.lastContact = '';
     this.lastPitchLabel = '';
     this.lastPitchSpeed = 0;
+    this.lastPitchFlight = 0;
     this.feedbackT = 0;
     this.feedbackText = '';
   }
 
   // -------------------------------------------------------------------------
 
-  update(dt: number, state: GameState, world: GameWorld): void {
+  /** Returns what the controls currently mean, so the touch pad can say so too. */
+  update(dt: number, state: GameState, world: GameWorld): ControlLabels {
     // Practice is explicitly not scored, so the scoreboard must not claim to be
     // keeping score. The count, the outs and the bases still matter, so they stay.
     const practice = !!state.setup.practice;
     this.root.classList.toggle('practice', practice);
     this.lineBox.style.display = practice || !this.showLineScore ? 'none' : '';
+    const labels = controlLabels(state, this.input.isHeld('p1', 'modifier'));
     this.updateScore(state);
     this.updateMatchup(state);
     this.updateBanner(state);
-    this.updatePrompts(state);
+    this.updatePrompts(labels);
     this.updatePitchChips(state);
     this.updateReadout(state);
     this.updateDefenseCard(state);
-    this.plate.update(state, world, this.promptBox.offsetTop);
+    // The floor the swing verdict must stay above. Normally the prompt bar; on
+    // touch the bar is gone and `offsetTop` of a hidden element is 0, which
+    // would be a floor at the top of the screen — so the pad's own top edge
+    // stands in for it.
+    const safeBottom = this.touchMode
+      ? this.root.clientHeight - TOUCH_PAD_RESERVE
+      : this.promptBox.offsetTop;
+    this.plate.update(state, world, safeBottom);
     this.legendBox.classList.toggle(
       'on',
       !this.legendBox.dataset.off &&
@@ -175,6 +200,7 @@ export class Hud {
     } else {
       this.feedbackBox.textContent = '';
     }
+    return labels;
   }
 
   private updateScore(state: GameState): void {
@@ -322,13 +348,29 @@ export class Hud {
       return;
     }
 
-    const k = (a: Parameters<InputManager['describe']>[1]) => this.input.describe('p1', a);
-    const open = this.input.isHeld('p1', 'modifier');
+    // On a phone there is no L-Shift to name and no key caps to print, so the
+    // card refers to the pad: the DEFENCE button, and the directions on it.
+    const TOUCH_CAP: Partial<Record<PromptAction, string>> = {
+      modifier: 'DEFENCE',
+      diamondUp: '▲',
+      diamondLeft: '◀',
+      diamondRight: '▶',
+      diamondDown: '▼',
+      special: 'NORMAL',
+      switchFielder: 'AROUND',
+    };
+    const k = (a: PromptAction) =>
+      this.touchMode ? (TOUCH_CAP[a] ?? '') : this.input.describe('p1', a);
+    // On a phone the open card would be a second copy of the pad, which is
+    // already showing DP / IN / CORNERS / NO XBH on the buttons themselves. So
+    // the card stays collapsed there and does the one job the pad cannot: name
+    // the alignment currently in force.
+    const open = !this.touchMode && this.input.isHeld('p1', 'modifier');
     const cur = state.alignment;
 
     // Rebuilding this markup on every animation frame is pure churn — the card
     // changes maybe twice a plate appearance.
-    const key = `${open ? 'open' : 'chip'}|${cur}|${state.pitchAround}`;
+    const key = `${open ? 'open' : 'chip'}|${cur}|${state.pitchAround}|${this.touchMode}`;
     if (key === this.defenseKey) return;
     this.defenseKey = key;
 
@@ -339,10 +381,15 @@ export class Hud {
           : state.pitchAround === 'around'
             ? ' · PITCH AROUND'
             : '';
+      // The touch build drops the "how to change it" line: the DEFENCE button
+      // is on screen a thumb's width away and says so itself.
+      const hint = this.touchMode
+        ? ''
+        : `<span class="dhint"><kbd>${escapeHtml(k('modifier'))}</kbd>SET</span>`;
       this.defenseBox.innerHTML =
         `<span class="dtag">DEFENCE</span>` +
         `<b>${escapeHtml(ALIGNMENT_SHORT[cur])}${escapeHtml(around)}</b>` +
-        `<span class="dhint"><kbd>${escapeHtml(k('modifier'))}</kbd>SET</span>`;
+        hint;
       return;
     }
 
@@ -366,64 +413,28 @@ export class Hud {
       `<span class="drow"><kbd>${escapeHtml(k('switchFielder'))}</kbd>PITCH AROUND</span>`;
   }
 
-  private updatePrompts(state: GameState): void {
-    const prompts: [string, string][] = [];
-    const k = (a: Parameters<InputManager['describe']>[1]) => this.input.describe('p1', a);
-
-    const batting = humanIsBatting(state);
-    const pitching = humanIsPitching(state);
-    const batterRunning = state.runners.some((r) => r.isBatter && !r.out && !r.scored);
-
-    if (state.phase === 'inplay' && batting) {
-      prompts.push(
-        [k('diamondUp'), 'SEND TO 2ND'],
-        [k('diamondLeft'), 'SEND TO 3RD'],
-        [k('diamondDown'), 'SEND HOME'],
-        [k('diamondRight'), 'SEND TO 1ST'],
-        [k('special'), 'ADVANCE ALL'],
-        [`${k('modifier')}+`, 'GO BACK'],
-      );
-    } else if (state.phase === 'inplay' && pitching) {
-      prompts.push(
-        [
-          `${k('up')}${k('left')}${k('down')}${k('right')}`,
-          // Auto-fielding is silent otherwise, and a fielder running on its own
-          // while you hold the controls is exactly the kind of thing a player
-          // should never have to guess about.
-          state.autoFielding ? 'AUTO — MOVE TO TAKE OVER' : 'MOVE FIELDER',
-        ],
-        [k('diamondRight'), 'THROW 1ST'],
-        [k('diamondUp'), 'THROW 2ND'],
-        [k('diamondLeft'), 'THROW 3RD'],
-        [k('diamondDown'), 'THROW HOME'],
-        [k('special'), 'DIVE'],
-        [k('switchFielder'), 'SWITCH'],
-      );
-    } else if (batting) {
-      prompts.push(
-        [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'MOVE AIM'],
-        [k('diamondDown'), 'CONTACT SWING'],
-        [k('diamondRight'), 'POWER SWING'],
-        [k('diamondLeft'), 'BUNT'],
-        [k('diamondUp'), 'TAKE / CHECK'],
-      );
-      if (state.runners.length) prompts.push([`${k('modifier')}+DIR`, 'STEAL']);
-    } else if (pitching) {
-      prompts.push(
-        [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'AIM / STEER'],
-        [k('diamondLeft'), 'PITCH 1'],
-        [k('diamondDown'), 'PITCH 2'],
-        [k('diamondRight'), 'PITCH 3'],
-        [k('diamondUp'), 'PITCH 4'],
-        [`${k('modifier')}+DIR`, 'SET DEFENCE'],
-        [k('switchFielder'), 'PITCH AROUND'],
-      );
+  /**
+   * The keyboard prompt bar. On a touch device the pad prints the same words on
+   * the buttons themselves, so a second copy along the bottom is nothing but
+   * lost screen — the phone gets the field instead.
+   */
+  private updatePrompts(labels: ControlLabels): void {
+    if (this.touchMode) {
+      if (this.promptKey !== 'touch') {
+        this.promptKey = 'touch';
+        this.promptBox.innerHTML = '';
+      }
+      return;
     }
-    void batterRunning;
+    const k = (a: PromptAction) => this.input.describe('p1', a);
+    const prompts = promptPairs(labels, k);
     prompts.push(['ESC', 'PAUSE']);
 
+    const key = prompts.map((p) => p.join(':')).join('|');
+    if (key === this.promptKey) return;
+    this.promptKey = key;
     this.promptBox.innerHTML = prompts
-      .map(([key, label]) => `<span class="prompt"><kbd>${escapeHtml(key)}</kbd>${label}</span>`)
+      .map(([cap, label]) => `<span class="prompt"><kbd>${escapeHtml(cap)}</kbd>${label}</span>`)
       .join('');
   }
 
@@ -435,12 +446,16 @@ export class Hud {
     this.pitchBox.style.display = '';
     const pitcher = lookupPlayer(state, state.pitcher.playerId);
     const rep = pitcher.repertoire ?? ['fastball'];
-    const keys = [
-      this.input.describe('p1', 'diamondLeft'),
-      this.input.describe('p1', 'diamondDown'),
-      this.input.describe('p1', 'diamondRight'),
-      this.input.describe('p1', 'diamondUp'),
-    ];
+    // On a phone there is no key to name, so each chip is tagged with the
+    // direction on the pad that throws it — the same shape the buttons are in.
+    const keys = this.touchMode
+      ? ['◀', '▼', '▶', '▲']
+      : [
+          this.input.describe('p1', 'diamondLeft'),
+          this.input.describe('p1', 'diamondDown'),
+          this.input.describe('p1', 'diamondRight'),
+          this.input.describe('p1', 'diamondUp'),
+        ];
     const velo = (pitcher.pitch?.velocity ?? 55 - 20) / 79;
     this.pitchBox.innerHTML = rep
       .map((t, i) => {
@@ -452,7 +467,7 @@ export class Hud {
         return `<div class="pitch-chip">
           <span class="key">${escapeHtml(keys[i] ?? '?')}</span>
           <span class="dot" style="background:${cssColor(p.color)}"></span>
-          <span class="nm">${p.label}</span>
+          <span class="nm">${this.touchMode ? p.short : p.label}</span>
           <span class="mph">${Math.round(speed * MPH)}${overused ? ' · OVERUSED' : ''}</span>
         </div>`;
       })
@@ -464,6 +479,7 @@ export class Hud {
     if (cp && (state.phase === 'pitch' || state.phase === 'windup')) {
       this.lastPitchLabel = PITCHES[cp.type].label;
       this.lastPitchSpeed = cp.speedMs;
+      this.lastPitchFlight = cp.T;
     }
     const k = this.readoutBox.querySelector('.k') as HTMLElement;
     const v = this.readoutBox.querySelector('.v') as HTMLElement;
@@ -475,10 +491,14 @@ export class Hud {
       note.textContent = `${Math.round(state.play.launchAngle)}° · ${state.play.description}`;
     } else {
       k.textContent = 'LAST PITCH';
-      // Speed and pitch name together: the two facts a hitter needs to build a
-      // read, and the pair the tracker dot cannot show on its own.
+      // Speed, pitch name, and how long it was actually in the air. The speed is
+      // the pitcher's true release velocity; the seconds are what the hitter
+      // really got, and the pitch tempo stretches one without touching the
+      // other, so printing only the first would be a half-truth (see
+      // PITCH_TEMPO in core/constants.ts).
+      const flight = this.lastPitchFlight ? ` · ${this.lastPitchFlight.toFixed(2)}s` : '';
       v.textContent = this.lastPitchSpeed
-        ? `${Math.round(this.lastPitchSpeed * MPH)} ${this.lastPitchLabel.toUpperCase()}`
+        ? `${Math.round(this.lastPitchSpeed * MPH)} ${this.lastPitchLabel.toUpperCase()}${flight}`
         : '—';
       const s = state.lastSwing;
       note.textContent =

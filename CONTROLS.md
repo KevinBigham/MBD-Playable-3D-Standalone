@@ -47,6 +47,40 @@ Player 2's layout is chosen so both players fit on one laptop keyboard without
 reaching across each other. If a numpad is available its diamond is more
 comfortable, and both sets are live at once.
 
+## Phone and tablet
+
+The on-screen pad appears the moment the device produces a touch — you do not
+turn it on, and a laptop with a touchscreen keeps its keyboard until you
+actually touch the glass. It drives Player 1 only; two thumbs on one phone is
+not a two-player control scheme.
+
+| Control | Where it is | What it is |
+|---|---|---|
+| Stick | Anywhere in the left half | **Floating.** There is no circle to hit — put a thumb down and that is where the stick is. Drag past the edge and it follows, so a long swipe never runs out of travel. |
+| The four buttons | Bottom right, laid out as the base diamond | Captioned with what they do *right now* — `SWING`, or `2ND`, or `SL`. A caption you cannot use is not drawn and cannot be pressed. |
+| `DEFENCE` / `STEAL` / `BACK` | Below the diamond | The modifier. It **latches** rather than being held: tap it, it lights up, the next press spends it. Tap it again to put it away. |
+| `NORMAL` / `ALL` / `DIVE` | Below the diamond | Special, whatever it means in the situation. |
+| `AROUND` / `SWITCH` | Below the diamond | Switch-fielder. |
+| `II` | Top right | Pause. |
+
+Two things follow from the latch that are worth knowing, because they are what
+make a seven-button scheme fit under two thumbs:
+
+- **Arming the modifier re-labels the diamond.** Tap `DEFENCE` while pitching
+  and the four buttons become `DP` / `IN` / `CORNERS` / `NO XBH`. Tap `STEAL`
+  at the plate and they become the four bases. You find the modifier out by
+  pressing it and watching, rather than by reading this table.
+- **The pitching diamond names the pitch, not the slot.** You press `SL`, not
+  "pitch 3".
+
+The game is built for landscape. In portrait it puts up a card asking for a
+turn, with a button to play in portrait anyway — because plenty of people have
+rotation locked and the portrait layout does work; the field is just narrower.
+
+Opening defaults on a touch device, all of them changeable in **Settings**:
+pitch tempo **Relaxed**, graphics **Balanced**, line score **off**. A setting
+you have changed yourself is never overwritten, including changing them back.
+
 ## Gamepad (either player)
 
 | Action | Button |
@@ -83,13 +117,30 @@ drift and small inputs still register.
 
 **How contact works.** The bat arrives at the plate a fixed time after you press
 — 0.125 s for a contact swing, 0.165 s for a power swing. You are predicting
-where and when the ball will be, not reacting to where it is. The Meridian
-Circuit pitches from 68 feet rather than 60 feet 6 inches, which is a deliberate
-design choice: it gives you roughly half a second from release instead of four
-tenths, and the radar reading is still the ball's true speed. Two errors decide
+where and when the ball will be, not reacting to where it is. Two errors decide
 everything: how far the cursor is from where the ball crossed, and how far your
 timing was from the ball's arrival. Being under the ball lifts it; being over it
 beats it into the ground. Swinging early pulls; swinging late goes the other way.
+
+**How long you get.** Two things buy you time, and the game is straight with you
+about both. The Meridian Circuit pitches from 68 feet rather than 60 feet
+6 inches — a longer path at the speed the radar claims. On top of that,
+**Settings → Pitch tempo** stretches the pitch clock itself:
+
+| Tempo | A fastball from release to the mitt |
+|---|---|
+| Brisk | ~0.45 s — real time, real baseball |
+| Standard *(default)* | ~0.59 s |
+| Relaxed *(default on a phone)* | ~0.72 s |
+
+The ball takes the same path through the air at every setting — same release,
+same break, same spot at the plate — it just travels it more slowly. Nothing
+else in the game is slowed: the bat, the batted ball, the fielders and the
+runners all live in real seconds. The radar shows the pitcher's true release
+velocity, and the last-pitch readout prints **the actual flight time in seconds
+next to it**, so the number you actually need is never the fudged one. The CPU
+hitter gains nothing from a slower tempo: it commits a fixed number of seconds
+before the ball arrives, not a fraction of the way through the flight.
 
 Square one up and the result is close to predictable. Catch it off the end of the
 bat and it genuinely can go anywhere — the randomness in the model scales with
@@ -222,6 +273,7 @@ colour, so the state is never colour-only.
 | `Enter` / `Space` / `A` | Confirm |
 | `Escape` / `B` | Back |
 | Mouse | Hover to highlight, click to choose |
+| Touch | Tap a row to choose it. Rows with a value grow **◀ ▶** buttons — a phone has no arrow keys, so the arrows have to be real. A `◀ BACK` button sits in the top-right corner of every screen that has somewhere to go back to. |
 
 ## When an action is not available
 

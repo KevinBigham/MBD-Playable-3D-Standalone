@@ -13,6 +13,9 @@ import { swingProfile, zoneBounds } from '../sim/contact';
 import { getAudio, type SfxName } from '../audio/audio';
 import { Hud } from './hud';
 import { InputManager, type ActionId } from './input';
+import { TouchControls } from './touch';
+import type { ControlLabels } from './controls';
+import { detectDevice, isPortrait, toggleFullscreen, viewportSize } from './device';
 import {
   type AppApi,
   BracketScreen,
@@ -80,6 +83,20 @@ import { escapeHtml } from './hud';
 
 type Mode = 'menu' | 'game' | 'derby';
 
+/** The derby is one situation from first pitch to last, so its pad is fixed. */
+const DERBY_LABELS: ControlLabels = {
+  situation: 'batting',
+  verb: 'DERBY',
+  stick: 'MOVE AIM',
+  diamondUp: '',
+  diamondLeft: '',
+  diamondDown: 'SWING',
+  diamondRight: 'POWER',
+  special: '',
+  modifier: '',
+  switchFielder: '',
+};
+
 /**
  * Application shell: owns the render loop, the screen stack, and the bridge
  * between menus and the simulation. The simulation itself is stepped at a
@@ -109,6 +126,10 @@ export class App implements AppApi {
   /** Where a finished game should send its result. */
   private gameContext: 'quick' | 'season' | 'playoff' | 'cup' | 'practice' = 'quick';
 
+  readonly touch: TouchControls;
+  readonly device = detectDevice();
+  private rotateEl: HTMLDivElement | null = null;
+
   private accumulator = 0;
   private lastTime = 0;
   private running = false;
@@ -122,17 +143,70 @@ export class App implements AppApi {
     this.customs = loadCustomPlayers();
     this.teams = buildLeague();
     applyCustomPlayers(this.teams, this.customs);
-    this.settings = { ...DEFAULT_SETTINGS, ...(loadSlot<GameSettings>(SLOT.settings) ?? {}) };
+    const saved = loadSlot<GameSettings>(SLOT.settings);
+    this.settings = { ...DEFAULT_SETTINGS, ...this.deviceDefaults(), ...(saved ?? {}) };
     this.world = new GameWorld(canvas);
     this.hud = new Hud(this.input);
+    this.touch = new TouchControls(() => this.requestPause());
+    this.input.attachTouch(this.touch);
+    this.uiRoot.appendChild(this.touch.root);
     this.applySettings();
 
     window.addEventListener('resize', this.onResize);
+    window.addEventListener('orientationchange', this.onResize);
+    // Mobile Safari resizes the *visual* viewport when its toolbars slide away
+    // without ever firing a window resize, so the canvas has to listen to both.
+    window.visualViewport?.addEventListener('resize', this.onResize);
+    window.visualViewport?.addEventListener('scroll', this.onResize);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.audio.suspend();
       else this.audio.resume();
     });
+    // The pad appears the moment the device proves it has a finger, whatever
+    // the media queries guessed. A laptop with a touchscreen therefore keeps
+    // its keyboard until somebody actually touches the glass.
+    const firstTouch = () => {
+      this.setTouchMode(true);
+      window.removeEventListener('touchstart', firstTouch);
+    };
+    window.addEventListener('touchstart', firstTouch, { passive: true });
+    if (this.device.touchPrimary) this.setTouchMode(true);
+
     this.onResize();
+  }
+
+  /**
+   * Opening defaults that depend on the hardware. Only ever applied under a
+   * saved settings object, so a choice the player has actually made always
+   * wins — including a choice to put a phone back on High.
+   */
+  private deviceDefaults(): Partial<GameSettings> {
+    if (!this.device.touchPrimary) return {};
+    return {
+      // A thumb is slower than a key, and there is no second chance to read a
+      // pitch on a 5-inch screen.
+      pitchTempo: 'relaxed',
+      // Phone GPUs are not laptop GPUs, and a dropped frame at the plate is a
+      // missed swing.
+      quality: 'balanced',
+      // The line score is the first thing to go when the screen is 400px wide.
+      showLineScore: false,
+    };
+  }
+
+  private setTouchMode(on: boolean): void {
+    if (this.touch.isEnabled() === on) return;
+    this.touch.setEnabled(on);
+    this.hud.setTouchMode(on);
+    document.body.classList.toggle('touch-mode', on);
+    this.onResize();
+  }
+
+  /** The on-screen pause button, and anything else that wants the pause menu. */
+  private requestPause(): void {
+    if (this.mode === 'menu') return;
+    if (this.paused) this.closePause();
+    else this.openPause();
   }
 
   // -------------------------------------------------------------------- boot
@@ -209,10 +283,58 @@ export class App implements AppApi {
   }
 
   private onResize = (): void => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const { w, h } = viewportSize();
+    // Everything positioned in CSS reads these instead of vh, because vh on
+    // mobile means "the page if the toolbars were gone" and the toolbars are
+    // usually there.
+    const root = document.documentElement;
+    root.style.setProperty('--vw', `${w}px`);
+    root.style.setProperty('--vh', `${h}px`);
+    root.classList.toggle('portrait', h > w);
+    root.classList.toggle('tiny', Math.min(w, h) < 420);
     this.world.resize(w, h);
+    this.updateRotateGate();
   };
+
+  /**
+   * Portrait on a phone is not a layout problem, it is a framing problem: a
+   * baseball field is wide, and the strike zone ends up the size of a stamp. So
+   * portrait gets a card asking for a turn — and a way past it, because plenty
+   * of people have rotation locked and are not going to unlock it for this.
+   */
+  private updateRotateGate(): void {
+    const wanted = this.device.phone && isPortrait() && this.mode !== 'menu';
+    if (!wanted) {
+      this.rotateEl?.remove();
+      this.rotateEl = null;
+      return;
+    }
+    if (this.rotateEl) return;
+    const el = document.createElement('div');
+    el.className = 'rotate-gate';
+    el.innerHTML = `
+      <div class="rot-icon">⟳</div>
+      <h2>TURN YOUR PHONE</h2>
+      <p>MOONSHOT NINE plays sideways. The field is wide and the strike zone is small.</p>
+      <button class="rot-dismiss" type="button">PLAY IN PORTRAIT ANYWAY</button>
+    `;
+    el.querySelector('.rot-dismiss')?.addEventListener('click', () => {
+      el.remove();
+      this.rotateEl = null;
+      // Not remembered on purpose: it is a nudge, not a setting, and it should
+      // come back next game rather than quietly never appearing again.
+    });
+    this.uiRoot.appendChild(el);
+    this.rotateEl = el;
+  }
+
+  toggleFullscreen(): void {
+    void toggleFullscreen();
+  }
+
+  isTouch(): boolean {
+    return this.touch.isEnabled();
+  }
 
   // ------------------------------------------------------------- main loop
 
@@ -337,7 +459,16 @@ export class App implements AppApi {
     this.world.render();
 
     if (this.mode === 'game' && this.game) {
-      this.hud.update(dt, this.game, this.world);
+      const labels = this.hud.update(dt, this.game, this.world);
+      this.touch.setLabels(labels);
+      // The pad goes away entirely while the CPU has the half-inning; leaving
+      // dead buttons on screen is worse than having none.
+      this.touch.setVisible(!this.paused && labels.situation !== 'idle');
+    } else if (this.mode === 'derby' && this.derby) {
+      this.touch.setLabels(DERBY_LABELS);
+      this.touch.setVisible(!this.paused && this.derby.phase !== 'final');
+    } else {
+      this.touch.setVisible(false);
     }
   }
 
@@ -429,6 +560,12 @@ export class App implements AppApi {
       top.root.remove();
     }
     this.goto(screen);
+  }
+
+  canGoBack(): boolean {
+    // The pause card is not on the stack; popping the stack under a live game
+    // would strand the player in a menu they never opened.
+    return !this.paused && this.stack.length > 1;
   }
 
   back(): void {
@@ -553,6 +690,7 @@ export class App implements AppApi {
   gotoMainMenu(): void {
     this.clearStack();
     this.mode = 'menu';
+    this.updateRotateGate();
     this.game = null;
     this.derby = null;
     // Any route back to the menu must take the in-game HUD with it.
@@ -1285,7 +1423,12 @@ export class App implements AppApi {
     stadiumId: string,
     entrants: { playerId: string; teamId: string; controller: 'p1' | 'p2' | null }[],
   ): void {
-    this.derby = createDerby({ stadiumId, entrants, seed: freshSeed() });
+    this.derby = createDerby({
+      stadiumId,
+      entrants,
+      seed: freshSeed(),
+      pitchTempo: this.settings.pitchTempo,
+    });
     const st = getStadium(stadiumId);
     this.world.loadMatch(st, true, this.teams[0], this.teams[1]);
     this.clearStack();
@@ -1617,6 +1760,10 @@ export class App implements AppApi {
   startGame(setup: GameSetup): void {
     const away = teamById(this.teams, setup.awayTeamId);
     const home = teamById(this.teams, setup.homeTeamId);
+    // Every path into a game — quick play, season, cup, practice — funnels
+    // through here, so this is the one place the pitch tempo has to be stamped
+    // on. Callers build setups without knowing the option exists.
+    setup = { ...setup, pitchTempo: this.settings.pitchTempo };
     this.game = createGameState(setup, away, home);
     this.world.loadMatch(getStadium(setup.stadiumId), setup.night, away, home);
     this.clearStack();
@@ -1633,6 +1780,7 @@ export class App implements AppApi {
     // the previous one is over or it opens the next game quoting a pitch that
     // was thrown to somebody else.
     this.hud.resetReadout();
+    this.updateRotateGate();
   }
 
   private showPostgame(): void {

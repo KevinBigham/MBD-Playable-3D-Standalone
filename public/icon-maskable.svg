@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Moonshot Nine">
+  <!-- Maskable: everything that matters stays inside the middle 80%, because
+       the launcher is free to crop this to a circle, a squircle or a rounded
+       square and will. -->
+  <rect width="512" height="512" fill="#0b1020"/>
+  <circle cx="256" cy="256" r="118" fill="#f4efe3"/>
+  <g fill="none" stroke="#c4392b" stroke-width="11" stroke-linecap="round">
+    <path d="M170 176a150 150 0 0 1 0 160"/>
+    <path d="M342 176a150 150 0 0 0 0 160"/>
+  </g>
+  <circle cx="256" cy="256" r="118" fill="none" stroke="#ffd15c" stroke-width="13"/>
+</svg>

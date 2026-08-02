@@ -14,9 +14,11 @@ Complete and playable end to end.
 - Human control of batting, pitching, fielding, baserunning and the defensive
   alignment
 - Local two-player on one keyboard, or with two gamepads
+- Playable on a phone: on-screen pad with situation-aware captions, landscape
+  layout with a portrait fallback, installable to the home screen
 - CPU plays complete games unassisted at three genuinely different difficulties
 - Seasons save automatically, survive a page reload and resume correctly
-- 188 automated tests pass; 120 CPU-versus-CPU games complete with zero
+- 201 automated tests pass; 120 CPU-versus-CPU games complete with zero
   anomalies and zero forced play resolutions
 - Two independent evaluators attacked the running build; every blocker and major
   finding is fixed and covered by a regression test
@@ -511,9 +513,127 @@ the 120-game figure of 10.06 should be read with that in mind.
 
 ---
 
+## Pitch tempo, and a decision reversed
+
+Reported again: still not enough time between release and the plate to decide
+anything.
+
+The deep mound had already spent its budget. 68 feet buys 0.48 s; 90 feet would
+buy more and would also stop being a ballpark. So the pitch's flight is now
+stretched by a **pitch tempo** factor — Brisk 1.0, Standard 1.3, Relaxed 1.6 —
+which puts a fastball at 0.45 / 0.59 / 0.72 s.
+
+**This reverses a position the docs used to argue for.** The old text said
+stretching the flight clock while the radar printed 95 would be a lie, and it
+was right about the mechanism. What it got wrong was treating "quietly" as
+optional. The tempo is a labelled setting on the options screen, and the
+last-pitch readout now prints the real flight time next to the speed —
+`97 HEATER · 0.55s`. The stylisation is visible in the one place a hitter looks.
+
+Three things kept it from becoming a general time dilation:
+
+- The gravity term is shaped by the **physical** flight time, not the stretched
+  one. Shaping it with the stretched clock turns every pitch into an eephus; a
+  test walks both trajectories point-for-point and holds them to 1e-9 m.
+- Steering integrates on the pitch's own clock, so a slow tempo does not hand
+  the pitcher back the advantage it just gave the hitter.
+- Nothing outside the pitch is touched: bat, batted ball, fielders, runners.
+
+Measuring the effect on the CPU turned out to be the interesting part. The CPU
+rolls for pitch steering once per tick during the flight, so a longer flight
+consumes a different number of draws and the random stream diverges from the
+first pitch — **two tempos on the same seed are two different games, not the
+same game slower.** Every comparison is two samples, never a controlled A/B, and
+`scripts/simulate.ts` grew a tempo argument so at least the parks and seeds
+could be held fixed.
+
+Two batches, disagreeing about the direction:
+
+| | AVG | K% | R/g |
+|---|---|---|---|
+| 60 games, one park — Brisk | .262 | 21.3 | 7.95 |
+| 60 games, one park — Standard | .267 | 22.9 | 8.43 |
+| 60 games, one park — Relaxed | .262 | 21.3 | 8.00 |
+| 120 games, all parks — Brisk | .282 | 21.3 | 10.06 |
+| 120 games, all parks — Standard | .273 | 21.5 | 10.13 |
+
+Standard sits above Brisk in one and below it in the other, and in the first
+batch the two *extremes* returned an identical .262 and 21.3%. A real effect
+does not change sign between samples. The conclusion is that tempo does not
+systematically move the CPU game — and, incidentally, that this harness's noise
+on batting average is about ±10 points at 120 games, which is worth knowing the
+next time a nine-point "improvement" shows up. Zero anomalies and zero forced
+resolutions in every batch.
+
+---
+
+## Playable on a phone
+
+The whole port sits above `sim/`. `ui/touch.ts` maintains held/edge sets keyed
+by the same `ActionId` the keyboard uses, and `InputManager` ORs them in for
+player one, so the engine cannot tell a thumb from a key. Not one line under
+`src/sim/` changed for the controls.
+
+What the port actually needed:
+
+- **A floating stick**, because you cannot see what is under your own thumb.
+  Put a finger down anywhere in the left half and that is the stick; drag past
+  its radius and the base follows so a swipe never runs out of travel.
+- **Captions instead of button names.** `SWING`, `2ND`, `SL` — never `A`/`B`.
+  `ui/controls.ts` is the single source, consumed by both the touch pad and the
+  keyboard prompt bar, so the two cannot drift apart. An unlabelled button is
+  hidden *and* disabled, so there are no dead buttons to learn to ignore.
+- **A latching modifier**, because holding a shoulder button while pressing a
+  face button is a two-handed gamepad idiom. Tap, it lights, the next press
+  spends it.
+- **Arming it re-labels the diamond** — `DEFENCE` turns the four buttons into
+  `DP`/`IN`/`CORNERS`/`NO XBH`. That is what makes a latch discoverable rather
+  than a thing you have to be told about, and the keyboard build got the same
+  behaviour for free.
+- **`visualViewport`, not `vh`.** On mobile Safari `100vh` measures the page as
+  though the toolbars were not there, which puts the controls under the address
+  bar. The app writes `--vw`/`--vh` from `visualViewport` and the layout reads
+  those.
+
+### Two defects the port surfaced
+
+**A human could never call a steal.** The modifier is what tells the engine "this
+diamond press is a baserunning command, not a swing selection" — and
+`handleRunnerCommands` then read the same flag a second time as "go back". So a
+called steal routed into the retreat branch and told the runner to go to the base
+he was standing on. Every prompt bar in the game had been advertising
+`SHIFT+DIR → STEAL` since the control scheme was written.
+
+It survived every simulated game because the CPU calls its own steals through a
+different path, and no test had ever pressed the button. Before the pitch the
+modifier no longer selects "go back"; going back is a live-ball decision and
+stays one. `commands.test.ts` now presses the button and checks the runner.
+
+**Pointer capture could eat a press.** `setPointerCapture` throws if the pointer
+is not currently active, and the throw abandoned the rest of the press handler —
+losing the button entirely. Found by driving the pad with synthetic pointer
+events and noticing the latch never lit. It is an enhancement, so it now fails
+quietly.
+
+### Layout verification
+
+Checked at 932×430, 844×390, 667×375, 640×360 and 390×750 portrait, in the menu,
+at the plate, on the mound and with the defensive card armed: zero overlapping
+panels, zero elements off-screen, and no live touch target under 40×36 px. Six
+real collisions were found and fixed this way — the pause button on the matchup
+panel, the stick caption over the menu, the pitch chips across the scoreboard,
+the alignment card into the readout, the header panels colliding in portrait,
+and the aux buttons landing at 34 px tall on a short screen.
+
+The desktop layout was re-checked at 1280×720 afterwards and is unchanged: the
+prompt bar, the hint pane, the line score and the keyboard-key chips all behave
+exactly as before, and the touch DOM is present but `display: none`.
+
+---
+
 ## Tests performed
 
-- **Automated:** 188 Vitest tests across 15 files — RNG determinism, ball-flight
+- **Automated:** 201 Vitest tests across 17 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,
@@ -547,6 +667,19 @@ Evidence: `docs/screenshots/` and `docs/recordings/gameplay.webm`, all produced 
   API; `AudioContext` is created with the standard constructor and the renderer
   uses WebGL 1-compatible features via Three.js. Safari remains formally
   unverified.
+- **No real phone or tablet was available.** The touch build was verified at
+  handset viewport sizes in a desktop Chromium, with the pad driven by synthesised
+  `PointerEvent`s — which is enough to prove the layout, the label wiring and
+  that a press reaches the engine, and is *not* the same as a thumb on glass.
+  Three things in particular are unverified on hardware: multi-touch (stick and
+  a button at once, which the code supports by tracking pointer ids but which was
+  only ever exercised one pointer at a time), real touch latency, and frame rate
+  on a phone GPU. The mobile default is Balanced rather than High for that last
+  reason, but the number behind it is a guess, not a measurement.
+- **iOS Safari has no Fullscreen API**, so the fullscreen setting will do nothing
+  there. The layout does not depend on it — safe-area insets and `visualViewport`
+  keep the controls clear of the browser chrome either way — but the row will
+  read OFF no matter how many times it is pressed.
 - **Long-session memory** was measured across consecutive games and is stable,
   but a multi-hour session was not run.
 - **The 26-second play guard has never fired** in any validation run since the

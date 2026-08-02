@@ -2,7 +2,7 @@
   "name": "moonshot-nine",
   "private": true,
   "version": "1.0.0",
-  "description": "MOONSHOT NINE — an original arcade baseball game for the desktop browser.",
+  "description": "MOONSHOT NINE — an original arcade baseball game for the browser, on desktop or phone.",
   "type": "module",
   "scripts": {
     "dev": "vite",

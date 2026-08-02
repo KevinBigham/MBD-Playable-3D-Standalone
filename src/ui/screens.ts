@@ -1,4 +1,5 @@
-import type { Difficulty, GameSetup, PracticeDrill, Team } from '../core/types';
+import type { Difficulty, GameSetup, PitchTempo, PracticeDrill, Team } from '../core/types';
+import { DEFAULT_PITCH_TEMPO } from '../core/constants';
 import { STADIUMS, getStadium } from '../data/stadiums';
 import { TEAM_IDENTITIES, displayName, teamRating } from '../data/teams';
 import { DIFFICULTY } from '../sim/ai';
@@ -60,6 +61,11 @@ export interface AppApi {
   rebind(player: 'p1' | 'p2', action: ActionId, done: () => void): void;
   resetBindings(): void;
   hasGamepad(): boolean;
+  /** False on the main menu and on the pause card, which have nowhere to go. */
+  canGoBack(): boolean;
+  toggleFullscreen(): void;
+  /** True once the on-screen pad has taken over — the settings list adapts. */
+  isTouch(): boolean;
 }
 
 export interface GameSettings {
@@ -73,6 +79,8 @@ export interface GameSettings {
   highContrast: boolean;
   muted: boolean;
   quality: 'high' | 'balanced' | 'performance';
+  /** Stretch on the pitch clock. Copied into every GameSetup the app starts. */
+  pitchTempo: PitchTempo;
   lastDifficulty: Difficulty;
   lastInnings: number;
 }
@@ -87,6 +95,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   highContrast: false,
   muted: false,
   quality: 'high',
+  pitchTempo: DEFAULT_PITCH_TEMPO,
   lastDifficulty: 'pro',
   lastInnings: 9,
 };
@@ -168,6 +177,7 @@ export abstract class Screen {
   /** Standard head/body/foot chrome. */
   protected frame(title: string, sub: string, body: string, foot: string): string {
     return `
+      ${this.backButtonHtml()}
       <div class="screen-head">
         <h1 class="screen-title">${escapeHtml(title)}</h1>
         <div class="screen-sub">${escapeHtml(sub)}</div>
@@ -183,10 +193,18 @@ export abstract class Screen {
         const dis = r.disabled?.() ? ' disabled' : '';
         const sel = i === this.sel ? ' sel' : '';
         const val = r.value ? `<span class="value">${escapeHtml(r.value())}</span>` : '';
-        const arrows = r.onLeft || r.onRight ? '<span class="arrows">◀ ▶</span>' : '';
-        return `<li class="menu-item${sel}${dis}" data-i="${i}"><span class="label">${escapeHtml(
+        const steps = r.onLeft || r.onRight;
+        const arrows = steps ? '<span class="arrows">◀ ▶</span>' : '';
+        // On a touch device the arrows have to be pressable, not printed:
+        // there is no left-arrow key on a phone, so a value row would be
+        // unreachable. They are inert markup until `body.touch-mode` shows them.
+        const buttons = steps
+          ? `<button class="menu-step" data-step="-1" type="button" aria-label="${escapeHtml(r.label)} previous">◀</button>` +
+            `<button class="menu-step" data-step="1" type="button" aria-label="${escapeHtml(r.label)} next">▶</button>`
+          : '';
+        return `<li class="menu-item${sel}${dis}${steps ? ' stepper' : ''}" data-i="${i}"><span class="label">${escapeHtml(
           r.label,
-        )}</span>${arrows}${val}</li>`;
+        )}</span>${arrows}${val}${buttons}</li>`;
       })
       .join('')}</ul>`;
   }
@@ -226,25 +244,84 @@ export abstract class Screen {
     return `<span><b>↑↓</b> MOVE</span><span><b>←→</b> CHANGE</span><span><b>ENTER</b> CONFIRM</span><span><b>ESC</b> BACK</span>${extra}${pad}`;
   }
 
-  /** Wires mouse selection for the rendered menu rows. */
+  /**
+   * Wires pointer selection for the rendered menu rows.
+   *
+   * `mouseenter` deliberately stays a mouse-only hook: a finger has no hover,
+   * and letting a touch synthesise one makes the first tap merely highlight a
+   * row. A tap has to *do* the thing.
+   */
   protected wireMouse(): void {
+    this.wireBack();
     this.root.querySelectorAll<HTMLElement>('.menu-item').forEach((el) => {
-      el.addEventListener('mouseenter', () => {
+      el.addEventListener('pointerenter', (e) => {
+        // Only a mouse truly hovers. A touch synthesises an enter on the way to
+        // a tap, and acting on it makes the first tap merely highlight a row.
+        if (e.pointerType !== 'mouse') return;
         const i = Number(el.dataset.i);
         if (this.rows[i]?.disabled?.()) return;
         this.sel = i;
         this.refreshSelection();
       });
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
         const i = Number(el.dataset.i);
-        if (this.rows[i]?.disabled?.()) {
+        const row = this.rows[i];
+        // A tap on one of the value steppers nudges the value; it must not also
+        // count as selecting the row and firing its action.
+        const step = (e.target as HTMLElement)?.closest?.('.menu-step') as HTMLElement | null;
+        if (step) {
+          e.stopPropagation();
+          if (row?.disabled?.()) {
+            this.app.playSfx('menuDenied');
+            return;
+          }
+          this.sel = i;
+          if (step.dataset.step === '-1') row?.onLeft?.();
+          else row?.onRight?.();
+          this.app.playSfx('menuMove');
+          this.refreshSelection();
+          return;
+        }
+        if (row?.disabled?.()) {
           this.app.playSfx('menuDenied');
           return;
         }
         this.sel = i;
+        this.refreshSelection();
+        // A row with no action but a value is a setting: tapping its label
+        // steps it forward, which is the only thing tapping it could mean.
+        if (!row?.onSelect && (row?.onRight || row?.onLeft)) {
+          (row.onRight ?? row.onLeft)?.();
+          this.app.playSfx('menuMove');
+          this.refreshSelection();
+          return;
+        }
         this.app.playSfx('menuSelect');
-        this.rows[i]?.onSelect?.();
+        row?.onSelect?.();
       });
+    });
+  }
+
+  /**
+   * An on-screen way out. Escape is a keyboard idea and a phone does not have
+   * one; the CSS only shows this in touch mode.
+   */
+  protected backButtonHtml(label = 'BACK'): string {
+    return `<button class="screen-back js-back" type="button">◀ ${escapeHtml(label)}</button>`;
+  }
+
+  protected wireBack(): void {
+    const el = this.root.querySelector<HTMLButtonElement>('.js-back');
+    if (!el) return;
+    // Nothing to go back to: the main menu, and the pause card, which offers
+    // Resume as a row and would otherwise pop the menu underneath the game.
+    if (!this.app.canGoBack()) {
+      el.remove();
+      return;
+    }
+    el.addEventListener('click', () => {
+      this.app.playSfx('menuBack');
+      this.app.back();
     });
   }
 }
@@ -266,9 +343,16 @@ export class TitleScreen extends Screen {
     this.root.innerHTML = `
       <div class="title-mark">MOONSHOT<em>NINE</em></div>
       <div class="title-tag">Meridian Circuit Baseball</div>
-      <div class="title-press">Press Enter or Space</div>
+      <div class="title-press">Press Enter or Space<span class="only-touch">Tap to start</span></div>
       <div class="title-foot">An original game. Ten clubs, eight parks, one cup.</div>
     `;
+    // The whole title is the button. This is also the first user gesture of the
+    // session, which is the only moment a browser will let the audio start —
+    // so on a phone there is no other way in.
+    this.root.addEventListener('click', () => {
+      this.app.playSfx('menuSelect');
+      this.onStart();
+    });
   }
 
   override update(dt: number): void {
@@ -764,6 +848,20 @@ const HINTS: Record<ActionId, string> = {
 // Settings
 // ---------------------------------------------------------------------------
 
+const PITCH_TEMPO_ORDER: PitchTempo[] = ['brisk', 'standard', 'relaxed'];
+
+const PITCH_TEMPO_LABEL: Record<PitchTempo, string> = {
+  brisk: 'BRISK — REAL TIME',
+  standard: 'STANDARD',
+  relaxed: 'RELAXED — MOST TIME',
+};
+
+function cycleTempo(cur: PitchTempo, dir: number): PitchTempo {
+  const i = PITCH_TEMPO_ORDER.indexOf(cur);
+  const n = PITCH_TEMPO_ORDER.length;
+  return PITCH_TEMPO_ORDER[(((i < 0 ? 1 : i) + dir) % n + n) % n];
+}
+
 export function buildSettingsRows(app: AppApi): MenuRow[] {
   const s = app.settings;
   const bar = (v: number) => `${'█'.repeat(Math.round(v * 10))}${'·'.repeat(10 - Math.round(v * 10))} ${Math.round(v * 100)}%`;
@@ -857,6 +955,20 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
       onSelect: toggle('showLineScore'),
     },
     {
+      id: 'tempo',
+      label: 'Pitch tempo',
+      value: () => PITCH_TEMPO_LABEL[s.pitchTempo],
+      hint: 'How long the ball hangs between release and the mitt. Relaxed gives you about half a second longer to read a pitch and pick a swing; Brisk is real time. The radar always shows the pitcher’s true velocity, and the last-pitch readout prints the actual flight time.',
+      onLeft: () => {
+        s.pitchTempo = cycleTempo(s.pitchTempo, -1);
+        app.saveSettings();
+      },
+      onRight: () => {
+        s.pitchTempo = cycleTempo(s.pitchTempo, 1);
+        app.saveSettings();
+      },
+    },
+    {
       id: 'quality',
       label: 'Graphics',
       value: () => s.quality.toUpperCase(),
@@ -870,6 +982,19 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
         app.saveSettings();
       },
     },
+    ...(app.isTouch()
+      ? [
+          {
+            id: 'fullscreen',
+            label: 'Fullscreen',
+            value: () => (document.fullscreenElement ? 'ON' : 'OFF'),
+            hint: 'Hides the browser toolbars so the whole screen is the ballpark. Not offered by every mobile browser — iPhone Safari has no fullscreen at all, and the layout already keeps the controls clear of its toolbars either way.',
+            onSelect: () => app.toggleFullscreen(),
+            onLeft: () => app.toggleFullscreen(),
+            onRight: () => app.toggleFullscreen(),
+          } as MenuRow,
+        ]
+      : []),
     { id: 'back', label: 'Back', onSelect: () => app.back() },
   ];
 }
@@ -890,6 +1015,7 @@ export function settingsSummaryHtml(app: AppApi): string {
       <tr><td style="text-align:left">Reduced flashing</td><td>${yn(s.reducedFlashing)}</td></tr>
       <tr><td style="text-align:left">Plate view</td><td>${yn(s.plateView)}</td></tr>
       <tr><td style="text-align:left">Line score on HUD</td><td>${yn(s.showLineScore)}</td></tr>
+      <tr><td style="text-align:left">Pitch tempo</td><td>${PITCH_TEMPO_LABEL[s.pitchTempo]}</td></tr>
       <tr><td style="text-align:left">Graphics</td><td>${s.quality.toUpperCase()}</td></tr>
       <tr><td style="text-align:left">Last difficulty</td><td>${DIFFICULTY[s.lastDifficulty].label}</td></tr>
       <tr><td style="text-align:left">Last game length</td><td>${s.lastInnings} INNINGS</td></tr>

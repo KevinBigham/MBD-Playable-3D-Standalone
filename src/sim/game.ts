@@ -1,7 +1,9 @@
 import {
   BASE_PATH,
   CONTACT_Z,
+  DEFAULT_PITCH_TEMPO,
   MOUND_Z,
+  PITCH_TEMPO,
   TICK_DT,
   ZONE_CENTER_Y,
   attr01,
@@ -630,6 +632,7 @@ function beginWindup(state: GameState, type: PitchType, aimX: number, aimY: numb
     breakY,
     lateness: prof.lateness,
     releaseX: armSign * 0.42,
+    timeScale: PITCH_TEMPO[state.setup.pitchTempo ?? DEFAULT_PITCH_TEMPO],
   });
 
   const batter = currentBatter(state);
@@ -2017,7 +2020,13 @@ function handleRunnerCommands(state: GameState, input: InputFrame, preplay: bool
 
   // Map the pressed base to the runner most relevant to it.
   const targetBase = input.base === 0 ? 4 : input.base;
-  if (input.modifier) {
+  // Before the pitch the modifier is what got us in here at all — it is the
+  // "this is a baserunning command, not a swing" key — so it cannot *also*
+  // select "go back", or a called steal would send the runner to the bag he is
+  // already standing on. That is what it did: the prompt bar advertised STEAL
+  // and the branch below quietly reversed it, which made a human-called steal
+  // unreachable. Going back is a live-ball decision and stays one.
+  if (input.modifier && !preplay) {
     // "Go back": pick the runner ahead of that base and send them back.
     const candidate = live
       .filter((r) => runnerAbs(r) > 0 && Math.floor(runnerAbs(r)) + 1 >= targetBase)

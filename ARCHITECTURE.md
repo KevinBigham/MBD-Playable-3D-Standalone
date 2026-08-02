@@ -63,6 +63,9 @@ src/
 
   ui/           DOM. menus, HUD, input, app shell
     input.ts, hud.ts, plateview.ts, screens.ts, app.ts
+    controls.ts   what every button means right now — one source, two consumers
+    touch.ts      the on-screen pad
+    device.ts     touch/phone detection and the real viewport size
 
   tests/        vitest
 scripts/        simulate, tune-physics, verify-fixes, capture
@@ -119,6 +122,37 @@ The manager AI (`chooseAlignment` in `sim/ai.ts`) takes a plain
 `DefenseSituation` struct rather than `GameState`, so it holds no reference to
 the engine and is unit-testable on its own — which is what
 `situational.test.ts` does for every branch.
+
+## One button, one meaning, one source
+
+`ui/controls.ts` exports `controlLabels(state, modifierArmed)`, which answers a
+single question: what do the eleven controls mean at this instant. Two things
+consume it — the keyboard prompt bar along the bottom of the HUD, and the
+captions printed on the on-screen touch pad.
+
+They are not allowed to be separate. On a phone there is no prompt bar to glance
+at and no key cap to read, so the caption *is* the button; if the two answers
+ever diverged, the touch build would be lying about its own controls. Deriving
+both from one function makes that impossible rather than merely unlikely, and it
+is why `commands.test.ts` can assert what a button says and what the engine does
+in the same test.
+
+`modifierArmed` is a parameter rather than internal state because the modifier
+genuinely changes what the diamond does, so it has to change what the diamond
+says. That is what makes a latched modifier discoverable on a touchscreen: press
+it, watch four captions change.
+
+## The touch pad feeds the same InputFrame as everything else
+
+`ui/touch.ts` owns no game state. It maintains held/edge sets keyed by the same
+`ActionId` the keyboard uses, and `InputManager.held`/`pressed` simply OR it in
+for player one. The engine cannot tell a thumb from a key, which is the property
+that let the whole port happen without touching `sim/`.
+
+The pad is enabled by an actual touch (`touchstart`), not by a media query, so a
+laptop with a touchscreen keeps its keyboard until somebody uses the glass —
+and `detectDevice()` in `ui/device.ts` only chooses opening defaults, never
+capabilities.
 
 ## Determinism
 

@@ -1,19 +1,25 @@
 /**
  * Batch CPU-vs-CPU simulation harness.
  *
- *   npx tsx scripts/simulate.ts [games] [innings] [difficulty]
+ *   npx tsx scripts/simulate.ts [games] [innings] [difficulty] [tempo]
+ *
+ * `tempo` is brisk | standard | relaxed and defaults to the game's own default.
+ * It is here so the pitch-clock stretch can be isolated on identical seeds
+ * rather than compared across two different batches.
  *
  * Prints a distribution of results plus every anomaly detected by
  * validateState(). This is the tool used to hunt deadlocks and rule bugs.
  */
 import { buildLeague } from '../src/data/teams';
 import { simulateGame, summarize } from '../src/sim/autoplay';
-import type { Difficulty, GameSetup } from '../src/core/types';
+import type { Difficulty, GameSetup, PitchTempo } from '../src/core/types';
+import { DEFAULT_PITCH_TEMPO } from '../src/core/constants';
 import { STADIUMS } from '../src/data/stadiums';
 
 const games = Number(process.argv[2] ?? 100);
 const innings = Number(process.argv[3] ?? 3);
 const difficulty = (process.argv[4] ?? 'pro') as Difficulty;
+const tempo = (process.argv[5] ?? DEFAULT_PITCH_TEMPO) as PitchTempo;
 
 const league = buildLeague();
 const t0 = Date.now();
@@ -59,6 +65,7 @@ for (let i = 0; i < games; i++) {
     homeControl: 'cpu',
     night: i % 2 === 0,
     seed: 1000 + i * 7919,
+    pitchTempo: tempo,
   };
   const report = simulateGame(setup, away, home);
   const s = summarize(report);
@@ -103,7 +110,7 @@ for (let i = 0; i < games; i++) {
 
 const secs = (Date.now() - t0) / 1000;
 console.log('\n================ SIMULATION REPORT ================');
-console.log(`games            : ${games} (${innings} innings, ${difficulty})`);
+console.log(`games            : ${games} (${innings} innings, ${difficulty}, ${tempo} tempo)`);
 console.log(`completed        : ${completed}/${games}`);
 console.log(`wall clock       : ${secs.toFixed(1)}s  (${(secs / games).toFixed(2)}s per game)`);
 console.log(`runs per game    : ${(totalRuns / games).toFixed(2)}`);

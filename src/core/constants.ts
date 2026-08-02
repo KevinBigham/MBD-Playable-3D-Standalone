@@ -44,10 +44,9 @@ export const BASE_POS: ReadonlyArray<{ x: number; z: number }> = [
  * reflex test you keep failing.
  *
  * Moving the rubber back buys the hitter ~15% more time (0.42 s to 0.48 s on a
- * fastball) while keeping the physics completely honest: the ball travels at
- * exactly the speed the radar readout claims, over a longer path. The
- * alternative — quietly stretching the flight clock, or slowing the ball but
- * still printing 95 on the scoreboard — would be lying to the player.
+ * fastball) while keeping the geometry honest: over a longer path, at the speed
+ * the radar claims. That is as far as distance alone can go — see PITCH_TEMPO
+ * below for the rest of the answer, and for what it costs.
  *
  * The CPU hitter gains nothing from this. Its read is budgeted in seconds
  * before arrival (see `react` in cpuBatting), not as a fraction of the flight,
@@ -115,6 +114,47 @@ export const PITCH_TELL_REVEAL: Record<'rookie' | 'pro' | 'allstar', number> = {
   pro: 0.62,
   allstar: 2,
 };
+
+/**
+ * PITCH TEMPO — the pitch clock runs slower than the rest of the world, and
+ * this is the one place in the engine where that is true.
+ *
+ * A deeper mound bought 0.48 s. It is not enough. The hitter's job in this game
+ * is bigger than a real hitter's: read the pitch, drive a cursor to where it is
+ * going, and pick contact / power / bunt / take, all before it arrives. On a
+ * phone that cursor is a thumb. 0.48 s is a reflex test; the decision the game
+ * is actually about never gets made.
+ *
+ * So the ball's flight from release to the contact plane is stretched by this
+ * factor. The path through space is unchanged — same release point, same break,
+ * same arc, same spot at the plate — only the clock along it is slower. Nothing
+ * else in the game is dilated: the swing, the bat, batted-ball flight, fielders
+ * and runners all live in real seconds.
+ *
+ * WHAT THIS COSTS, PLAINLY: the ball on screen is not moving at the speed the
+ * radar prints. The radar shows the pitcher's true release velocity, because
+ * that is the pitch's identity and what the contact model is fed; the clock is
+ * stretched around it. That is a stylisation, and an earlier version of this
+ * file called doing it quietly a lie. It is not quiet. The setting is on the
+ * options screen, and the last-pitch readout prints the real flight time in
+ * seconds next to the speed, so the number the hitter actually needs is the one
+ * that is never fudged.
+ *
+ * The CPU hitter is unaffected, for the same reason a deeper mound does not
+ * help it: it commits a fixed number of seconds before arrival.
+ */
+export type PitchTempo = 'brisk' | 'standard' | 'relaxed';
+
+export const PITCH_TEMPO: Record<PitchTempo, number> = {
+  /** The old behaviour: ~0.48 s on a fastball. */
+  brisk: 1,
+  /** Default. ~0.62 s — enough to read a pitch and still be rushed by a heater. */
+  standard: 1.3,
+  /** ~0.77 s. Built for thumbs, and the default when the game opens on a phone. */
+  relaxed: 1.6,
+};
+
+export const DEFAULT_PITCH_TEMPO: PitchTempo = 'standard';
 
 /** Player movement caps, m/s, before attribute scaling. */
 export const RUNNER_BASE_SPEED = 6.4;

@@ -2,12 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover lets the game paint under a notch; the layout pulls the
+      controls back out of it with env(safe-area-inset-*). user-scalable=no is
+      here for exactly one reason: a double-tap on an action button during a
+      swing must not zoom the field. Nothing readable is hidden by it — the
+      whole interface is sized in viewport units and scales with the screen.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Moonshot Nine" />
     <meta
       name="description"
-      content="MOONSHOT NINE - an original arcade baseball game for the desktop browser."
+      content="MOONSHOT NINE - an original arcade baseball game for the browser, on a desktop or a phone."
     />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <title>MOONSHOT NINE</title>
   </head>
   <body>
