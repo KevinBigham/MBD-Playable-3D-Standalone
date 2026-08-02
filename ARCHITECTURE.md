@@ -91,6 +91,35 @@ drifts is worse than no copy at all:
 - `pitchBreak()` in `data/pitches.ts` is the single source of a pitch's movement,
   called by `sim/game.ts` to launch the ball and by `plateview.ts` to preview it
 
+## Defensive alignments are geometry, not modifiers
+
+`DefensiveAlignment` in `sim/state.ts` names five ways the defence can stand.
+`ALIGN_DELTA` in `sim/fielders.ts` maps each one to nine position offsets in
+metres, and that is the entire implementation.
+
+Nothing else in the engine knows what "infield in" means. There is no branch in
+the contact model, no term in the hit-probability calculation, no lookup table
+keyed on alignment. The four infielders simply start five to seven metres closer
+to the plate and every consequence falls out of the physics that was already
+there: the throw home is shorter, so the run gets cut off; the grass behind them
+is longer, so ground balls that were outs go through.
+
+This is worth being strict about for two reasons.
+
+**It cannot drift out of sync with what the player sees.** The fielders are
+drawn at `FielderState.x/z`, which is where the simulation is actually running
+them. An alignment implemented as a probability modifier would be invisible, and
+a player who cannot see the defence cannot play against it.
+
+**It costs nothing to add another one.** A new alignment is nine pairs of
+numbers and a name. It needs no new code path, and it cannot introduce a rules
+bug, because it does not touch the rules.
+
+The manager AI (`chooseAlignment` in `sim/ai.ts`) takes a plain
+`DefenseSituation` struct rather than `GameState`, so it holds no reference to
+the engine and is unit-testable on its own — which is what
+`situational.test.ts` does for every branch.
+
 ## Determinism
 
 `GameSetup.seed` seeds one `Rng`. Every stochastic decision in a game draws from

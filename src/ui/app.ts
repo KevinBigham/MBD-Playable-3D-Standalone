@@ -372,6 +372,8 @@ export class App implements AppApi {
       bigplay: 'bigPlay',
       gameover: 'gameOver',
       steal: 'slide',
+      wildpitch: 'error',
+      defense: 'menuMove',
     };
     if (kind === 'contact') {
       const name: SfxName = power > 0.72 ? 'contactBarrel' : power > 0.42 ? 'contactSolid' : 'contactWeak';
@@ -389,6 +391,13 @@ export class App implements AppApi {
     if (kind === 'denied') {
       this.audio.playSfx('menuDenied');
       if (text) this.hud.flashFeedback(text, '#a9a294');
+      return;
+    }
+    // Setting the defence is a confirmation, not an event in the game — say
+    // what changed and get out of the way.
+    if (kind === 'defense') {
+      this.audio.playSfx('menuMove');
+      if (text) this.hud.flashFeedback(text, '#5ce1ff');
       return;
     }
     if (kind === 'homerun') this.audio.announce('homerun');

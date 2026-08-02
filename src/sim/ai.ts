@@ -3,7 +3,7 @@ import { Rng } from '../core/rng';
 import { attr01, clamp01, ZONE_CENTER_Y } from '../core/constants';
 import { PITCHES } from '../data/pitches';
 import { zoneBounds } from './contact';
-import type { PitcherRuntime } from './state';
+import type { DefensiveAlignment, PitcherRuntime } from './state';
 
 export interface DifficultyParams {
   label: string;
@@ -92,10 +92,32 @@ export function planPitch(
   runnersOn: boolean,
   d: DifficultyParams,
   rng: Rng,
+  pitchAround: 'none' | 'around' | 'intentional' = 'none',
 ): PitchPlan {
   const repertoire = pitcher.repertoire ?? ['fastball'];
   const zone = zoneBounds(batter);
   const control = attr01(pitcher.pitch?.control ?? 50);
+
+  // An intentional walk is not a pitch selection problem. Throw the softest
+  // thing in the bag, well outside, and take the base.
+  if (pitchAround === 'intentional') {
+    let easiest = 0;
+    let bestWild = Infinity;
+    repertoire.forEach((type, i) => {
+      const w = PITCHES[type].wildness;
+      if (w < bestWild) {
+        bestWild = w;
+        easiest = i;
+      }
+    });
+    return {
+      index: easiest,
+      type: repertoire[easiest],
+      aimX: zone.halfWidth * 2.6,
+      aimY: ZONE_CENTER_Y + 0.1,
+      intent: 'waste',
+    };
+  }
 
   // --- What kind of pitch does the situation call for? ---------------------
   const behind = balls > strikes;
@@ -151,6 +173,13 @@ export function planPitch(
     intent = 'waste';
   } else {
     intent = roll < 0.4 ? 'attack' : roll < 0.76 ? 'setup' : 'chase';
+  }
+
+  // Pitching around: never give him the middle. Everything moves to the black
+  // or off it, which is how a good hitter ends up walking without anybody
+  // holding four fingers up.
+  if (pitchAround === 'around' && intent === 'attack') {
+    intent = threeBalls ? 'setup' : 'chase';
   }
 
   let aimX = 0;
@@ -317,6 +346,92 @@ export function familiarityOf(runtime: PitcherRuntime, type: PitchType): number 
   const share = used / total;
   const recentSame = runtime.recent.slice(-4).filter((t) => t === type).length / 4;
   return clamp01((share - 0.3) * 1.6 + recentSame * 0.55);
+}
+
+// ---------------------------------------------------------------------------
+// Managing the defence
+// ---------------------------------------------------------------------------
+
+export interface DefenseSituation {
+  /** Bases 1..3 occupied. Index 0 is unused. */
+  occupied: readonly boolean[];
+  outs: number;
+  inning: number;
+  totalInnings: number;
+  /** Fielding team's runs minus batting team's runs. */
+  runDiff: number;
+  batter: Player;
+}
+
+/**
+ * The manager's call on how to stand. This is deliberately written the way a
+ * bench coach would say it out loud, in priority order, because a player who
+ * cannot predict the CPU's alignment cannot play against it.
+ *
+ * The ordering matters: cutting off the tying or go-ahead run at the plate
+ * outranks setting up a double play, which outranks protecting a big lead.
+ */
+export function chooseAlignment(s: DefenseSituation): DefensiveAlignment {
+  const late = s.inning >= Math.max(2, s.totalInnings - 2);
+  const onFirst = s.occupied[1];
+  const onSecond = s.occupied[2];
+  const onThird = s.occupied[3];
+
+  // A runner on third with fewer than two outs is the whole reason infield-in
+  // exists. Only worth the base hits it concedes when that run actually decides
+  // something: it is the tying or go-ahead run, or it is late and close.
+  if (onThird && s.outs < 2) {
+    const runMatters = s.runDiff <= 2 && s.runDiff >= -3;
+    // Tied or trailing, that run beats you whatever inning it is.
+    if (runMatters && (late || s.runDiff <= 1)) return 'in';
+  }
+
+  // Sacrifice territory: a runner in scoring position to move over, fewer than
+  // two outs, a hitter who is not going to beat you deep, and a tight game.
+  if ((onFirst || onSecond) && s.outs < 2 && !onThird) {
+    const power = attr01(s.batter.bat.power);
+    const speed = attr01(s.batter.bat.speed);
+    if (power < 0.4 && speed > 0.55 && Math.abs(s.runDiff) <= 2) return 'corners';
+  }
+
+  // Two on and nobody out, or a runner on first with a double play in order.
+  if (onFirst && s.outs < 2) return 'dp';
+
+  // Protecting a late lead: keep everything in front of you and make them
+  // string singles together.
+  if (late && s.runDiff >= 2 && s.runDiff <= 4) return 'nodoubles';
+
+  return 'normal';
+}
+
+/**
+ * Whether the pitcher should refuse to give this hitter anything.
+ *
+ * First base open with a dangerous hitter and a weak one behind him is the
+ * classic intentional walk; the same situation with the base occupied is a
+ * "pitch around" — work the edges, take the walk if it comes.
+ */
+export function choosePitchAround(
+  s: DefenseSituation,
+  onDeck: Player,
+  base1Open: boolean,
+): 'none' | 'around' | 'intentional' {
+  const threat = attr01(s.batter.bat.power) * 0.6 + attr01(s.batter.bat.contact) * 0.4;
+  const next = attr01(onDeck.bat.power) * 0.6 + attr01(onDeck.bat.contact) * 0.4;
+  const late = s.inning >= Math.max(2, s.totalInnings - 2);
+  const close = Math.abs(s.runDiff) <= 2;
+
+  // Never put the winning run on base.
+  const runnersOn = s.occupied.filter(Boolean).length;
+  if (base1Open && s.runDiff <= 0 && runnersOn + 1 >= Math.abs(s.runDiff) + 1 && s.runDiff < 0) {
+    return 'none';
+  }
+
+  if (base1Open && s.outs === 2 && threat > 0.78 && threat - next > 0.16 && close) {
+    return 'intentional';
+  }
+  if (threat > 0.74 && close && late && s.occupied[2]) return 'around';
+  return 'none';
 }
 
 // ---------------------------------------------------------------------------

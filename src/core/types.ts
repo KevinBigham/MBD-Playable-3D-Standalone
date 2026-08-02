@@ -208,6 +208,8 @@ export interface PitchingLine {
   w: number;
   l: number;
   sv: number;
+  /** Wild pitches charged to this pitcher. */
+  wp: number;
 }
 
 export function emptyBattingLine(): BattingLine {
@@ -215,7 +217,7 @@ export function emptyBattingLine(): BattingLine {
 }
 
 export function emptyPitchingLine(): PitchingLine {
-  return { outs: 0, h: 0, r: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, pitches: 0, w: 0, l: 0, sv: 0 };
+  return { outs: 0, h: 0, r: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, pitches: 0, w: 0, l: 0, sv: 0, wp: 0 };
 }
 
 export interface GameResult {

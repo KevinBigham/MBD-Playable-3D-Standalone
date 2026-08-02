@@ -118,6 +118,8 @@ identically either way; you just do it blind.
 | Move (before the pitch) | Moves the aim bracket. It marks **where the ball will cross the plate**, break included. |
 | Diamond left / down / right / up | Throws pitch 1 / 2 / 3 / 4 from this pitcher's repertoire. The four chips at bottom-left show the pitch, its speed, and a warning when you have leaned on it too heavily. |
 | Move (during the flight) | Steers the ball. The effect saturates, so mashing a direction bends the pitch — it cannot teleport it. A pitcher with high Movement steers more. |
+| Modifier + diamond | **Sets the defence.** See below. |
+| Switch fielder | Cycles **pitch to him → pitch around → put him on**. |
 
 While you are setting up, a coloured dashed arc runs into the target for **every
 pitch in your repertoire** — the colours match the chips at bottom-left, which
@@ -131,6 +133,43 @@ velocity and command, and the stamina bar under his name tells you when.
 
 The CPU hitter tracks how often you use each pitch. Lean on one and it starts
 sitting on it: your best pitch gets worse the more you love it.
+
+### Managing the defence
+
+Hold the modifier while you are pitching and the diamond becomes the manager's
+card. **Holding it is also what puts the card on screen**, listing all five calls
+next to their buttons with the current one lit, so there is nothing to remember.
+
+| Input | Call |
+|---|---|
+| Modifier + diamond up (2nd) | **Double-play depth.** The middle infielders cheat toward the bag. |
+| Modifier + diamond left (3rd) | **Infield in.** All four infielders on the grass. |
+| Modifier + diamond right (1st) | **Corners in.** First and third crash for the bunt. |
+| Modifier + diamond down (home) | **No doubles.** Outfield deep, corners on the lines. |
+| Modifier + Special | **Normal.** |
+
+None of these is a modifier on a dice roll. Each one is where nine people are
+standing, and the trade is real in both directions:
+
+- **Infield in** shortens the throw home enough to cut a run off at the plate,
+  and lengthens the grass behind the infielders. Balls that were outs go through.
+- **Double-play depth** shortens the pivot at second so you can turn two, and
+  widens the hole on both sides of the bag.
+- **No doubles** keeps everything in front of the outfielders and lets ordinary
+  singles fall in all day.
+- **Corners in** smothers a bunt and leaves both corners wide open.
+
+You keep whatever you set until the next hitter, when the manager takes the card
+back. The CPU makes the same calls from the same situation and in the same
+priority order — cut off the tying run, then set up the double play, then
+protect a late lead — and you can watch the infield walk in before the pitch,
+which means you can hit against it.
+
+**Pitching around.** Switch-fielder cycles three states. *Pitch around* stops
+giving him anything over the plate; he may still swing at something off it, and
+he may well walk. *Put him on* is the intentional walk. The CPU will put a
+dangerous hitter on with two outs and first base open when the man on deck is a
+step down — and never when the game is out of hand.
 
 ### Fielding
 
@@ -162,7 +201,9 @@ marks where a fly ball is going to come down.
 | Modifier + Special | Sends every runner back. |
 
 If you never touch a base button, your runners still run sensibly: they take
-what is there, hold when the throw beats them and tag up on fly balls. Commands
+what is there, hold when the throw beats them, tag up on fly balls and score
+from third on a sacrifice fly. A runner who breaks for the next bag on the pitch
+gets a real throw from the catcher — a stolen base is contested, not awarded. Commands
 are an override for when you want to be braver — or more careful — than the
 default.
 

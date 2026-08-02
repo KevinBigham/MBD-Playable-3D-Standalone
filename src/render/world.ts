@@ -464,6 +464,10 @@ export class GameWorld {
       case 'run':
         this.crowdEnergy = Math.min(1, this.crowdEnergy + 0.5);
         break;
+      case 'wildpitch':
+        this.director.addShake(0.14);
+        this.crowdEnergy = Math.min(1, this.crowdEnergy + 0.45);
+        break;
       case 'out':
         this.crowdEnergy = Math.min(1, this.crowdEnergy + 0.22);
         break;

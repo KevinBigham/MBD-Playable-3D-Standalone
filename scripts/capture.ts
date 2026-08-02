@@ -226,6 +226,35 @@ async function main(): Promise<void> {
   // the tracker dots from earlier in the at-bat all on screen together.
   await shotInFlight(page, '21-plate-view-pitch');
 
+  // The manager's card, open. The capture holds the modifier and verifies the
+  // card is actually on screen before shooting, so this can never quietly ship
+  // a picture of an empty corner.
+  await startGame(page, {
+    awayTeamId: 'coralkey',
+    homeTeamId: 'ironport',
+    stadiumId: 'anchor-yard',
+    innings: 3,
+    difficulty: 'pro',
+    awayControl: 'cpu',
+    homeControl: 'human1',
+    night: false,
+    seed: 31337,
+  });
+  await waitPhase(page, ['preplay']);
+  // The half-inning banner runs for about two seconds and would otherwise sit
+  // across the middle of the shot.
+  await page.waitForTimeout(2800);
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('KeyJ'); // infield in
+  await page.waitForTimeout(900);
+  const cardOpen = await page.evaluate(() => {
+    const el = document.querySelector('.hud-defense');
+    return !!el && el.classList.contains('on') && el.textContent!.includes('INFIELD IN');
+  });
+  if (!cardOpen) console.log('  (warning: defensive card was not on screen for 22-defensive-card)');
+  await shot(page, '22-defensive-card', 0);
+  await page.keyboard.up('Shift');
+
   await page.keyboard.press('Escape');
   await page.waitForTimeout(550);
   await shot(page, '17-pause');

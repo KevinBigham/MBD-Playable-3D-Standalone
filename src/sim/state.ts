@@ -18,6 +18,37 @@ import { CONTACT_Z, ZONE_CENTER_Y } from '../core/constants';
 
 export type Side = 'away' | 'home';
 
+/**
+ * How the defence is standing before the pitch. This is the manager's decision
+ * in baseball and it is a genuine trade, not a cosmetic one:
+ *
+ * - `normal`    the honest alignment; no strength, no hole.
+ * - `dp`        middle infielders cheat toward second so they can turn two,
+ *               which widens the hole on both sides of the bag.
+ * - `in`        the infield plays on the grass to cut a run off at the plate.
+ *               Balls that would have been outs now shoot through.
+ * - `nodoubles` outfielders play deep and the corners guard the lines. Nothing
+ *               gets past you; ordinary singles fall in all day.
+ * - `corners`   first and third crash for a bunt, leaving the corners exposed.
+ */
+export type DefensiveAlignment = 'normal' | 'dp' | 'in' | 'nodoubles' | 'corners';
+
+export const ALIGNMENT_LABEL: Record<DefensiveAlignment, string> = {
+  normal: 'NORMAL',
+  dp: 'DOUBLE-PLAY DEPTH',
+  in: 'INFIELD IN',
+  nodoubles: 'NO DOUBLES',
+  corners: 'CORNERS IN',
+};
+
+export const ALIGNMENT_SHORT: Record<DefensiveAlignment, string> = {
+  normal: 'NORMAL',
+  dp: 'DP DEPTH',
+  in: 'INFIELD IN',
+  nodoubles: 'NO DOUBLES',
+  corners: 'CORNERS',
+};
+
 export type Phase =
   | 'lineup' // pre-game presentation
   | 'preplay' // defence set, pitcher choosing
@@ -269,6 +300,8 @@ export interface GameEvent {
     | 'bigplay'
     | 'slide'
     | 'denied'
+    | 'defense'
+    | 'wildpitch'
     | 'pitchrelease';
   /** Free-form text shown by the HUD banner (may be empty). */
   text?: string;
@@ -350,6 +383,23 @@ export interface GameState {
   cpuSwingAt: number | null;
   /** Slot of the fielder currently pursuing the ball. */
   chaseSlot: number;
+
+  /** How the defence is standing for this pitch. Read by the fielder AI. */
+  alignment: DefensiveAlignment;
+  /**
+   * True when the human on defence chose this alignment rather than the manager
+   * AI. A human choice sticks until they change it or the situation resets at
+   * the start of a new plate appearance.
+   */
+  alignmentLocked: boolean;
+  /**
+   * Set when the pitcher is deliberately not giving the hitter anything to hit.
+   * `around` still permits a strike on the black; `intentional` is the free pass.
+   */
+  pitchAround: 'none' | 'around' | 'intentional';
+  /** Pull-side shift for this hitter, kept so alignment changes preserve it. */
+  pullShift: number;
+
   /** Seconds the human on defence has given no movement input. */
   defenseIdleT: number;
   /** True while the CPU is pursuing on the human's behalf; see updateDefense. */
@@ -379,6 +429,28 @@ export interface GameState {
     ballsInPlay: number;
     swings: number;
     inZone: number;
+    /**
+     * Baseball-texture tallies. Batting average alone cannot tell you whether a
+     * game *feels* like baseball: two engines can both hit .275 while one turns
+     * double plays and steals bases and the other never does. These counters are
+     * what the balance harness reads to keep the situational game honest.
+     */
+    texture: {
+      doublePlays: number;
+      sacFlies: number;
+      sacBunts: number;
+      stealAttempts: number;
+      stealsSafe: number;
+      /** Runners stranded at the end of each half-inning. */
+      lob: number;
+      wildPitches: number;
+      passedBalls: number;
+      intentionalWalks: number;
+      /** Outs recorded on runners other than the batter. */
+      runnersThrownOut: number;
+      /** Pitches thrown with each defensive alignment in force. */
+      alignment: Record<DefensiveAlignment, number>;
+    };
     warnings: string[];
   };
 }
@@ -524,6 +596,10 @@ export function createGameState(setup: GameSetup, away: Team, home: Team): GameS
     cpuRead: null,
     cpuSwingAt: null,
     chaseSlot: 0,
+    alignment: 'normal',
+    alignmentLocked: false,
+    pitchAround: 'none',
+    pullShift: 0,
     defenseIdleT: 0,
     autoFielding: false,
     predictX: 0,
@@ -545,6 +621,19 @@ export function createGameState(setup: GameSetup, away: Team, home: Team): GameS
       ballsInPlay: 0,
       swings: 0,
       inZone: 0,
+      texture: {
+        doublePlays: 0,
+        sacFlies: 0,
+        sacBunts: 0,
+        stealAttempts: 0,
+        stealsSafe: 0,
+        lob: 0,
+        wildPitches: 0,
+        passedBalls: 0,
+        intentionalWalks: 0,
+        runnersThrownOut: 0,
+        alignment: { normal: 0, dp: 0, in: 0, nodoubles: 0, corners: 0 },
+      },
       warnings: [],
     },
   };

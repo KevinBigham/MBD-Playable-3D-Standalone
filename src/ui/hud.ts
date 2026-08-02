@@ -1,7 +1,14 @@
 import { PITCHES } from '../data/pitches';
 import { controllerFor, humanIsBatting, humanIsPitching } from '../sim/game';
-import type { GameState } from '../sim/state';
-import { battingSide, currentBatter, fieldingSide, lookupPlayer, teamOf } from '../sim/state';
+import type { DefensiveAlignment, GameState } from '../sim/state';
+import {
+  ALIGNMENT_SHORT,
+  battingSide,
+  currentBatter,
+  fieldingSide,
+  lookupPlayer,
+  teamOf,
+} from '../sim/state';
 import { cssColor } from '../render/palette';
 import type { GameWorld } from '../render/world';
 import type { InputManager } from './input';
@@ -25,6 +32,9 @@ export class Hud {
   private matchupBox!: HTMLDivElement;
   private bannerBox!: HTMLDivElement;
   private promptBox!: HTMLDivElement;
+  private defenseBox!: HTMLDivElement;
+  /** Last rendered defence-card signature, so the DOM is only touched on change. */
+  private defenseKey = '';
   private pitchBox!: HTMLDivElement;
   private readoutBox!: HTMLDivElement;
   private feedbackBox!: HTMLDivElement;
@@ -94,6 +104,7 @@ export class Hud {
         <span class="lg" data-r="foul">FOUL</span>
         <span class="lg" data-r="inplay">IN PLAY</span>
       </div>
+      <div class="hud-defense"></div>
       <div class="hud-feedback"></div>
       <div class="hud-prompts"></div>
     `;
@@ -106,6 +117,7 @@ export class Hud {
     this.feedbackBox = this.root.querySelector('.hud-feedback') as HTMLDivElement;
     this.lineBox = this.root.querySelector('.hud-linescore') as HTMLDivElement;
     this.legendBox = this.root.querySelector('.hud-legend') as HTMLDivElement;
+    this.defenseBox = this.root.querySelector('.hud-defense') as HTMLDivElement;
 
     // The plate view sits underneath the panels so a tracker dot can never
     // cover the count or the prompts.
@@ -145,6 +157,7 @@ export class Hud {
     this.updatePrompts(state);
     this.updatePitchChips(state);
     this.updateReadout(state);
+    this.updateDefenseCard(state);
     this.plate.update(state, world, this.promptBox.offsetTop);
     this.legendBox.classList.toggle(
       'on',
@@ -288,6 +301,71 @@ export class Hud {
     sub.textContent = b.sub;
   }
 
+  /**
+   * The defensive card.
+   *
+   * Holding the modifier while you are pitching turns the diamond into the
+   * manager's card, and holding it is also what puts the card on screen — so
+   * the mapping is discovered rather than memorised. When the modifier is not
+   * held it collapses to a single chip naming how the defence is standing,
+   * because a player who cannot see the alignment cannot play around it.
+   */
+  private updateDefenseCard(state: GameState): void {
+    const pitching = humanIsPitching(state);
+    const show = pitching && (state.phase === 'preplay' || state.phase === 'windup');
+    this.defenseBox.classList.toggle('on', show);
+    if (!show) {
+      if (this.defenseKey !== '') {
+        this.defenseBox.innerHTML = '';
+        this.defenseKey = '';
+      }
+      return;
+    }
+
+    const k = (a: Parameters<InputManager['describe']>[1]) => this.input.describe('p1', a);
+    const open = this.input.isHeld('p1', 'modifier');
+    const cur = state.alignment;
+
+    // Rebuilding this markup on every animation frame is pure churn — the card
+    // changes maybe twice a plate appearance.
+    const key = `${open ? 'open' : 'chip'}|${cur}|${state.pitchAround}`;
+    if (key === this.defenseKey) return;
+    this.defenseKey = key;
+
+    if (!open) {
+      const around =
+        state.pitchAround === 'intentional'
+          ? ' · PUT HIM ON'
+          : state.pitchAround === 'around'
+            ? ' · PITCH AROUND'
+            : '';
+      this.defenseBox.innerHTML =
+        `<span class="dtag">DEFENCE</span>` +
+        `<b>${escapeHtml(ALIGNMENT_SHORT[cur])}${escapeHtml(around)}</b>` +
+        `<span class="dhint"><kbd>${escapeHtml(k('modifier'))}</kbd>SET</span>`;
+      return;
+    }
+
+    // Same order as ALIGN_BY_BASE in the engine: home, first, second, third.
+    const rows: [string, DefensiveAlignment][] = [
+      [k('diamondUp'), 'dp'],
+      [k('diamondLeft'), 'in'],
+      [k('diamondRight'), 'corners'],
+      [k('diamondDown'), 'nodoubles'],
+      [k('special'), 'normal'],
+    ];
+    this.defenseBox.innerHTML =
+      `<span class="dtag">SET THE DEFENCE</span>` +
+      rows
+        .map(
+          ([key, a]) =>
+            `<span class="drow${a === cur ? ' sel' : ''}">` +
+            `<kbd>${escapeHtml(key)}</kbd>${escapeHtml(ALIGNMENT_SHORT[a])}</span>`,
+        )
+        .join('') +
+      `<span class="drow"><kbd>${escapeHtml(k('switchFielder'))}</kbd>PITCH AROUND</span>`;
+  }
+
   private updatePrompts(state: GameState): void {
     const prompts: [string, string][] = [];
     const k = (a: Parameters<InputManager['describe']>[1]) => this.input.describe('p1', a);
@@ -337,6 +415,8 @@ export class Hud {
         [k('diamondDown'), 'PITCH 2'],
         [k('diamondRight'), 'PITCH 3'],
         [k('diamondUp'), 'PITCH 4'],
+        [`${k('modifier')}+DIR`, 'SET DEFENCE'],
+        [k('switchFielder'), 'PITCH AROUND'],
       );
     }
     void batterRunning;

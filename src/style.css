@@ -1491,3 +1491,68 @@ body.reduced-motion .boot-bar i {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Defensive card
+   Sits on the right so it never fights the pitch chips (bottom-left) or the
+   tracker legend, and clears the prompt bar the same way the legend does.
+   --------------------------------------------------------------------------- */
+.hud-defense {
+  position: absolute;
+  /* Clears the last-pitch readout below it with room to spare — at 124px the
+     open card sat 4px off it, which is one extra row away from a collision. */
+  bottom: 136px;
+  right: 14px;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 6px 11px;
+  background: rgba(7, 11, 23, 0.86);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-right: 6px solid var(--gold);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  max-width: 34vw;
+}
+
+.hud-defense.on {
+  display: flex;
+}
+
+.hud-defense .dtag {
+  color: var(--ink-dim);
+  letter-spacing: 0.2em;
+  font-size: 10px;
+}
+
+.hud-defense b {
+  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+}
+
+.hud-defense .dhint,
+.hud-defense .drow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+/* The alignment currently in force reads as chosen, not merely listed. */
+.hud-defense .drow.sel {
+  color: var(--gold);
+}
+
+.hud-defense kbd {
+  font-family: var(--font);
+  font-weight: 800;
+  background: var(--ink);
+  color: #10131f;
+  padding: 1px 6px;
+  min-width: 20px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}

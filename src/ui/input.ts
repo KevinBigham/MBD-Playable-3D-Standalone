@@ -199,6 +199,11 @@ export class InputManager {
     this.keyEdges.clear();
   };
 
+  /** True while the action is held. Public so the HUD can show modal cards. */
+  isHeld(player: 'p1' | 'p2', action: ActionId): boolean {
+    return this.held(player, action);
+  }
+
   private held(player: 'p1' | 'p2', action: ActionId): boolean {
     return this.bindings[player][action].some((c) => this.keys.has(c));
   }

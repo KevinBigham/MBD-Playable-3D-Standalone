@@ -324,6 +324,28 @@ is the real rule.
 
 ## Fielding
 
+### The defence has a manager
+
+Five alignments — normal, double-play depth, infield in, no doubles, corners in
+— are available to the CPU manager and, on the modifier, to the human pitching.
+
+They are implemented as **position offsets and nothing else**. There is no
+"infield-in modifier" anywhere in the outcome model; the four infielders simply
+start five to seven metres closer to the plate, and every consequence falls out
+of the physics that was already there. The throw home gets shorter, so the run
+gets cut off. The grass behind them gets longer, so ground balls that were outs
+go through. Nobody had to decide what those numbers should be, because the
+simulation already knew.
+
+That is also why the alignment is worth showing the hitter. The infield visibly
+walks in before the pitch, and a player who can see it can hit against it — a
+probability modifier hidden in a table could never do that.
+
+The manager's priority order is written the way a bench coach would say it:
+cut the tying or go-ahead run off at the plate first; set up the double play
+second; protect a late lead third. Across 60 games the mix lands at roughly 75%
+normal, 16% double-play depth, 5% no doubles, 2% infield in and 1% corners.
+
 ### Nothing on the field waits for you
 
 The human on defence is always attached to whichever fielder the coverage solver
@@ -389,12 +411,48 @@ The margin they demand depends on what they are attempting:
 
 | Attempt | Required margin (Pro CPU) |
 |---|---|
-| Batter taking second | −0.24 s (he runs on instinct) |
+| Batter taking second | −0.50 s (he runs on instinct) |
 | Any other extra base | +0.27 s |
 | Trying to score | +0.38 s |
 
 Two outs makes everyone 0.14 s braver. Throws longer than 65 m carry a 1.0 s
 relay penalty, which is the other half of why balls in the gap become doubles.
+
+**The batter's margin is the single most load-bearing number in the offence.**
+At the original −0.24 s the hitter pulled up at first on balls that were plainly
+doubles, and extra-base hits ran a third below the real rate — 1.9 doubles a
+game against a real 3.3. Moving it to −0.50 s produced 2.9 without touching the
+hit rate at all, because the hits it converts were already hits. What it costs
+is outs on the bases when he is wrong, which is the honest price and a good
+moment in its own right.
+
+The obvious-looking alternative was tested and rejected: moving the outfielders
+from 273 ft back to a realistic 295 ft did generate the doubles, and also an
+extra hit a game of bloops falling in front of them, taking batting average on
+balls in play from .331 to .393. The shortfall was never where the defence
+stood.
+
+### Tag-ups
+
+A runner forced back to re-touch after a catch is released the moment he gets
+there, and is then free to run again on the ordinary margin above. Without that
+release the flag stayed set for the rest of the play: the runner on third
+dutifully returned to the bag and then stood on it while the ball came in, and
+sacrifice flies ran at **0.03 per game** — which is to say they did not exist.
+They now run at 0.38.
+
+### Stolen bases are contested
+
+A runner who breaks on the pitch used to walk to the next base while nobody
+threw — eight and a half free bases a game. A steal is now an ordinary live
+play: the catcher gathers the pitch (pop time 0.52–0.72 s, by his fielding),
+the middle infielder covers, and the tag either beats the runner or it does not.
+Every part of that is machinery the engine already had for balls in play.
+
+Attempts are decided once per pitch rather than once per simulation tick — the
+old per-tick roll at 120 Hz is why a fast runner went on essentially every
+pitch. The result is 1.05 attempts a game at 79% safe, against a real-baseball
+1.4 and 79%.
 
 Invariants are enforced every step: runners cannot pass each other, and two
 runners can never end up on the same bag.
@@ -429,22 +487,44 @@ count like a hitter rather than hacking at everything.
 
 Measured over 100 CPU-versus-CPU nine-inning games on Pro:
 
-| Statistic | MOONSHOT NINE | Note |
-|---|---|---|
-| Runs per game (both clubs) | 9.6 | Deliberately above real baseball |
-| Hits per game | 20.1 | |
-| Home runs per game | 2.29 | Rare enough to matter, common enough to chase |
-| Doubles / triples per game | 1.9 / 0.2 | |
-| Batting average | .271 | |
-| Batting average on balls in play | .323 | |
-| Strikeout rate | 22.0% | |
-| Walk rate | 3.6% | Below real baseball, on purpose — walks are dead time |
-| Errors per game | 1.1 | |
-| Pitches per plate appearance | 4.0 | |
-| Pitches in the strike zone | 48.8% | |
-| Whiffs per swing | 20.8% | |
-| Extra-inning games | 7% | |
-| Shutouts | 25% | |
+| Statistic | MOONSHOT NINE | Real baseball | Note |
+|---|---|---|---|
+| Runs per game (both clubs) | 9.4 | 8.6 | Deliberately above real baseball |
+| Hits per game | 18.9 | 17.0 | |
+| Home runs per game | 2.2 | 2.3 | Rare enough to matter, common enough to chase |
+| Doubles / triples per game | 2.9 / 0.2 | 3.3 / 0.3 | |
+| Batting average | .272 | .248 | |
+| Batting average on balls in play | .327 | .291 | |
+| Strikeout rate | 22.2% | 22.6% | |
+| Walk rate | 4.1% | 8.2% | Below real baseball, on purpose — walks are dead time |
+| Errors per game | 0.97 | 1.2 | |
+| Pitches per plate appearance | 4.0 | 3.9 | |
+| Pitches in the strike zone | 49.3% | 48.5% | |
+| Whiffs per swing | 19.2% | 24.6% | |
+| Extra-inning games | 7% | 9% | |
+| Shutouts | 12% | 13% | |
+
+### Baseball texture
+
+Batting average alone cannot tell you whether a game *feels* like baseball. Two
+engines can both hit .272 while one turns double plays and steals bases and the
+other never does — so the balance harness measures the situational game too, and
+these numbers are what the round was actually for:
+
+| Per game (both clubs) | Before | After | Real baseball |
+|---|---|---|---|
+| Double plays | 2.3 | 2.3 | 1.7 |
+| Sacrifice flies | **0.03** | **0.38** | 0.5 |
+| Stolen-base attempts | **8.54** | **1.05** | 1.4 |
+| Stolen-base success | **100%** | **79%** | 79% |
+| Wild pitches / passed balls | 0 / 0 | 0.45 / 0.27 | 0.7 / 0.2 |
+| Runners thrown out on the bases | 4.0 | 3.4 | — |
+| Doubles | 1.9 | 2.9 | 3.3 |
+| Intentional walks | 0 | 0.08 | 0.15 |
+
+The three bolded rows were not tuning. They were defects: tag-ups could never
+release, steals were never contested, and a ball in the dirt could not get past
+the catcher.
 
 A three-inning game takes about four and a half minutes; a nine-inning game
 about fifteen.
@@ -523,6 +603,7 @@ nine innings.
 | Simplification | Why |
 |---|---|
 | No pickoff throws | The mound-runner mini-game competes with the pitcher-batter one for attention, and the pitcher-batter one is the game |
+| No dropped third strike | The uncaught third strike is a genuinely good moment, but the strikeout-plus-throw-down needs its own play flow rather than a special case bolted to the count. A ball in the dirt only starts a play when the plate appearance continues |
 | Straight-line basepaths in the simulation | Distances and times are exact; only the drawn path is simplified |
 | Only pitching substitutions | Deep bench management is a different genre |
 | No infield fly, balk, interference or obstruction | Rare, hard to communicate at speed, and never advantageous to one side by their absence |

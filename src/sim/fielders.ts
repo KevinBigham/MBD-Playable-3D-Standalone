@@ -13,7 +13,7 @@ import {
 } from '../core/constants';
 import type { Player } from '../core/types';
 import { type Ball, launchFree } from './physics';
-import type { FielderState } from './state';
+import type { DefensiveAlignment, FielderState } from './state';
 import { DRAG_K } from '../core/constants';
 
 /** Standing defensive alignment, in world metres. */
@@ -24,10 +24,52 @@ export const ALIGNMENT: ReadonlyArray<{ x: number; z: number }> = [
   { x: 9.6, z: 34.0 },       // 2B
   { x: -17.0, z: 24.2 },     // 3B
   { x: -9.9, z: 34.2 },      // SS
+  // Outfield depth stays where it is. Doubles ran a third below the real rate
+  // and moving the outfielders back to a realistic 295 ft did produce them —
+  // along with an extra hit a game of bloops falling in front, which pushed
+  // BABIP to .393. The shortfall was never depth: it was that the hitter did
+  // not turn first hard enough. See advanceMargin in runners.ts.
   { x: -38.0, z: 74.0 },     // LF
   { x: 0, z: 88.0 },         // CF
   { x: 38.0, z: 74.0 },      // RF
 ];
+
+/**
+ * Where each alignment stands, as a delta from ALIGNMENT in metres.
+ *
+ * These are the whole feature. Nothing else in the engine knows what "infield
+ * in" means — the fielders simply start somewhere else, and every consequence
+ * falls out of the physics that was already there. Playing in shortens the
+ * throw home and lengthens the grass behind you, so you cut the run off and
+ * concede the base hit. Double-play depth shortens the pivot and widens both
+ * holes. Playing no-doubles turns gappers into singles and bloops into hits.
+ *
+ * That is why these are position offsets and not probability modifiers: a
+ * player who can see the defence move can predict what it costs.
+ */
+const ALIGN_DELTA: Record<DefensiveAlignment, ReadonlyArray<readonly [number, number]>> = {
+  //        P        C        1B            2B            3B            SS            LF           CF          RF
+  normal: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
+  // Middle infielders cheat two steps toward the bag and one step in.
+  dp: [[0, 0], [0, 0], [-0.6, -0.8], [-2.4, -1.7], [0.6, -0.8], [2.5, -1.7], [0, 0], [0, 0], [0, 0]],
+  // All four infielders on the grass; the outfield comes in to back up a play
+  // at the plate, which is what makes a sacrifice fly a real gamble.
+  in: [[0, 0], [0, 0], [-1.2, -5.6], [-0.8, -7.5], [1.2, -5.6], [0.8, -7.5], [0, -5], [0, -5], [0, -5]],
+  // Corners on the lines, outfield deep and wide.
+  nodoubles: [[0, 0], [0, 0], [3.2, 0.4], [0, 1.2], [-3.2, 0.4], [0, 1.2], [-3.4, 7], [0, 6], [3.4, 7]],
+  // First and third crash for the bunt; the middle slides over to cover.
+  corners: [[0, 0], [0, 0], [-2.4, -9.1], [3.4, -1.4], [2.2, -9.0], [3.9, -1.4], [0, 0], [0, 0], [0, 0]],
+};
+
+/** Home position for a slot under a given alignment, before any pull shift. */
+export function alignedHome(
+  slot: number,
+  alignment: DefensiveAlignment,
+): { x: number; z: number } {
+  const a = ALIGNMENT[slot];
+  const d = ALIGN_DELTA[alignment][slot];
+  return { x: a.x + d[0], z: a.z + d[1] };
+}
 
 export const CATCHER_SLOT = 1;
 export const PITCHER_SLOT = 0;
@@ -72,9 +114,13 @@ export function makeFielder(player: Player, slot: number): FielderState {
   };
 }
 
-export function resetAlignment(fielders: FielderState[], shiftPull: number): void {
+export function resetAlignment(
+  fielders: FielderState[],
+  shiftPull: number,
+  alignment: DefensiveAlignment = 'normal',
+): void {
   for (const f of fielders) {
-    const a = ALIGNMENT[f.slot];
+    const a = alignedHome(f.slot, alignment);
     // A gentle shift toward the hitter's pull side keeps defences from feeling
     // static without ever leaving a base uncovered.
     const shift = f.slot >= 2 ? shiftPull * (f.slot >= 6 ? 5.5 : 2.6) : 0;
@@ -95,6 +141,29 @@ export function resetAlignment(fielders: FielderState[], shiftPull: number): voi
     f.reactDelay = 0;
     f.errorFlash = 0;
     f.humanControlled = false;
+  }
+}
+
+/**
+ * Moves the defence's home spots without teleporting anybody. Used when the
+ * alignment changes between pitches: the fielders walk to the new positions
+ * under idleFielders, which is both readable and honest — you can see the
+ * infield come in, and so can the hitter.
+ */
+export function restand(
+  fielders: FielderState[],
+  shiftPull: number,
+  alignment: DefensiveAlignment,
+): void {
+  for (const f of fielders) {
+    const a = alignedHome(f.slot, alignment);
+    const shift = f.slot >= 2 ? shiftPull * (f.slot >= 6 ? 5.5 : 2.6) : 0;
+    f.homeX = a.x + shift;
+    f.homeZ = a.z;
+    if (f.role === 'idle') {
+      f.tx = f.homeX;
+      f.tz = f.homeZ;
+    }
   }
 }
 

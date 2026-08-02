@@ -37,6 +37,7 @@ import {
   moveFielder,
   reachHeight,
   resetAlignment,
+  restand,
   startDive,
   throwBall,
   throwError,
@@ -52,6 +53,7 @@ import {
   distanceToBase,
   isOnBase,
   makeRunner,
+  occupiedBases,
   runnerAbs,
   stepRunner,
   timeToBase,
@@ -65,11 +67,22 @@ import {
   swingProfile,
   zoneBounds,
 } from './contact';
-import { DIFFICULTY, familiarityOf, planPitch, readPitch, shouldPullPitcher } from './ai';
+import {
+  DIFFICULTY,
+  type DefenseSituation,
+  chooseAlignment,
+  choosePitchAround,
+  familiarityOf,
+  planPitch,
+  readPitch,
+  shouldPullPitcher,
+} from './ai';
 import { findIntercept, projectBall } from './trajectory';
 import type { InputFrame, InputPair } from './input';
 import { emptyInput } from './input';
 import {
+  ALIGNMENT_SHORT,
+  type DefensiveAlignment,
   type GameState,
   type PitchLogResult,
   type PlayContext,
@@ -263,10 +276,18 @@ export function startAtBat(state: GameState): void {
     checked: false,
   };
 
+  // Every plate appearance is a fresh situation, so the manager gets to call
+  // the defence again. A human who set the alignment by hand keeps it only
+  // until the situation changes underneath them.
+  state.alignmentLocked = false;
+  state.pitchAround = 'none';
+  state.alignment = decideDefense(state);
+
   // Defensive alignment shifts a little toward the hitter's pull side.
   const pull = pullDirection(batter.bats, pitcher.throws);
   const pullStrength = (attr01(batter.bat.power) - 0.45) * 1.2;
-  resetAlignment(state.fielders, pull * clamp(pullStrength, -0.4, 0.9));
+  state.pullShift = pull * clamp(pullStrength, -0.4, 0.9);
+  resetAlignment(state.fielders, state.pullShift, state.alignment);
 
   // Runners reset to their bases with a lead.
   for (const r of state.runners) {
@@ -301,6 +322,38 @@ export function startAtBat(state: GameState): void {
   setPhase(state, 'preplay');
 
   maybeChangePitcher(state);
+}
+
+/**
+ * Situation the defensive manager reads. Built here rather than in ai.ts so
+ * the AI module stays free of GameState and testable on its own.
+ */
+function defenseSituation(state: GameState): DefenseSituation {
+  const fs = fieldingSide(state);
+  const bs = battingSide(state);
+  return {
+    occupied: occupiedBases(state.runners),
+    outs: state.outs,
+    inning: state.inning,
+    totalInnings: state.setup.innings,
+    runDiff: state.stats[fs].runs - state.stats[bs].runs,
+    batter: currentBatter(state),
+  };
+}
+
+/** Alignment for the current situation, respecting a human's manual choice. */
+function decideDefense(state: GameState): DefensiveAlignment {
+  if (state.alignmentLocked) return state.alignment;
+  if (humanIsPitching(state)) return 'normal';
+  return chooseAlignment(defenseSituation(state));
+}
+
+/** The hitter on deck, used for intentional-walk decisions. */
+function onDeckBatter(state: GameState): Player {
+  const bs = battingSide(state);
+  const team = teamOf(state, bs);
+  const idx = (state.battingIdx[bs] + 1) % team.lineup.length;
+  return playerById(team, team.lineup[idx]);
 }
 
 /** Puts runners on for the baserunning drill so there is something to command. */
@@ -346,18 +399,30 @@ function updatePrePlay(state: GameState, dt: number, inputs: InputPair): void {
   }
 
   if (pitchInput) {
-    pr.aimX = clamp(pr.aimX + pitchInput.moveX * AIM_SPEED * dt, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
-    pr.aimY = clamp(pr.aimY + pitchInput.moveY * AIM_SPEED * dt, CURSOR_Y_MIN, CURSOR_Y_MAX);
-    if (pitchInput.pitchSlot >= 0) {
-      if (pr.ready > 0) {
-        pushEvent(state, { kind: 'denied', text: 'Not set yet' });
-      } else {
-        const rep = repertoireOf(state);
-        const idx = clamp(pitchInput.pitchSlot, 0, rep.length - 1);
-        pr.selected = idx;
-        beginWindup(state, rep[idx], pr.aimX, pr.aimY);
+    // Holding the modifier turns the diamond into the defensive card. Holding
+    // it is also what makes the card appear on screen, so the mapping never has
+    // to be memorised.
+    if (pitchInput.modifier) {
+      if (pitchInput.base >= 0) setAlignment(state, ALIGN_BY_BASE[pitchInput.base], true);
+      // `advanceAll` is suppressed while the modifier is down, so the reset
+      // rides on `dive`, which is the raw special button.
+      if (pitchInput.dive) setAlignment(state, 'normal', true);
+    } else {
+      pr.aimX = clamp(pr.aimX + pitchInput.moveX * AIM_SPEED * dt, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
+      pr.aimY = clamp(pr.aimY + pitchInput.moveY * AIM_SPEED * dt, CURSOR_Y_MIN, CURSOR_Y_MAX);
+      if (pitchInput.pitchSlot >= 0) {
+        if (pr.ready > 0) {
+          pushEvent(state, { kind: 'denied', text: 'Not set yet' });
+        } else {
+          const rep = repertoireOf(state);
+          const idx = clamp(pitchInput.pitchSlot, 0, rep.length - 1);
+          pr.selected = idx;
+          beginWindup(state, rep[idx], pr.aimX, pr.aimY);
+        }
       }
     }
+    // Switch-fielder doubles as the "put him on" button while you are pitching.
+    if (pitchInput.switchFielder) cyclePitchAround(state);
   } else if (pr.ready <= 0) {
     const rep = repertoireOf(state);
     const pitcher = lookupPlayer(state, pr.playerId);
@@ -372,8 +437,11 @@ function updatePrePlay(state: GameState, dt: number, inputs: InputPair): void {
       state.runners.length > 0,
       d,
       state.rng,
+      state.pitchAround,
     );
     pr.selected = clamp(plan.index, 0, rep.length - 1);
+    // CURSOR_X_LIMIT is more than twice the half-width of any strike zone, so
+    // an intentional ball aimed at the clamp is still unmistakably a ball.
     pr.aimX = clamp(plan.aimX, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
     pr.aimY = clamp(plan.aimY, CURSOR_Y_MIN, CURSOR_Y_MAX);
     beginWindup(state, rep[pr.selected], pr.aimX, pr.aimY);
@@ -382,6 +450,45 @@ function updatePrePlay(state: GameState, dt: number, inputs: InputPair): void {
   void zone;
   idleFielders(state, dt);
   stepRunnersPreplay(state, dt);
+}
+
+/** The diamond, read as the defensive card. Order is home, first, second, third. */
+const ALIGN_BY_BASE: ReadonlyArray<DefensiveAlignment> = ['nodoubles', 'corners', 'dp', 'in'];
+
+/** Applies an alignment and walks the fielders to it. */
+function setAlignment(state: GameState, next: DefensiveAlignment, byHuman: boolean): void {
+  if (byHuman) state.alignmentLocked = true;
+  if (state.alignment === next) return;
+  state.alignment = next;
+  restand(state.fielders, state.pullShift, next);
+  if (byHuman) {
+    pushEvent(state, { kind: 'defense', text: ALIGNMENT_SHORT[next] });
+  }
+}
+
+/** Human toggle: pitch him carefully, then put him on, then never mind. */
+function cyclePitchAround(state: GameState): void {
+  const order = ['none', 'around', 'intentional'] as const;
+  const next = order[(order.indexOf(state.pitchAround) + 1) % order.length];
+  state.pitchAround = next;
+  pushEvent(state, {
+    kind: 'defense',
+    text: next === 'none' ? 'PITCH TO HIM' : next === 'around' ? 'PITCH AROUND' : 'PUT HIM ON',
+  });
+}
+
+/**
+ * Re-reads the situation between pitches. The manager may move the defence
+ * mid-count — a runner who steals second changes what the infield should be
+ * doing, and a defence that only ever set up once would look asleep.
+ */
+function reconsiderDefense(state: GameState): void {
+  if (state.alignmentLocked) return;
+  if (humanIsPitching(state)) return;
+  const sit = defenseSituation(state);
+  setAlignment(state, chooseAlignment(sit), false);
+  const occ = sit.occupied;
+  state.pitchAround = choosePitchAround(sit, onDeckBatter(state), !occ[1]);
 }
 
 function repertoireOf(state: GameState): PitchType[] {
@@ -415,6 +522,7 @@ function stepRunnersPreplay(state: GameState, dt: number): void {
     } else if (r.cmdTarget !== null && r.cmdTarget > r.base) {
       r.stealing = true;
       r.target = clamp(r.cmdTarget, 0, 4);
+      state.diag.texture.stealAttempts++;
       pushEvent(state, { kind: 'steal', text: `${lookupPlayer(state, r.playerId).lastName} goes!` });
     } else {
       r.target = r.base + 0.055;
@@ -423,10 +531,26 @@ function stepRunnersPreplay(state: GameState, dt: number): void {
   }
 }
 
+/**
+ * Whether the CPU sends a runner on this pitch.
+ *
+ * This used to roll the dice on every simulation tick, which at 120 Hz meant a
+ * fast runner attempted a steal on essentially every pitch — eight and a half
+ * attempts a game. It is now decided once per pitch, at a rate that reads like
+ * baseball, and the decision accounts for the situation the way a third-base
+ * coach would: don't run when you are already in scoring position for nothing,
+ * don't run down big, and run more when the run actually matters.
+ */
 function cpuPreplayOffense(state: GameState, dt: number): void {
   void dt;
-  if (state.phaseT < 0.25) return;
+  // One decision per pitch, taken the instant the defence is set.
+  if (state.phaseT < 0.25 || state.phaseT - dt >= 0.25) return;
+
   const d = DIFFICULTY[state.difficulty];
+  const bs = battingSide(state);
+  const fs = fieldingSide(state);
+  const deficit = state.stats[fs].runs - state.stats[bs].runs;
+
   for (const r of state.runners) {
     if (r.out || r.scored || r.stealing || r.base >= 3) continue;
     if (r.leadHold > 0) continue;
@@ -436,9 +560,17 @@ function cpuPreplayOffense(state: GameState, dt: number): void {
     if (occupiedAhead) continue;
     const runner = lookupPlayer(state, r.playerId);
     const speed = attr01(runner.bat.speed);
-    if (speed < 0.6) continue;
-    const chance = d.stealDrive * speed * 0.02;
-    if (state.rng.chance(chance)) {
+    if (speed < 0.52) continue;
+
+    // Base rate per pitch. Second is worth taking; third is a bigger gamble and
+    // is only worth it with fewer than two outs, when a single would score him.
+    let chance = d.stealDrive * (speed - 0.45) * 0.72;
+    if (r.base === 2) chance *= state.outs < 2 ? 0.4 : 0.12;
+    // Down by a lot, station-to-station; up by a lot, no need to force it.
+    if (Math.abs(deficit) >= 5) chance *= 0.3;
+    if (state.strikes === 2) chance *= 0.7;
+
+    if (state.rng.chance(clamp01(chance))) {
       r.cmdTarget = r.base + 1;
     }
   }
@@ -449,6 +581,7 @@ function cpuPreplayOffense(state: GameState, dt: number): void {
 // ---------------------------------------------------------------------------
 
 function beginWindup(state: GameState, type: PitchType, aimX: number, aimY: number): void {
+  state.diag.texture.alignment[state.alignment]++;
   const pr = state.pitcher;
   const pitcher = lookupPlayer(state, pr.playerId);
   const prof = PITCHES[type];
@@ -765,6 +898,7 @@ function resolveSwingNow(state: GameState, timingError: number, profile: ReturnT
     state.diag.swingMisses++;
     pushEvent(state, { kind: 'swingmiss', text: res.note });
     logPitch(state, 'swinging');
+    if (state.strikes + 1 < 3) checkBallInDirt(state);
     addStrike(state, 'swinging');
     return;
   }
@@ -872,8 +1006,66 @@ function resolveTakenPitch(state: GameState): void {
     addStrike(state, 'called');
   } else {
     logPitch(state, 'ball');
+    // Ball four already moves everybody; checking here as well would advance
+    // the same runners twice.
+    if (state.balls + 1 < 4) checkBallInDirt(state);
     addBall(state);
   }
+}
+
+/**
+ * A pitch the catcher has to block. Only interesting with somebody on base —
+ * a ball skipping to the backstop with the bases empty is not a moment, it is
+ * a delay — so this deliberately does nothing otherwise.
+ *
+ * A pitch that crossed well below the knees is the pitcher's fault and goes in
+ * the book as a wild pitch; one the catcher simply missed is a passed ball.
+ * Both let every runner take a base, which is what makes a breaking ball with
+ * a man on third an actual decision instead of a free strikeout.
+ */
+function checkBallInDirt(state: GameState): void {
+  const info = state.currentPitch;
+  if (!info) return;
+  const live = state.runners.filter((r) => !r.out && !r.scored && !r.isBatter);
+  if (live.length === 0) return;
+
+  const zone = zoneBounds(currentBatter(state));
+  // How far below the bottom of the zone the ball crossed, in metres.
+  const below = zone.bottom - info.plateY;
+  if (below < 0.16) return;
+
+  const catcher = state.fielders[CATCHER_SLOT];
+  const skill = attr01(catcher.fielding);
+  const move = Math.abs(PITCHES[info.type].breakX) + Math.abs(PITCHES[info.type].breakY);
+  // Scaled so a good catcher blocks nearly everything and a bad one behind a
+  // sharp breaking ball in the dirt genuinely loses one now and then.
+  const p = clamp01((below - 0.16) * 1.7 + move * 0.2) * (0.36 - skill * 0.25);
+  if (!state.rng.chance(clamp01(p))) return;
+
+  const wild = below > 0.235;
+  if (wild) state.diag.texture.wildPitches++;
+  else state.diag.texture.passedBalls++;
+
+  const pitching = pitchingLine(state, state.pitcher.side, state.pitcher.playerId);
+  if (wild) pitching.wp++;
+
+  for (const r of [...live].sort((a, b) => b.base - a.base)) {
+    if (r.base >= 3) {
+      r.base = 4;
+      r.progress = 0;
+      r.scored = true;
+      scoreRun(state, r);
+    } else {
+      r.base += 1;
+      r.progress = 0;
+      r.target = r.base;
+    }
+  }
+  state.runners = state.runners.filter((r) => !r.out && !r.scored);
+
+  pushEvent(state, { kind: 'wildpitch', text: wild ? 'WILD PITCH' : 'PASSED BALL', power: 0.7 });
+  setBanner(state, wild ? 'WILD PITCH' : 'PASSED BALL', 'RUNNERS MOVE UP', 'error', 1.5);
+  checkWalkOff(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -932,8 +1124,16 @@ function walk(state: GameState): void {
   line.pa++;
   line.bb++;
   pitchingLine(state, state.pitcher.side, state.pitcher.playerId).bb++;
-  pushEvent(state, { kind: 'walk', text: 'BALL FOUR' });
-  setBanner(state, 'BALL FOUR', `${batter.lastName.toUpperCase()} TAKES FIRST`, 'walk', 1.6);
+  const free = state.pitchAround === 'intentional';
+  if (free) state.diag.texture.intentionalWalks++;
+  pushEvent(state, { kind: 'walk', text: free ? 'PUT HIM ON' : 'BALL FOUR' });
+  setBanner(
+    state,
+    free ? 'INTENTIONAL' : 'BALL FOUR',
+    `${batter.lastName.toUpperCase()} TAKES FIRST`,
+    'walk',
+    1.6,
+  );
   awardBases(state, batter, 1);
   state.play.outcome = 'walk';
   checkWalkOff(state);
@@ -996,12 +1196,70 @@ function endPitch(state: GameState, _playEnded: boolean): void {
   state.ball.z = MOUND_Z;
   state.ball.pitch = undefined;
   state.pitcher.ready = humanIsPitching(state) ? 0.3 : 0.55 + state.rng.range(0, 0.4);
+
+  // Somebody broke for the next bag on that pitch. The catcher has the ball and
+  // a decision to make, so this becomes a live play rather than a free base.
+  const stealers = state.runners.filter((r) => !r.out && !r.scored && r.stealing);
+  if (stealers.length && state.outs < 3) {
+    startThrowDown(state, stealers);
+    return;
+  }
+
   for (const r of state.runners) {
     r.cmdTarget = null;
     r.stealing = false;
     r.target = r.base;
   }
+  reconsiderDefense(state);
   setPhase(state, 'preplay');
+}
+
+/**
+ * The catcher's throw to second.
+ *
+ * Before this existed a runner simply walked to the next base while the pitch
+ * was in the air and nobody contested it — eight and a half free bases a game,
+ * and not one throw. Now it is an ordinary live play: the catcher gathers, the
+ * middle infielder covers, and the tag either beats the runner or it does not.
+ * Every part of that is machinery the engine already had for balls in play.
+ */
+function startThrowDown(state: GameState, stealers: RunnerState[]): void {
+  const catcher = state.fielders[CATCHER_SLOT];
+  const ball = state.ball;
+
+  state.play = makePlayContext(state.batter.playerId, battingSide(state));
+  state.play.live = true;
+  state.play.steal = true;
+  state.play.fair = true;
+
+  catcher.hasBall = true;
+  // Pop time: gathering the pitch and getting rid of it. A good defensive
+  // catcher is roughly a fifth of a second quicker than a bad one, which is
+  // very close to the difference it makes in the real game.
+  catcher.transfer = 0.72 - attr01(catcher.fielding) * 0.2;
+  catcher.role = 'chase';
+  ball.mode = 'held';
+  ball.x = catcher.x;
+  ball.y = 1.3;
+  ball.z = catcher.z;
+  ball.vx = ball.vy = ball.vz = 0;
+  ball.rolling = false;
+  ball.pitch = undefined;
+
+  for (const r of stealers) {
+    r.cmdTarget = null;
+    r.target = clamp(r.base + 1, 0, 4);
+  }
+  for (const r of state.runners) {
+    if (r.stealing) continue;
+    r.cmdTarget = null;
+    r.target = r.base;
+  }
+
+  assignCoverage(state.fielders, CATCHER_SLOT);
+  state.chaseSlot = CATCHER_SLOT;
+  state.diag.plays++;
+  setPhase(state, 'inplay');
 }
 
 /** Ends the plate appearance and moves to the next hitter (or the next half). */
@@ -1856,6 +2114,7 @@ function callOut(state: GameState, r: RunnerState, kind: 'force' | 'tag' | 'appe
   r.out = true;
   state.play.outs++;
   if (r.isBatter) state.play.batterOut = true;
+  else state.diag.texture.runnersThrownOut++;
   recordOut(state, 1);
   const p = lookupPlayer(state, r.playerId);
   pushEvent(state, {
@@ -1977,6 +2236,10 @@ function endPlay(state: GameState): void {
     const sacFly = play.caught && play.runs > 0 && state.outs < 3;
     const sacBunt = state.batter.swingKind === 'bunt' && play.batterOut && play.outs >= 1 && play.runs === 0 && advancedARunner(state);
 
+    if (play.outs >= 2) state.diag.texture.doublePlays++;
+    if (sacFly) state.diag.texture.sacFlies++;
+    if (sacBunt) state.diag.texture.sacBunts++;
+
     if (play.batterOut || !batterRunner || batterRunner.out) {
       if (sacFly || sacBunt) {
         play.outcome = 'sacrifice';
@@ -2023,6 +2286,16 @@ function advancedARunner(state: GameState): boolean {
 }
 
 function resumeAfterSteal(state: GameState): void {
+  const bs = battingSide(state);
+  if (state.play.outs === 0) {
+    state.diag.texture.stealsSafe++;
+    for (const r of state.runners) {
+      if (!r.stealing || r.out || r.scored) continue;
+      battingLine(state, bs, r.playerId).sb++;
+    }
+    setBanner(state, 'SAFE', 'STOLEN BASE', 'hit', 1.3);
+  }
+  for (const r of state.runners) r.stealing = false;
   state.play = makePlayContext(state.batter.playerId, battingSide(state));
   state.runners = state.runners.filter((r) => !r.out && !r.scored);
   settleRunnersToBases(state.runners);
@@ -2108,7 +2381,9 @@ function endHalfInning(state: GameState): void {
     return;
   }
   const bs = battingSide(state);
-  state.stats[bs].lob += state.runners.filter((r) => !r.out && !r.scored).length;
+  const stranded = state.runners.filter((r) => !r.out && !r.scored).length;
+  state.stats[bs].lob += stranded;
+  state.diag.texture.lob += stranded;
   state.runners = [];
   state.outs = 0;
 

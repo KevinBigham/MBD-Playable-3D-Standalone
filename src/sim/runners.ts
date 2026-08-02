@@ -269,8 +269,17 @@ export function decideRunnerTargets(ctx: BaserunDecisionCtx): void {
 
     if (ctx.caught) {
       if (r.mustTag) {
-        r.target = r.tagBase;
-        continue;
+        // A runner who has got back and re-touched has satisfied the appeal and
+        // is free to run again. Without this release the flag stayed set for the
+        // rest of the play, pinning him to the bag — which is why sacrifice
+        // flies almost never happened: the runner on third dutifully returned
+        // and then stood there while the ball came in.
+        if (runnerAbs(r) <= r.tagBase + ON_BAG_PROGRESS + 1e-6) {
+          r.mustTag = false;
+        } else {
+          r.target = r.tagBase;
+          continue;
+        }
       }
       // Legitimately tagged up: go only if it is clearly safe.
       const gain = shouldAdvance(ctx, r, r.base + 1, 0.55 - ctx.aggression * 0.2);
@@ -324,7 +333,12 @@ export function decideRunnerTargets(ctx: BaserunDecisionCtx): void {
 /** How much daylight a runner insists on before committing to a base. */
 function advanceMargin(r: RunnerState, base: number, aggression: number, outs: number): number {
   const twoOut = outs === 2 ? -0.14 : 0;
-  if (r.isBatter && base === 2) return -0.02 - aggression * 0.4 + twoOut;
+  // How hard the hitter turns first. This one number is what separates a game
+  // of singles from a game of baseball: at the old -0.24 he pulled up at first
+  // on balls that were plainly doubles, and extra-base hits ran a third below
+  // the real rate. Being wrong here costs an out on the bases, which is the
+  // honest price and a good moment in its own right.
+  if (r.isBatter && base === 2) return -0.2 - aggression * 0.55 + twoOut;
   if (base === 4) return 0.52 - aggression * 0.26 + twoOut;
   return 0.38 - aggression * 0.2 + twoOut;
 }

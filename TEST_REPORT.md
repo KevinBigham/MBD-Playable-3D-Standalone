@@ -11,7 +11,7 @@ shown. Nothing here is an estimate.
 npx vitest run
 ```
 
-**Result: 14 files, 166 tests, 166 passed, 0 failed. 62 s wall clock.**
+**Result: 15 files, 188 tests, 188 passed, 0 failed. 64 s wall clock.**
 
 | File | Tests | What it protects |
 |---|---|---|
@@ -29,6 +29,7 @@ npx vitest run
 | `foulout.test.ts` | 3 | The ten seeds an evaluator used to reproduce the caught-foul-fly blocker: zero seconds of live play with three outs recorded, batting order stays strictly cyclical, and extra innings stay bounded |
 | `autofield.test.ts` | 7 | The hands-off defence deadlock a player reported: whole games driven with a defence input frame that is present but never moves, asserting the play guard never fires, that plays resolve within 4 s of what the same games take with a full CPU defence, that one frame of steering takes control back with no cooldown, and that a pitch takes longer to reach the plate than a regulation mound would allow |
 | `plate.test.ts` | 11 | The plate upgrade: outcome noise measured across 200 seeds is at least twice as tight on a barrel as on a mishit, timing changes launch angle deterministically, off-the-end contact costs exit velocity, every label and normalised error matches the swing it was given, the pitch tracker agrees with the count and with the zone on 30 games, and the break preview reports exactly what the engine applies |
+| `situational.test.ts` | 22 | Situational baseball: every alignment moves the right people in the right direction and never moves the pitcher or catcher; the manager's priority order across seven situations; the intentional walk fires only when it buys something; and over 24 full games — double plays turn, runners score from third on fly balls, stolen bases come back neither 0% nor 100% safe, balls get past the catcher at a plausible rate, and more than one alignment is used without the honest one stopping being the common one |
 
 ---
 
@@ -39,7 +40,7 @@ npx tsx scripts/simulate.ts 120 9 pro
 ```
 
 **120 of 120 games completed. 0 anomalies. 0 forced play resolutions.**
-78.9 s wall clock, 0.66 s per nine-inning game.
+77.6 s wall clock, 0.65 s per nine-inning game.
 
 Every game is validated every 30 ticks against the full invariant set: outs
 0–3, balls 0–3, strikes 0–2, no negative runs, inning within range, at most four
@@ -48,32 +49,84 @@ of order or off the basepath, ball and fielders finite and inside the world.
 
 Measured output:
 
-| Statistic | Value | Before the plate upgrade |
-|---|---|---|
-| Runs per game (both clubs) | 9.28 | 9.60 |
-| Hits per game | 19.02 | 20.1 |
-| Home runs per game | 2.07 | 2.29 |
-| Doubles / triples per game | 1.9 / 0.2 | 1.9 / 0.2 |
-| Batting average | .275 | .271 |
-| Batting average on balls in play | .330 | .323 |
-| Strikeout rate | 21.5% | 22.0% |
-| Walk rate | 4.3% (hit-by-pitch is counted separately) | 3.6% |
-| Errors per game | 1.06 | 1.08 |
-| Pitches per plate appearance | 4.06 | 4.0 |
-| Pitches in the strike zone | 49.0% | 48.8% |
-| Whiffs per swing | 19.1% | 20.8% |
-| Fouls as a share of pitches | 13.6% | 13.5% |
-| Extra-inning games | 6 of 120 | 7 of 100 |
-| Walk-off finishes | 6 of 120 | 5 of 100 |
-| Shutouts | 18 of 120 | 18 of 100 |
+| Statistic | Value | Before this round | Real baseball |
+|---|---|---|---|
+| Runs per game (both clubs) | 10.06 | 9.28 | 8.6 |
+| Hits per game | 19.76 | 19.02 | 17.0 |
+| Home runs per game | 2.09 | 2.07 | 2.3 |
+| Doubles / triples per game | 3.0 / 0.2 | 1.9 / 0.2 | 3.3 / 0.3 |
+| Batting average | .282 | .275 | .248 |
+| Batting average on balls in play | .339 | .330 | .291 |
+| Strikeout rate | 21.3% | 21.5% | 22.6% |
+| Walk rate | 4.3% (hit-by-pitch is counted separately) | 4.3% | 8.2% |
+| Errors per game | 0.92 | 1.06 | 1.2 |
+| Pitches per plate appearance | 4.02 | 4.06 | 3.9 |
+| Pitches in the strike zone | 49.1% | 49.0% | 48.5% |
+| Whiffs per swing | 19.2% | 19.1% | 24.6% |
+| Fouls as a share of pitches | 13.6% | 13.6% | — |
+| Extra-inning games | 8 of 120 | 6 of 120 | 9% |
+| Walk-off finishes | 7 of 120 | 6 of 120 | — |
+| Shutouts | 19 of 120 | 18 of 120 | 13% |
+
+### Baseball texture
+
+The harness now measures the situational game as well, because batting average
+alone cannot tell you whether a game feels like baseball. This is what the round
+was actually for:
+
+| Per game (both clubs) | Before | After | Real baseball |
+|---|---|---|---|
+| Double plays | 2.3 | 2.28 | 1.7 |
+| Sacrifice flies | **0.03** | **0.40** | 0.5 |
+| Stolen-base attempts | **8.54** | **1.30** | 1.4 |
+| Stolen-base success | **100%** | **76%** | 79% |
+| Wild pitches / passed balls | 0 / 0 | 0.61 / 0.18 | 0.7 / 0.2 |
+| Runners thrown out on the bases | 4.03 | 3.37 | — |
+| Intentional walks | 0 | 0.07 | 0.15 |
+| Left on base | 12.85 | 13.24 | 13.6 |
+| Alignment share (normal / DP / in / no-doubles / corners) | 100 / 0 / 0 / 0 / 0 | 74 / 16 / 3 / 6 / 1 | — |
+
+The four bolded rows were not tuning; they were defects. Tag-ups could never
+release, so a runner on third dutifully returned to the bag after a catch and
+then stood on it. Steals were never contested — the runner simply walked to the
+next base while nobody threw. And no pitch could get past the catcher at all.
+
+**Runs are up 0.8 per game and that is the honest cost of the round.** Doubles,
+sacrifice flies and wild pitches all add offence; contested steals take some
+back. Two 60-game batches of the identical final build returned 9.37 and 10.30
+runs per game, so the run-to-run noise here is around ±0.5 and the 120-game
+figure of 10.06 should be read with that in mind rather than as a precise
+number.
 
 This batch is also the check on the deeper mound: moving the rubber from 60 ft
 6 in to 68 ft changed the CPU-versus-CPU line by less than the run-to-run noise,
 which is the expected result — the CPU hitter's read is budgeted in seconds
 before arrival rather than as a fraction of the flight.
 
-Combined-run distribution ran from 1 to 32 with a mode at 5, so games are not
+Combined-run distribution ran from 1 to 27 with a mode at 7, so games are not
 clustering on a single script.
+
+### A change that was measured and rejected
+
+Doubles ran a third below the real rate (1.9 against 3.3). The obvious cause
+looked like outfield depth: the corner outfielders stood 273 ft from the plate
+where real ones play nearer 295 ft, so every ball into the gap was cut off
+before the hitter could turn first.
+
+Moving them back did produce the doubles — 2.2 to 3.0. It also produced an extra
+2.9 singles a game of bloops falling in front of them, taking batting average to
+.315 and BABIP to .393. Extra-base hits as a share of hits actually *fell*,
+because singles rose faster than doubles.
+
+The real cause was the hitter, not the defence. The margin a batter-runner
+demands before committing to second was −0.24 s, and at that setting he pulled
+up at first on balls that were plainly doubles. Moving it to −0.50 s produced
+2.9 doubles with the outfielders left exactly where they were, and cost nothing
+in hit rate because the hits it converts were already hits — what it costs is
+outs on the bases when he is wrong.
+
+The outfield change was reverted in full. It is recorded here because the
+experiment is the reason the final build has one change instead of two.
 
 The second column is the same measurement before the swing model was made less
 random, and it is shown because the change was not free. Cutting outcome noise on
@@ -148,10 +201,10 @@ Type-check clean, build succeeds from a clean state.
 | Artefact | Raw | Gzipped |
 |---|---|---|
 | `dist/index.html` | 1.05 kB | 0.50 kB |
-| `dist/assets/index-*.css` | 15.7 kB | 4.0 kB |
-| `dist/assets/index-*.js` (game) | 251 kB | 84 kB |
+| `dist/assets/index-*.css` | 20.3 kB | 4.9 kB |
+| `dist/assets/index-*.js` (game) | 277 kB | 92 kB |
 | `dist/assets/three-*.js` | 502 kB | 127 kB |
-| **Total** | **769 kB** | **216 kB** |
+| **Total** | **800 kB** | **224 kB** |
 
 Three.js is the only runtime dependency and accounts for 65% of the bundle. It
 is split into its own chunk so game updates do not force it to be re-downloaded.
@@ -167,11 +220,11 @@ Chromium at **1920x1080**, nine-inning All-Star game running live:
 
 | Measure | Value |
 |---|---|
-| Page load to interactive title screen | 542 ms |
-| Frame rate, minimum over 60 s | 75.9 |
-| Frame rate, 5th percentile | 79.7 |
-| Frame rate, mean | 86.0 |
-| Frame rate, maximum | 91.2 |
+| Page load to interactive title screen | 545 ms |
+| Frame rate, minimum over 60 s | 73.1 |
+| Frame rate, 5th percentile | 74.8 |
+| Frame rate, mean | 79.3 |
+| Frame rate, maximum | 89.8 |
 
 Those numbers are **after** two graphics passes — jointed player models with
 uniform detail, real cast shadows, a four-times-denser crowd, tiered stands with
@@ -186,7 +239,10 @@ recorded because the drop was invisible by eye and only the harness caught it.
 
 The plate view runs every frame and costs nothing measurable: it is a fixed pool
 of SVG elements whose attributes are rewritten in place, and `world.project()`
-reuses a single scratch vector rather than allocating per call.
+reuses a single scratch vector rather than allocating per call. The defensive
+card follows the same rule for the same reason: its markup is rebuilt only when
+the alignment, the pitch-around state or the open/closed state actually changes,
+which is twice a plate appearance rather than eighty times a second.
 
 Leak check — eight complete match loads back to back, one per ballpark,
 alternating day and night, forcing GC between samples. GPU geometries and HUD
@@ -294,12 +350,15 @@ Verified in the running product:
 | Audio unlock after a gesture, volume setters, 40 sounds in one frame | Works, nothing thrown |
 | Browser refresh on a menu | Clean restart, save intact |
 
-Evidence: 21 screenshots in `docs/screenshots/` and
+Evidence: 22 screenshots in `docs/screenshots/` and
 `docs/recordings/gameplay.webm`, all captured from the production build.
 `21-plate-view-pitch.png` is a genuinely mid-flight frame — the capture script
 fires the shutter early, then checks afterwards where the ball actually was and
 retries on the next pitch if it missed, rather than shipping a frame that only
-looks like the one it claims to be.
+looks like the one it claims to be. `22-defensive-card.png` holds the real
+modifier key and asserts the card is on screen with INFIELD IN selected before
+the shutter fires, for the same reason: a screenshot of an empty corner would
+otherwise pass silently.
 
 ## 9. Independent review
 

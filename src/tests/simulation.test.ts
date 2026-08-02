@@ -51,7 +51,7 @@ const batch: Batch = {
   batting: {
     ab: 0, r: 0, h: 0, doubles: 0, triples: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, pa: 0,
   },
-  pitching: { outs: 0, h: 0, r: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, pitches: 0, w: 0, l: 0, sv: 0 },
+  pitching: { outs: 0, h: 0, r: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, pitches: 0, w: 0, l: 0, sv: 0, wp: 0 },
   totalRuns: 0,
   totalHits: 0,
   totalInnings: 0,

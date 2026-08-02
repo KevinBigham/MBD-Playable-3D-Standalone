@@ -11,11 +11,12 @@ Complete and playable end to end.
 - Title → menu → setup → game → result → rematch or return, with no dead ends
 - Quick Play, Season, Championship, Moonshot Derby, Practice and the Player
   Creator all functional
-- Human control of batting, pitching, fielding and baserunning
+- Human control of batting, pitching, fielding, baserunning and the defensive
+  alignment
 - Local two-player on one keyboard, or with two gamepads
 - CPU plays complete games unassisted at three genuinely different difficulties
 - Seasons save automatically, survive a page reload and resume correctly
-- 159 automated tests pass; 120 CPU-versus-CPU games complete with zero
+- 188 automated tests pass; 120 CPU-versus-CPU games complete with zero
   anomalies and zero forced play resolutions
 - Two independent evaluators attacked the running build; every blocker and major
   finding is fixed and covered by a regression test
@@ -390,9 +391,129 @@ than before the pass started.
 
 ---
 
+## Situational baseball
+
+The engine could hit, pitch, field and run. What it could not do was play
+baseball *situations* — and measuring for them is what found three defects that
+a batting average could never have shown.
+
+### The harness had to learn to look
+
+Batting average alone cannot tell you whether a game feels like baseball. Two
+engines can both hit .275 while one turns double plays and steals bases and the
+other never does. So `state.diag.texture` now counts double plays, sacrifice
+flies, sacrifice bunts, steal attempts and successes, wild pitches, passed
+balls, intentional walks, runners thrown out on the bases, men left on, and the
+share of pitches thrown under each defensive alignment.
+
+The first run of that harness against the existing build is the whole story of
+this round:
+
+| Per game | Measured | Should be |
+|---|---|---|
+| Sacrifice flies | 0.03 | ~0.5 |
+| Stolen-base attempts | 8.54 | ~1.4 |
+| Stolen-base success | 100% | ~79% |
+| Wild pitches / passed balls | 0 / 0 | 0.7 / 0.2 |
+| Doubles | 1.9 | 3.3 |
+
+### Sacrifice flies did not exist
+
+`decideRunnerTargets` set `mustTag` on any runner off the bag when a fly ball
+was caught, and then read it like this:
+
+```ts
+if (ctx.caught) {
+  if (r.mustTag) { r.target = r.tagBase; continue; }
+  ...
+}
+```
+
+Nothing ever cleared the flag. A runner on third went back, re-touched, and then
+stood on the bag for the rest of the play while the ball came in. Releasing him
+the moment he arrives took sacrifice flies from **0.03 to 0.40 per game**.
+
+### A stolen base was a free base
+
+`play.steal` existed in the play context and was never set to `true` anywhere in
+the engine. A runner who broke on the pitch simply walked to the next bag while
+the ball was in flight, `endPitch` tidied up, and the catcher never threw. The
+CPU was taking **8.54 free bases a game** and none of them appeared in a box
+score, because nothing incremented `sb` either.
+
+A steal is now an ordinary live play. The catcher gathers the pitch — pop time
+0.52–0.72 s by his fielding rating — the middle infielder covers, and the tag
+either beats the runner or it does not. All of that is machinery the engine
+already had for balls in play; `startThrowDown` only has to hand the catcher the
+ball and set the phase.
+
+The attempt rate was the other half of it. `cpuPreplayOffense` rolled the dice
+on **every simulation tick**, which at 120 Hz meant a fast runner went on
+essentially every pitch. It is now one decision per pitch, weighted by the
+situation the way a third-base coach would weight it. Result: 1.30 attempts a
+game at 76% safe, against a real 1.4 at 79%.
+
+### Nothing could get past the catcher
+
+There was no wild pitch and no passed ball. A breaking ball in the dirt with a
+man on third was a free strike. Now a pitch that crosses well below the knees
+gets a block check against the catcher's fielding and the pitch's movement;
+below 0.235 m under the zone it goes in the book as a wild pitch, above it as a
+passed ball, and every runner takes a base. 0.61 and 0.18 per game.
+
+### The defence has a manager
+
+Five alignments — normal, double-play depth, infield in, no doubles, corners in
+— for the CPU manager and, on the modifier, for the human pitching.
+
+They are **position offsets and nothing else**. There is no branch anywhere in
+the outcome model. The four infielders start five to seven metres closer to the
+plate and every consequence falls out of the physics that was already there: the
+throw home is shorter so the run is cut off, the grass behind them is longer so
+ground balls that were outs go through.
+
+That is also why it is worth drawing. The infield visibly walks in before the
+pitch, and a player who can see it can hit against it — a hidden probability
+modifier never could.
+
+Holding the modifier while pitching opens the card *and* is what puts it on
+screen, so there is nothing to memorise. Across 120 games the CPU mix lands at
+74% normal, 16% double-play depth, 6% no doubles, 3% infield in, 1% corners.
+
+### Doubles: a change that was measured and rejected
+
+Doubles ran a third below the real rate. The obvious cause looked like outfield
+depth — corner outfielders stood 273 ft from the plate where real ones play
+nearer 295 ft, so every ball into the gap was cut off before the hitter could
+turn first.
+
+Moving them back did produce the doubles, 2.2 to 3.0. It also produced 2.9 extra
+singles a game of bloops falling in front of them, taking batting average to
+**.315** and BABIP to **.393**. Extra-base hits as a share of hits actually fell,
+because singles rose faster than doubles did.
+
+The cause was the hitter, not the defence. The margin a batter-runner demands
+before committing to second was −0.24 s, and at that number he pulled up at
+first on balls that were plainly doubles. Moving it to −0.50 s produced 2.9
+doubles with the outfielders left exactly where they were, and cost nothing in
+hit rate — the hits it converts were already hits. What it costs is outs on the
+bases when he is wrong, which is the honest price and a good moment in itself.
+
+The outfield change was reverted in full. Two changes became one because the
+experiment was run instead of assumed.
+
+### What it cost
+
+Runs are up 0.8 per game. Doubles, sacrifice flies and wild pitches all add
+offence; contested steals take some back. Two 60-game batches of the identical
+final build returned 9.37 and 10.30 runs, so run-to-run noise is around ±0.5 and
+the 120-game figure of 10.06 should be read with that in mind.
+
+---
+
 ## Tests performed
 
-- **Automated:** 159 Vitest tests across 13 files — RNG determinism, ball-flight
+- **Automated:** 188 Vitest tests across 15 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,

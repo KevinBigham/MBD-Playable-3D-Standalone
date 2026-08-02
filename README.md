@@ -48,7 +48,7 @@ they point at:
 | Situation | W A S D | J | K | L | I | Space | Left-Shift | Q |
 |---|---|---|---|---|---|---|---|---|
 | **Batting** | move the contact cursor | bunt | contact swing | power swing | take / check swing | — | hold + base = steal | — |
-| **Pitching** | aim before the pitch, steer during it | pitch 1 | pitch 2 | pitch 3 | pitch 4 | — | — | — |
+| **Pitching** | aim before the pitch, steer during it | pitch 1 | pitch 2 | pitch 3 | pitch 4 | — | hold + base = set the defence | pitch around / put him on |
 | **Fielding** | move the selected fielder | throw to 3rd | throw home | throw to 1st | throw to 2nd | dive / leap | — | switch fielder |
 | **Baserunning** | — | send to 3rd | send home | send to 1st | send to 2nd | advance everyone | hold + base = go back | — |
 
@@ -89,6 +89,38 @@ early, Pro shows it late, Ace never shows it. The CPU hitter receives none of it
 and no ball physics change on any setting. The entire overlay can be switched off
 under **Settings → Plate view**.
 
+## Managing the defence
+
+Baseball is not only the duel at the plate, and the four buttons carry a fourth
+meaning while you are pitching. Hold the modifier and the diamond becomes the
+manager's card — holding it is also what puts the card on screen, so there is
+nothing to memorise:
+
+```
+       Shift + I  =  DOUBLE-PLAY DEPTH
+Shift + J = INFIELD IN      Shift + L = CORNERS IN
+       Shift + K  =  NO DOUBLES        Shift + Space = NORMAL
+```
+
+None of these are modifiers on a dice roll. Each one is where nine people are
+actually standing, and every consequence falls out of the physics that was
+already there:
+
+| Call | What it buys | What it costs |
+|---|---|---|
+| **Infield in** | The throw home is short enough to cut the run off | Ground balls that were outs now shoot through |
+| **Double-play depth** | A short pivot at second, so you can turn two | A wider hole on both sides of the bag |
+| **No doubles** | Nothing gets past the outfielders | Ordinary singles fall in front of them all day |
+| **Corners in** | First and third smother a bunt | The corners are wide open |
+
+`Q` cycles **pitch to him → pitch around → put him on**. Pitching around never
+gives him the middle of the plate; putting him on is the free pass.
+
+The CPU manager makes the same calls off the same situation, in the order a
+bench coach would: cut off the tying run first, set up the double play second,
+protect a late lead third. You can see the infield walk in before the pitch, so
+you can hit against it.
+
 ## Modes
 
 | Mode | What it is |
@@ -108,8 +140,9 @@ npm test
 ```
 
 Runs the full Vitest suite: RNG determinism, ball-flight calibration, the swing
-model, baseball rules driven through the real engine, runner invariants, season
-and cup mode integrity, the derby, box-score bookkeeping, and a batch of 100
+model, baseball rules driven through the real engine, runner invariants,
+situational baseball (alignments, tag-ups, contested steals), season and cup
+mode integrity, the derby, box-score bookkeeping, and a batch of 100
 CPU-versus-CPU games checked for deadlocks, invalid states and believable
 statistics.
 
