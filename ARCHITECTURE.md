@@ -234,6 +234,55 @@ desktop belongs to the person using the browser.
 `scripts/phone-check.ts` is the regression net for all of it: the production
 build, in WebKit, with real touches, failing the run rather than reporting.
 
+## The MBD bridge
+
+`src/bridge/` is the consuming half of the Mr. Baseball Dynasty arcade-world
+contract. It is pure — same rule as `sim/`, `core/` and `data/`: no DOM, no
+`window`, no clock — so the whole seam is unit-testable, and `ui/world.ts` is
+the only part that knows about files, storage and menus.
+
+| Module | Job |
+|---|---|
+| `contract.ts` | The v1 types, transcribed rather than invented. No behaviour, no defaults. |
+| `rating.ts` | 0–550 to this game's 20–99, from `internal` only, monotone by construction. No inverse — deliberately. |
+| `validate.ts` | Fail closed. Names the rule and refuses; never repairs. |
+| `adapt.ts` | A world into `Team[]`, plus a report of everything invented and everything ignored. |
+| `receipt.ts` | A finished `GameResult` into a receipt, and the reconciliation MBD will repeat. |
+| `franchises.ts` | The 32-club catalog, marked as a transcription that will rot. |
+| `fixture.ts` | A conforming bundle, because MBD has no exporter yet. |
+
+**MBD is the world authority.** This game owns the game in progress and nothing
+else. The receipt reports facts — plate appearances, score, outs recorded — and
+never what they *mean*: no ratings changes, no development, no morale, no awards,
+no records. MBD derives all of that through the postgame pipeline it already has.
+A field in `receipt.ts` called anything like `fatigueAfter` would mean the bridge
+has started arguing with the world authority about the world.
+
+Three decisions worth finding again:
+
+**Ratings convert from `internal`, never from `arcade99`.** The convenience field
+is already the right scale, which is what makes it dangerous — it has been
+rounded to a hundred buckets, and 550 source values into 80 arcade values is
+lossy enough without doing it twice. `bridge.test.ts` proves a corrupt derived
+field changes nothing about play, and separately warns that it drifted.
+
+**A park factor picks a ballpark.** MBD's factor is not fed into its own
+plate-appearance resolution, so there is no simulation parity to inherit and the
+receiver must make one explicit decision. Multiplying carry by it would be a
+second modifier on a park this game already simulates in full — Denver would get
+thin air *and* a 12% bonus. Instead the factor chooses among eight real parks by
+nearest carry: applied once, as geometry, and recorded per club in the report.
+
+**`stuff` becomes the arsenal.** There is no `stuff` attribute here and adding
+one would mean retuning the pitching model — a balance change smuggled in as an
+import feature. But arsenal depth is how this game already expresses
+swing-and-miss quality, so that is where it goes, and the report says so.
+
+Not built, on purpose: nothing emits a receipt. MBD cannot yet reserve a
+scheduled game for external play (`gap #2` in the handoff) or accept one back
+(`gap #3`), so an export button would be the appearance of a closed loop rather
+than a loop.
+
 ## Determinism
 
 `GameSetup.seed` seeds one `Rng`. Every stochastic decision in a game draws from

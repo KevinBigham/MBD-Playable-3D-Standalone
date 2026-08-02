@@ -104,6 +104,15 @@ export interface TeamIdentity {
   name: string;
   abbr: string;
   division: 'tide' | 'ridge';
+  /**
+   * What to call that division on screen.
+   *
+   * The two circuits are this game's own structure, and an imported world has
+   * its own — MBD runs six divisions across two leagues. Rather than relabel
+   * somebody else's franchise as Tidewater, a club may carry the name its own
+   * world uses; absent, the built-in name is used.
+   */
+  divisionLabel?: string;
   primary: number;
   secondary: number;
   accent: number;

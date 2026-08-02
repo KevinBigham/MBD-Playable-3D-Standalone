@@ -1106,6 +1106,37 @@ html.rotated #touch {
   opacity: 0.85;
 }
 
+/* The world report: what an imported MBD bundle brought across, and — more
+   importantly — what this game had to make up to be able to draw it. Small,
+   dense and scrollable, because it is a disclosure rather than a headline. */
+
+.world-report {
+  overflow-y: auto;
+  font-size: 0.82em;
+  line-height: 1.45;
+}
+
+.world-report h5 {
+  margin: 0.9em 0 0.25em;
+  font-size: 0.85em;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+}
+
+.world-report ul {
+  margin: 0;
+  padding-left: 1.1em;
+  color: var(--ink-dim);
+}
+
+.world-report li {
+  margin: 0.15em 0;
+}
+
+.world-warn {
+  color: var(--hot);
+}
+
 /* The coach: the one sentence that makes the touch scheme visible, on the zone
    for a player's first three swings and then gone forever. It hangs under the
    zone, in the same place the verdict panel appears — one spot on the screen

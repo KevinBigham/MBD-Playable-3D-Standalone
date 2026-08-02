@@ -82,6 +82,59 @@ Screen** when the device can do it: a one-tap system dialog on Android, and the
 Share-sheet instructions on iOS, which gives a web page no way to ask for
 itself. It is offered once and never nags.
 
+## Playing a Mr. Baseball Dynasty world
+
+MOONSHOT NINE is the **arcade consumer** in the MBD arcade-world bridge: it can
+be handed a dynasty's franchises, rosters and ratings, play one game inside
+them, and hand back a factual receipt. **Main menu -> World.**
+
+| Row | What it loads |
+|---|---|
+| The Meridian Circuit | This game's own ten clubs. Seasons and the cup live here. |
+| MBD Sample World | All thirty-two MBD franchises, built in. The clubs are real; the players are generated, because MBD has no exporter yet. |
+| Import an MBD World… | A `.json` bundle exported from a save. |
+
+The rule the whole bridge is built around: **MBD is the world authority.** This
+game never owns contracts, promotions, trades, ratings development, schedule
+progression, standings or save history — it owns the game in progress. Player
+and team IDs are the joins and are never matched by name.
+
+What crosses, and how:
+
+- **Ratings** convert from MBD's canonical internal 0–550 to this game's 20–99,
+  from `internal` only and never from a derived field, and monotonically: a
+  higher source rating can never produce a worse arcade skill. Swept across all
+  551 values in `bridge.test.ts`.
+- **Park factor picks the ballpark.** MBD's 0.95–1.12 lands on the nearest of
+  this game's eight parks by carry, so the factor is applied *once*, as geometry
+  a hitter can see, rather than as an invisible multiplier stacked on top of a
+  park that is already simulated in full.
+- **`stuff` becomes the arsenal.** This game has no `stuff` attribute and adding
+  one would be a balance change smuggled in as an import feature — but a pitcher
+  with a splitter is exactly what "swing-and-miss quality" means here.
+- **Invented facts are listed, not hidden.** MBD has no handedness, jersey
+  number, body type, ballpark or repertoire. This game derives all of them from
+  the player's own MBD id — identical on every device — and the World screen
+  prints exactly what it made up and what it ignored.
+
+A bundle that does not check out is **rejected, not repaired**: a wrong lineup
+size, a roster claiming another club's player, an ineligible hitter batting, a
+starter who cannot pitch. Repairing any of those would produce a game that looks
+like the dynasty and is not.
+
+**Season and the cup stay on the Meridian Circuit.** That is the contract's own
+division rather than a limitation invented here — an exhibition package is
+defined for "team selection, local exhibition games, practice, home-run derby
+and other non-dynasty modes" and "produces no importable dynasty receipt".
+
+### What is not built
+
+`src/bridge/receipt.ts` builds and reconciles the result receipt, and it is
+tested against real games played through the real engine — but **nothing in the
+interface emits one.** MBD cannot yet reserve a scheduled game for external
+play or accept a receipt back, so a download button would be inventing the
+appearance of a closed loop. See `ARCHITECTURE.md`, "The MBD bridge".
+
 ## Controls
 
 The four action buttons are laid out like the bases, and always mean the base

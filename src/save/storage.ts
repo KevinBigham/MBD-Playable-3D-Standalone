@@ -95,4 +95,5 @@ export const SLOT = {
   records: 'records',
   resume: 'resume',
   coach: 'coach',
+  world: 'world',
 } as const;

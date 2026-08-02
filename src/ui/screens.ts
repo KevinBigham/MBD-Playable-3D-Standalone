@@ -442,14 +442,30 @@ export class TeamSelectScreen extends Screen {
   ) {
     super(app);
     if (highlightId) {
-      const i = TEAM_IDENTITIES.findIndex((t) => t.id === highlightId);
+      const i = this.clubs.findIndex((t) => t.id === highlightId);
       if (i >= 0) this.idx = i;
     }
   }
 
+  /**
+   * The clubs actually loaded, which is not always this game's own ten.
+   *
+   * Read from the app rather than from `TEAM_IDENTITIES` because an imported
+   * MBD world replaces the league wholesale: walking the built-in list and
+   * looking each id up in the loaded one finds nothing at all and hands
+   * `undefined` to everything downstream. `Team extends TeamIdentity`, so every
+   * field this screen draws is present either way.
+   */
+  private get clubs(): Team[] {
+    return this.app.teams;
+  }
+
   override render(): void {
-    const cards = TEAM_IDENTITIES.map((t, i) => {
-      const team = this.app.teams.find((x) => x.id === t.id)!;
+    // A league can change size under a screen that is still open — switching
+    // worlds goes back to the main menu, but a stale index is cheap to survive.
+    if (this.idx >= this.clubs.length) this.idx = 0;
+    const cards = this.clubs.map((t, i) => {
+      const team = t;
       const r = teamRating(team);
       return `<div class="team-card${i === this.idx ? ' sel' : ''}" data-i="${i}" style="background:linear-gradient(150deg, ${cssColor(
         t.primary,
@@ -475,7 +491,7 @@ export class TeamSelectScreen extends Screen {
       });
       el.addEventListener('click', () => {
         this.app.playSfx('menuSelect');
-        this.onPick(TEAM_IDENTITIES[Number(el.dataset.i)].id);
+        this.onPick(this.clubs[Number(el.dataset.i)].id);
       });
     });
   }
@@ -520,15 +536,15 @@ export class TeamSelectScreen extends Screen {
   }
 
   private detailHtml(): string {
-    const t = TEAM_IDENTITIES[this.idx];
-    const team = this.app.teams.find((x) => x.id === t.id)!;
+    const t = this.clubs[this.idx] ?? this.clubs[0];
+    const team = t;
     const star = team.players.find((p) => p.star);
     const stadium = getStadium(t.homeStadium);
     const r = teamRating(team);
     return `<div class="menu-hint">
       <h4>${escapeHtml(t.city)} ${escapeHtml(t.name)}</h4>
       <p style="color:var(--gold);letter-spacing:.1em;text-transform:uppercase">${escapeHtml(t.motto)}</p>
-      <p>${escapeHtml(divisionName(t.division))} · Offence ${r.off} · Defence ${r.def} · Pitching ${r.pit}</p>
+      <p>${escapeHtml(t.divisionLabel ?? divisionName(t.division))} · Offence ${r.off} · Defence ${r.def} · Pitching ${r.pit}</p>
       <p>Home park: <b>${escapeHtml(stadium.name)}</b> — ${escapeHtml(stadium.blurb)}</p>
       ${
         star
@@ -542,27 +558,29 @@ export class TeamSelectScreen extends Screen {
     const cols = this.columns();
     switch (action) {
       case 'left':
-        this.idx = (this.idx - 1 + TEAM_IDENTITIES.length) % TEAM_IDENTITIES.length;
+        this.idx = (this.idx - 1 + this.clubs.length) % this.clubs.length;
         break;
       case 'right':
-        this.idx = (this.idx + 1) % TEAM_IDENTITIES.length;
+        this.idx = (this.idx + 1) % this.clubs.length;
         break;
       case 'up':
         // Step by one column-row; if that lands on a club already covered by a
         // pure vertical walk the player can still reach every club with left
         // and right, and the wrap keeps the whole grid reachable.
         this.idx =
-          this.idx - cols >= 0 ? this.idx - cols : (this.idx - cols + TEAM_IDENTITIES.length * 2) % TEAM_IDENTITIES.length;
+          this.idx - cols >= 0
+            ? this.idx - cols
+            : (this.idx - cols + this.clubs.length * 2) % this.clubs.length;
         break;
       case 'down':
         this.idx =
-          this.idx + cols < TEAM_IDENTITIES.length
+          this.idx + cols < this.clubs.length
             ? this.idx + cols
             : (this.idx + 1) % Math.max(1, cols);
         break;
       case 'confirm':
         this.app.playSfx('menuSelect');
-        this.onPick(TEAM_IDENTITIES[this.idx].id);
+        this.onPick(this.clubs[this.idx].id);
         return;
       case 'back':
         this.app.playSfx('menuBack');

@@ -1041,9 +1041,144 @@ That is the right bias: nobody needs telling why the double was a double.
 
 ---
 
+## Wiring in Mr. Baseball Dynasty
+
+MBD is the user's dynasty simulator: thirty-two franchises, real rosters, ratings
+that develop, a schedule that advances, a save that has to stay true. MOONSHOT
+NINE is the arcade game those people should be able to play *in*. The arcade
+world bridge handoff defines the seam, and this round built the half that lives
+here — the **arcade consumer**, which is item 2 on the handoff's own
+implementation order.
+
+### The rule everything else follows from
+
+**MBD is the world authority.** This game never owns contracts, promotions,
+trades, ratings development, schedule progression, standings, or save history. It
+owns the game in progress, and it hands back a receipt of what happened.
+
+That sounds like a governance note and is actually a design constraint with
+teeth, because the failure it prevents is invisible. Two games that disagree
+about the same dynasty do not crash. They just quietly become two dynasties, and
+nobody finds out until a player notices their ace has the wrong ERA in one of
+them. Every rule in the contract — ids are the joins, never match by name; reject
+rather than repair; apply a modifier once and record it; one scheduled game
+settles once — exists to make a disagreement *loud*.
+
+So the bridge is five pure modules under `src/bridge/` with no DOM anywhere in
+them, and `ui/world.ts` as the only part that touches files, storage or menus.
+
+### Three decisions, made once and written down
+
+**Ratings convert from `internal`, never from `arcade99`.** MBD publishes each
+rating in four scales: canonical 0–550, a 20–80 scouting grade, a 0–1 normalized
+value, and a 0–99 arcade convenience. This game's own attributes sit on 20–99,
+so `arcade99` is *almost exactly* the right number and is right there — which is
+precisely what makes it the wrong one to use. It has already been rounded into a
+hundred buckets, and 550 source values into 80 arcade values is lossy enough
+without doing it twice. There is a test that corrupts `arcade99`, `display` and
+`normalized` on a rating and asserts play is unchanged, and a separate one that
+notices the drift and warns.
+
+The contract also demands monotonicity in one sentence: "a higher source rating
+cannot secretly make the corresponding skill worse". That is a property, not an
+opinion, so it is swept — all 551 internal values of every rating, and both
+inputs of the single blended one, independently. A monotonicity bug from a
+rounding or weighting mistake shows up at two adjacent values and nowhere else,
+which is exactly the kind of thing spot checks miss and sweeps do not.
+
+**A park factor picks a ballpark.** This is the decision the handoff explicitly
+asks to be made once, explicitly, and it is the most interesting thing in the
+round.
+
+MBD carries a park factor per club, 0.95 to 1.12, and — the handoff is careful to
+say so — does *not* pass it into its own plate-appearance resolution. So there is
+no simulation behaviour to copy and no parity to inherit. The obvious move is to
+multiply something: carry, exit velocity, home-run distance. That would be a
+second modifier laid on top of a ballpark this game already simulates in full,
+with real fences at real distances and real heights and real air. Denver would
+get thin air *and* a 12% bonus, and nobody would ever see the double-count
+because both halves are invisible.
+
+MOONSHOT's eight parks carry from 0.98 to 1.11, which covers MBD's range almost
+exactly. So the factor **chooses the park**. It is applied once, as geometry a
+hitter can see and hit over, and the choice is recorded per club in the bridge
+report. Denver's 1.12 lands at Summit Field, the thin-air park; San Francisco's
+0.95 lands at Grove Park, the one that swallows fly balls. There is a test that
+would fail if those two ever came out the other way round — numerically
+defensible and obviously wrong is a failure mode worth naming.
+
+**`stuff` becomes the arsenal.** MBD grades a pitcher on stuff, control, stamina,
+velocity and movement. This game has four of those and no `stuff`. Adding one
+would mean retuning the entire pitching model — a balance change smuggled into
+the codebase as an import feature, in the one place nobody would look for it.
+
+But "stuff" means deception and swing-and-miss quality, and this game already
+expresses exactly that through what a pitcher can throw: a power arm with two
+pitches is hittable, and the same arm with a splitter is not. So stuff sets
+arsenal depth, and a small share of movement, blended rather than summed so that
+raising either source rating can only help. The report says where it went, because
+a reader deserves to know what happened to a source rating rather than finding it
+absent.
+
+### Rejecting is a feature
+
+The validator is fail-closed and the temptation it resists is *helpfulness*. Fill
+in the missing ninth hitter. Pick another starter. Skip the player whose team id
+does not match. Every one of those produces a game that looks like the dynasty
+and is not — and the receipt it generates is then a lie MBD has no way to detect.
+
+Eight negative tests, each of which is a real export failure: duplicate ids, a
+roster claiming another club's player, an eight-man lineup, somebody batting
+twice, an ineligible hitter in the order, a starting pitcher with no pitcher
+ratings, an unavailable player in a game, and a modifier id that appears twice —
+that last one because a duplicate means the receiver cannot honestly claim to
+have applied each modifier once.
+
+### What this game had to make up
+
+MBD has no handedness, jersey number, height, weight, secondary positions, pitch
+repertoire, stadium or weather. This game cannot draw a single frame without most
+of those. So it invents them — deterministically, from each player's own MBD id,
+so two devices importing the same save produce byte-identical people — and then
+prints exactly what it invented on the World screen, next to exactly what it
+ignored. The contract's phrase is "never writes those defaults back as MBD
+truth"; the mechanism is that the receipt has nowhere to put them.
+
+### Playable today
+
+MBD has no exporter — that is gap #1 on the handoff's own list, and it is not
+this repository's to close. Waiting for it would have meant building an entire
+consuming half with nothing to point it at. So `fixture.ts` generates a
+conforming bundle from the real franchise catalog, and **MBD Sample World** is a
+menu row: thirty-two clubs in their own colours, with generated rosters, playable
+now. Boston at Denver in Summit Field, Vero Lachance batting with CON 57 · POW 80,
+zero console errors.
+
+### What was deliberately not built
+
+Nothing emits a receipt. `buildReceipt` and `reconcileReceipt` exist, are pure,
+and are tested against real games played through the real engine — but MBD cannot
+yet reserve a scheduled game for external play (gap #2) or accept one back
+(gap #3). A download button would be the appearance of a closed loop rather than
+a loop, and the appearance is worse than the absence.
+
+Season and the cup also stay on the Meridian Circuit. That is the contract's own
+division, not a limitation invented here: an exhibition package is defined for
+non-dynasty modes and "produces no importable dynasty receipt", so a 162-game
+season played with MBD clubs would be this game inventing dynasty history MBD has
+no way to accept.
+
+One real bug fell out of the work: the team-select screen walked the hardcoded
+ten-club identity table and looked each id up in the loaded league. With
+thirty-two MBD clubs loaded it found none of them and handed `undefined` to the
+rating helper. It now walks the loaded league, which is both the fix and the
+thing it should always have done.
+
+---
+
 ## Tests performed
 
-- **Automated:** 243 Vitest tests across 23 files — RNG determinism, ball-flight
+- **Automated:** 278 Vitest tests across 24 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,

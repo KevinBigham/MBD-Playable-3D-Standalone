@@ -28,6 +28,16 @@ import {
 } from './device';
 import { Coach } from './coach';
 import { Install } from './install';
+import {
+  forgetWorld,
+  loadSampleWorld,
+  loadWorldFrom,
+  meridianWorld,
+  pickBundleFile,
+  reportHtml,
+  restoreWorld,
+  type LoadedWorld,
+} from './world';
 import { Lifecycle } from './lifecycle';
 import { type Buzz, getHaptics } from './haptics';
 import {
@@ -180,6 +190,8 @@ export class App implements AppApi {
 
   private coach = new Coach();
   private install = new Install();
+  /** Which league is loaded — this game's own, or an imported MBD world. */
+  private league: LoadedWorld;
   private governor = new FrameGovernor((step) => this.applyQualityStep(step));
   private accumulator = 0;
   private lastTime = 0;
@@ -202,6 +214,10 @@ export class App implements AppApi {
     this.customs = loadCustomPlayers();
     this.teams = buildLeague();
     applyCustomPlayers(this.teams, this.customs);
+    // A world chosen last session is restored before anything reads the league,
+    // so a menu never has to know which one it is looking at.
+    this.league = restoreWorld() ?? meridianWorld(this.teams);
+    if (this.league.id !== 'meridian') this.teams = this.league.teams;
     const saved = loadSlot<GameSettings>(SLOT.settings);
     this.settings = { ...DEFAULT_SETTINGS, ...this.deviceDefaults(), ...(saved ?? {}) };
     this.world = new GameWorld(canvas);
@@ -873,6 +889,14 @@ export class App implements AppApi {
 
   /** Rebuilds the league from scratch so a deleted creation restores the original. */
   private rebuildLeague(): void {
+    if (this.league.id === 'mbd') {
+      // An imported world is MBD's roster, and a created player is this game's.
+      // Dropping a made-up ballplayer into somebody's dynasty would be exactly
+      // the kind of quiet disagreement the bridge exists to prevent, so the
+      // creator applies to the Meridian Circuit only.
+      this.teams = this.league.teams;
+      return;
+    }
     this.teams = buildLeague();
     applyCustomPlayers(this.teams, this.customs);
   }
@@ -986,13 +1010,31 @@ export class App implements AppApi {
           hint: hasSeason()
             ? 'Pick up your saved season where you left it.'
             : 'A full schedule, standings, statistics, a postseason and the Meridian Cup. Saves automatically.',
-          onSelect: () => this.gotoSeasonMenu(),
+          disabled: () => this.league.id !== 'meridian',
+          onSelect: () => {
+            // The contract's own division: an exhibition package is for team
+            // select, exhibitions, practice and the derby, and "produces no
+            // importable dynasty receipt". A season played with MBD clubs would
+            // be this game inventing 162 games of history MBD cannot accept.
+            if (this.league.id !== 'meridian') {
+              this.toast('SEASON PLAY NEEDS THE MERIDIAN CIRCUIT');
+              return;
+            }
+            this.gotoSeasonMenu();
+          },
         },
         {
           id: 'cup',
           label: hasCup() ? 'Championship — Continue' : 'Championship',
           hint: 'An eight-club knockout. Three wins and the cup is yours.',
-          onSelect: () => this.gotoChampionshipMenu(),
+          disabled: () => this.league.id !== 'meridian',
+          onSelect: () => {
+            if (this.league.id !== 'meridian') {
+              this.toast('THE CUP NEEDS THE MERIDIAN CIRCUIT');
+              return;
+            }
+            this.gotoChampionshipMenu();
+          },
         },
         {
           id: 'derby',
@@ -1005,6 +1047,13 @@ export class App implements AppApi {
           label: 'Practice',
           hint: 'Endless drills for batting, pitching, fielding and baserunning. Nothing is scored.',
           onSelect: () => this.gotoPracticeSetup(),
+        },
+        {
+          id: 'world',
+          label: 'World',
+          value: () => (this.league.id === 'mbd' ? 'MBD' : 'MERIDIAN'),
+          hint: 'Play this game\u2019s own ten clubs, or load a Mr. Baseball Dynasty world and use its franchises, rosters and ratings.',
+          onSelect: () => this.gotoWorldMenu(),
         },
         {
           id: 'creator',
@@ -1042,6 +1091,91 @@ export class App implements AppApi {
         ...this.installRows(),
       ]),
     );
+  }
+
+  /**
+   * CHOOSING A WORLD.
+   *
+   * Two things live behind this row: the game's own league, and whatever Mr.
+   * Baseball Dynasty has been asked to hand over. Switching is a whole-league
+   * change, so it returns to the main menu rather than leaving a stale roster
+   * screen behind it, and it never touches a saved season — those belong to the
+   * Meridian Circuit and stay there.
+   */
+  private gotoWorldMenu(): void {
+    const screen = new ListScreen(
+      this,
+      'WORLD',
+      'Which league is on the field',
+      () => [],
+      () => reportHtml(this.league),
+    );
+    const rebuild = () => {
+      const rows: MenuRow[] = [
+        {
+          id: 'meridian',
+          label: 'The Meridian Circuit',
+          value: () => (this.league.id === 'meridian' ? 'LOADED' : ''),
+          hint: 'Ten clubs, two divisions, every player original to this game. Seasons and the cup live here.',
+          onSelect: () => {
+            forgetWorld();
+            this.league = meridianWorld([]);
+            this.rebuildLeague();
+            this.league = meridianWorld(this.teams);
+            this.playSfx('menuSelect');
+            this.toast('MERIDIAN CIRCUIT LOADED');
+            this.gotoMainMenu();
+          },
+        },
+        {
+          id: 'sample',
+          label: 'MBD Sample World',
+          value: () => (this.league.id === 'mbd' ? 'LOADED' : ''),
+          hint: 'All thirty-two MBD franchises with generated rosters. Built into this game so the bridge can be played before an exporter exists — the clubs are real, the players are not.',
+          onSelect: () => {
+            this.setWorld(loadSampleWorld());
+          },
+        },
+        {
+          id: 'import',
+          label: 'Import an MBD World\u2026',
+          hint: 'Load a bundle exported from a dynasty save. Rejected rather than repaired if it does not check out.',
+          onSelect: () => {
+            void pickBundleFile().then((data) => {
+              if (data === null) return;
+              if ((data as { __unparseable?: boolean })?.__unparseable) {
+                this.toast('THAT FILE IS NOT JSON');
+                return;
+              }
+              const result = loadWorldFrom(data);
+              if ('error' in result) {
+                // Named, not swallowed. Somebody holding a bundle that will not
+                // load needs to know which rule it broke.
+                this.toast(`REJECTED \u2014 ${result.error.toUpperCase()}`);
+                return;
+              }
+              this.setWorld(result.world);
+            });
+          },
+        },
+      ];
+      screen.setRows(rows);
+      screen.render();
+    };
+    rebuild();
+    this.goto(screen);
+  }
+
+  private setWorld(world: LoadedWorld): void {
+    this.league = world;
+    this.teams = world.teams;
+    this.playSfx('menuSelect');
+    if (world.notPersisted) {
+      this.toast('LOADED \u2014 TOO LARGE TO KEEP FOR NEXT TIME');
+    } else {
+      this.toast(`${world.teams.length} CLUBS LOADED`);
+    }
+    this.gotoMainMenu();
   }
 
   /**
