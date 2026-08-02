@@ -4,7 +4,8 @@ import { createGameState } from '../sim/state';
 import { stepGame } from '../sim/game';
 import { emptyInputPair, clearEdges } from '../sim/input';
 import { finishGame } from '../sim/result';
-import { STADIUMS } from '../data/stadiums';
+import { STADIUMS, STADIUM_BY_ID } from '../data/stadiums';
+import { TEAM_IDENTITIES, homeStadiumOf, nextTeamId, shiftTeam } from '../data/teams';
 import {
   MBD_INTERNAL_MAX,
   MOONSHOT_ATTR_MAX,
@@ -360,6 +361,69 @@ describe('a dynasty becomes nine people on a field', () => {
   it('is deterministic, so two devices import the same people', () => {
     const again = adaptWorld(buildFixtureBundle());
     expect(JSON.stringify(again.teams)).toBe(JSON.stringify(world.teams));
+  });
+});
+
+// ------------------------------------------------------- the loaded league
+
+/**
+ * EVERY MODE PLAYS THE LEAGUE THAT IS LOADED.
+ *
+ * These three helpers used to walk this game's own ten-club identity table,
+ * which was correct for exactly as long as there was only one possible league.
+ * With thirty-two MBD clubs in front of them the failure is not a crash — it is
+ * worse than a crash. Quick Play's left/right would name clubs that are not in
+ * the game, and every ballpark would quietly become Anchor Yard, throwing away
+ * the park-factor decision without a word.
+ */
+describe('every mode plays the league that is loaded', () => {
+  const world = adaptWorld(buildFixtureBundle());
+
+  it('cycles inside the loaded league and nowhere else', () => {
+    const ids = new Set(world.teams.map((t) => t.id));
+    let id = world.teams[0].id;
+    // A full lap, plus one: it must come back to where it started rather than
+    // wandering into a league that is not on the field.
+    for (let i = 0; i <= world.teams.length; i++) {
+      id = nextTeamId(world.teams, id);
+      expect(ids.has(id)).toBe(true);
+    }
+    expect(id).toBe(world.teams[1].id);
+  });
+
+  it('never lands on the club it was told to avoid', () => {
+    const forbid = world.teams[3].id;
+    let id = world.teams[0].id;
+    for (let i = 0; i < world.teams.length * 2; i++) {
+      id = shiftTeam(world.teams, id, 1, forbid);
+      expect(id).not.toBe(forbid);
+    }
+    for (let i = 0; i < world.teams.length * 2; i++) {
+      id = shiftTeam(world.teams, id, -1, forbid);
+      expect(id).not.toBe(forbid);
+    }
+  });
+
+  it('gives every imported club its own ballpark, not a default', () => {
+    // The bug this replaces: an unknown id fell through to 'anchor-yard', so all
+    // thirty-two clubs shared one park and the park factor meant nothing.
+    const parks = new Set<string>();
+    for (const t of world.teams) {
+      const park = homeStadiumOf(world.teams, t.id);
+      expect(STADIUM_BY_ID[park]).toBeTruthy();
+      expect(park).toBe(t.homeStadium);
+      expect(park).toBe(parkForFactor(MBD_FRANCHISES.find((f) => f.id === t.id)!.parkFactor));
+      parks.add(park);
+    }
+    expect(parks.size).toBeGreaterThan(1);
+  });
+
+  it('still finds a Meridian park while an MBD world is loaded', () => {
+    // A saved season holds this game's own club ids and has to keep finding its
+    // ballparks even when the league on the field is somebody else's.
+    for (const t of TEAM_IDENTITIES) {
+      expect(homeStadiumOf(world.teams, t.id)).toBe(t.homeStadium);
+    }
   });
 });
 

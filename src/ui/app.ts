@@ -2,7 +2,15 @@ import type { GameResult, GameSetup, PracticeDrill, Team } from '../core/types';
 import { MAX_FRAME_DT, TICK_DT } from '../core/constants';
 import { freshSeed } from '../core/rng';
 import { STADIUMS, getStadium } from '../data/stadiums';
-import { TEAM_IDENTITIES, buildLeague, displayName, playerById, teamById } from '../data/teams';
+import {
+  buildLeague,
+  displayName,
+  homeStadiumOf,
+  nextTeamId,
+  playerById,
+  shiftTeam,
+  teamById,
+} from '../data/teams';
 import { createGameState, type GameState } from '../sim/state';
 import { changePitcher, humanIsBatting, humanIsPitching, stepGame } from '../sim/game';
 import { emptyInputPair } from '../sim/input';
@@ -29,6 +37,7 @@ import {
 import { Coach } from './coach';
 import { Install } from './install';
 import {
+  defaultWorld,
   forgetWorld,
   loadSampleWorld,
   loadWorldFrom,
@@ -214,9 +223,12 @@ export class App implements AppApi {
     this.customs = loadCustomPlayers();
     this.teams = buildLeague();
     applyCustomPlayers(this.teams, this.customs);
-    // A world chosen last session is restored before anything reads the league,
-    // so a menu never has to know which one it is looking at.
-    this.league = restoreWorld() ?? meridianWorld(this.teams);
+    // The league is settled before anything reads it, so no menu ever has to
+    // know which world it is looking at. A stored choice wins; a first run opens
+    // in MBD, which is what these clubs are here for.
+    const stored = restoreWorld();
+    const opening = stored === null ? defaultWorld() : stored === 'meridian' ? null : stored;
+    this.league = opening ?? meridianWorld(this.teams);
     if (this.league.id !== 'meridian') this.teams = this.league.teams;
     const saved = loadSlot<GameSettings>(SLOT.settings);
     this.settings = { ...DEFAULT_SETTINGS, ...this.deviceDefaults(), ...(saved ?? {}) };
@@ -1007,9 +1019,12 @@ export class App implements AppApi {
         {
           id: 'season',
           label: hasSeason() ? 'Season — Continue' : 'Season',
-          hint: hasSeason()
-            ? 'Pick up your saved season where you left it.'
-            : 'A full schedule, standings, statistics, a postseason and the Meridian Cup. Saves automatically.',
+          hint:
+            this.league.id !== 'meridian'
+              ? 'Played on the Meridian Circuit. Switch worlds under World to start one \u2014 an imported world is for exhibition play and produces no dynasty history.'
+              : hasSeason()
+                ? 'Pick up your saved season where you left it.'
+                : 'A full schedule, standings, statistics, a postseason and the Meridian Cup. Saves automatically.',
           disabled: () => this.league.id !== 'meridian',
           onSelect: () => {
             // The contract's own division: an exhibition package is for team
@@ -1026,7 +1041,10 @@ export class App implements AppApi {
         {
           id: 'cup',
           label: hasCup() ? 'Championship — Continue' : 'Championship',
-          hint: 'An eight-club knockout. Three wins and the cup is yours.',
+          hint:
+            this.league.id !== 'meridian'
+              ? 'Played on the Meridian Circuit. Switch worlds under World to enter.'
+              : 'An eight-club knockout. Three wins and the cup is yours.',
           disabled: () => this.league.id !== 'meridian',
           onSelect: () => {
             if (this.league.id !== 'meridian') {
@@ -1051,8 +1069,8 @@ export class App implements AppApi {
         {
           id: 'world',
           label: 'World',
-          value: () => (this.league.id === 'mbd' ? 'MBD' : 'MERIDIAN'),
-          hint: 'Play this game\u2019s own ten clubs, or load a Mr. Baseball Dynasty world and use its franchises, rosters and ratings.',
+          value: () => (this.league.id === 'mbd' ? `MBD \u00b7 ${this.teams.length}` : 'MERIDIAN'),
+          hint: 'Which league is on the field for exhibitions, the derby, practice and the roster browser. Seasons and the cup are always the Meridian Circuit.',
           onSelect: () => this.gotoWorldMenu(),
         },
         {
@@ -1133,7 +1151,9 @@ export class App implements AppApi {
           value: () => (this.league.id === 'mbd' ? 'LOADED' : ''),
           hint: 'All thirty-two MBD franchises with generated rosters. Built into this game so the bridge can be played before an exporter exists — the clubs are real, the players are not.',
           onSelect: () => {
-            this.setWorld(loadSampleWorld());
+            // Chosen, so remembered — unlike the same world arriving as the
+            // boot default, which deliberately leaves storage alone.
+            this.setWorld(loadSampleWorld(true));
           },
         },
         {
@@ -1256,17 +1276,17 @@ export class App implements AppApi {
             this.goto(
               new TeamSelectScreen(this, 'AWAY CLUB', 'Bats first', (id) => {
                 cfg.awayTeamId = id;
-                if (id === cfg.homeTeamId) cfg.homeTeamId = nextTeamId(id);
+                if (id === cfg.homeTeamId) cfg.homeTeamId = nextTeamId(this.teams, id);
                 this.back();
                 rebuild();
                 screen.render();
               }),
             ),
           onLeft: () => {
-            cfg.awayTeamId = shiftTeam(cfg.awayTeamId, -1, cfg.homeTeamId);
+            cfg.awayTeamId = shiftTeam(this.teams, cfg.awayTeamId, -1, cfg.homeTeamId);
           },
           onRight: () => {
-            cfg.awayTeamId = shiftTeam(cfg.awayTeamId, 1, cfg.homeTeamId);
+            cfg.awayTeamId = shiftTeam(this.teams, cfg.awayTeamId, 1, cfg.homeTeamId);
           },
         },
         {
@@ -1278,20 +1298,20 @@ export class App implements AppApi {
             this.goto(
               new TeamSelectScreen(this, 'HOME CLUB', 'Bats last', (id) => {
                 cfg.homeTeamId = id;
-                if (id === cfg.awayTeamId) cfg.awayTeamId = nextTeamId(id);
-                if (cfg.autoStadium) cfg.stadiumId = homeStadiumOf(id);
+                if (id === cfg.awayTeamId) cfg.awayTeamId = nextTeamId(this.teams, id);
+                if (cfg.autoStadium) cfg.stadiumId = homeStadiumOf(this.teams, id);
                 this.back();
                 rebuild();
                 screen.render();
               }),
             ),
           onLeft: () => {
-            cfg.homeTeamId = shiftTeam(cfg.homeTeamId, -1, cfg.awayTeamId);
-            if (cfg.autoStadium) cfg.stadiumId = homeStadiumOf(cfg.homeTeamId);
+            cfg.homeTeamId = shiftTeam(this.teams, cfg.homeTeamId, -1, cfg.awayTeamId);
+            if (cfg.autoStadium) cfg.stadiumId = homeStadiumOf(this.teams, cfg.homeTeamId);
           },
           onRight: () => {
-            cfg.homeTeamId = shiftTeam(cfg.homeTeamId, 1, cfg.awayTeamId);
-            if (cfg.autoStadium) cfg.stadiumId = homeStadiumOf(cfg.homeTeamId);
+            cfg.homeTeamId = shiftTeam(this.teams, cfg.homeTeamId, 1, cfg.awayTeamId);
+            if (cfg.autoStadium) cfg.stadiumId = homeStadiumOf(this.teams, cfg.homeTeamId);
           },
         },
         stadiumRow(
@@ -1415,10 +1435,10 @@ export class App implements AppApi {
               ),
             ),
           onLeft: () => {
-            cfg.teamId = shiftTeam(cfg.teamId, -1, '');
+            cfg.teamId = shiftTeam(this.teams, cfg.teamId, -1, '');
           },
           onRight: () => {
-            cfg.teamId = shiftTeam(cfg.teamId, 1, '');
+            cfg.teamId = shiftTeam(this.teams, cfg.teamId, 1, '');
           },
         },
         seasonLengthRow(
@@ -1597,7 +1617,7 @@ export class App implements AppApi {
       const setup: GameSetup = {
         awayTeamId: awayId,
         homeTeamId: homeId,
-        stadiumId: homeStadiumOf(homeId),
+        stadiumId: homeStadiumOf(this.teams, homeId),
         innings: s.innings,
         difficulty: s.difficulty,
         awayControl: 'cpu',
@@ -1617,7 +1637,7 @@ export class App implements AppApi {
     this.startGame({
       awayTeamId: awayId,
       homeTeamId: homeId,
-      stadiumId: homeStadiumOf(homeId),
+      stadiumId: homeStadiumOf(this.teams, homeId),
       innings: s.innings,
       difficulty: s.difficulty,
       awayControl: awayId === s.userTeamId ? 'human1' : 'cpu',
@@ -1656,10 +1676,10 @@ export class App implements AppApi {
               }, cfg.teamId),
             ),
           onLeft: () => {
-            cfg.teamId = shiftTeam(cfg.teamId, -1, '');
+            cfg.teamId = shiftTeam(this.teams, cfg.teamId, -1, '');
           },
           onRight: () => {
-            cfg.teamId = shiftTeam(cfg.teamId, 1, '');
+            cfg.teamId = shiftTeam(this.teams, cfg.teamId, 1, '');
           },
         },
         inningsRow(() => cfg.innings, (n) => { cfg.innings = n; }),
@@ -2045,16 +2065,16 @@ export class App implements AppApi {
           id: 'team',
           label: 'Your club',
           value: () => teamLabel(this.teams, cfg.teamId),
-          onLeft: () => { cfg.teamId = shiftTeam(cfg.teamId, -1, cfg.oppId); },
-          onRight: () => { cfg.teamId = shiftTeam(cfg.teamId, 1, cfg.oppId); },
+          onLeft: () => { cfg.teamId = shiftTeam(this.teams, cfg.teamId, -1, cfg.oppId); },
+          onRight: () => { cfg.teamId = shiftTeam(this.teams, cfg.teamId, 1, cfg.oppId); },
           hint: 'Different clubs give you very different hitters and arms to practise with.',
         },
         {
           id: 'opp',
           label: 'Opponent',
           value: () => teamLabel(this.teams, cfg.oppId),
-          onLeft: () => { cfg.oppId = shiftTeam(cfg.oppId, -1, cfg.teamId); },
-          onRight: () => { cfg.oppId = shiftTeam(cfg.oppId, 1, cfg.teamId); },
+          onLeft: () => { cfg.oppId = shiftTeam(this.teams, cfg.oppId, -1, cfg.teamId); },
+          onRight: () => { cfg.oppId = shiftTeam(this.teams, cfg.oppId, 1, cfg.teamId); },
           hint: 'Who you are working against.',
         },
         stadiumRow('Ballpark', () => cfg.stadiumId, (id) => { cfg.stadiumId = id; }),
@@ -2559,24 +2579,6 @@ function humanInvolved(state: GameState): boolean {
 function teamLabel(teams: Team[], id: string): string {
   const t = teams.find((x) => x.id === id) ?? teams[0];
   return `${t.city} ${t.name}`.toUpperCase();
-}
-
-function nextTeamId(id: string): string {
-  const i = TEAM_IDENTITIES.findIndex((t) => t.id === id);
-  return TEAM_IDENTITIES[(i + 1) % TEAM_IDENTITIES.length].id;
-}
-
-function shiftTeam(id: string, d: number, forbid: string): string {
-  let i = TEAM_IDENTITIES.findIndex((t) => t.id === id);
-  for (let n = 0; n < TEAM_IDENTITIES.length; n++) {
-    i = (i + d + TEAM_IDENTITIES.length) % TEAM_IDENTITIES.length;
-    if (TEAM_IDENTITIES[i].id !== forbid) return TEAM_IDENTITIES[i].id;
-  }
-  return id;
-}
-
-function homeStadiumOf(teamId: string): string {
-  return TEAM_IDENTITIES.find((t) => t.id === teamId)?.homeStadium ?? 'anchor-yard';
 }
 
 function CUP_ROUND_NAME(round: number): string {

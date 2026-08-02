@@ -610,3 +610,43 @@ export function teamRating(team: Team): { off: number; def: number; pit: number 
     ) / arms.length;
   return { off: Math.round(off), def: Math.round(def), pit: Math.round(pit) };
 }
+
+// ------------------------------------------------------ navigating a league
+
+/**
+ * WALKING THE LEAGUE THAT IS ACTUALLY LOADED.
+ *
+ * These three used to walk `TEAM_IDENTITIES` — this game's own ten clubs — which
+ * was correct for exactly as long as there was only one possible league. With an
+ * imported MBD world in front of them they cycle through thirty-two clubs that
+ * are not there, and every lookup falls through to a default: Quick Play's
+ * left/right would change the label to a club that is not in the game, and every
+ * ballpark would collapse to Anchor Yard, silently throwing away the park-factor
+ * decision the bridge went to some trouble to make.
+ *
+ * So they take the loaded league. `homeStadiumOf` keeps the built-in table as a
+ * *fallback* rather than a source, because a season save holds Meridian club ids
+ * and has to keep finding its parks even while an MBD world is loaded for
+ * exhibitions.
+ */
+export function nextTeamId(teams: Team[], id: string): string {
+  const i = teams.findIndex((t) => t.id === id);
+  return teams[(i + 1) % teams.length].id;
+}
+
+export function shiftTeam(teams: Team[], id: string, d: number, forbid: string): string {
+  let i = teams.findIndex((t) => t.id === id);
+  for (let n = 0; n < teams.length; n++) {
+    i = (i + d + teams.length) % teams.length;
+    if (teams[i].id !== forbid) return teams[i].id;
+  }
+  return id;
+}
+
+export function homeStadiumOf(teams: Team[], teamId: string): string {
+  return (
+    teams.find((t) => t.id === teamId)?.homeStadium ??
+    TEAM_IDENTITIES.find((t) => t.id === teamId)?.homeStadium ??
+    'anchor-yard'
+  );
+}

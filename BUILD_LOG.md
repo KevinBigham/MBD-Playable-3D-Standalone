@@ -1176,9 +1176,74 @@ thing it should always have done.
 
 ---
 
+## Opening in the MBD world
+
+Shipping the bridge was not the same as wiring it in. A fresh visit still landed
+on the Meridian Circuit and the MBD clubs were three menus away, which is a
+strange thing to say about the world the game is *for*. Making it the default
+turned out to be one line and three bugs.
+
+### Three helpers that only worked because there had only ever been one league
+
+`nextTeamId`, `shiftTeam` and `homeStadiumOf` all walked `TEAM_IDENTITIES` —
+this game's own ten clubs. That was correct for as long as there was exactly one
+possible league, and it is the shape of assumption that survives review forever
+because nothing is wrong with it until something is.
+
+With thirty-two MBD clubs loaded, none of them crashed. That is the problem.
+Quick Play's left and right cycled through ten clubs that were not in the game,
+and every lookup fell through to a default — so the label changed to a club you
+could not play and **every ballpark quietly became Anchor Yard**, throwing away
+the park-factor decision the bridge had gone to some trouble to make. Denver at
+Anchor Yard, silently, forever.
+
+They now take the loaded league. `homeStadiumOf` keeps the built-in table as a
+*fallback* rather than a source, because a saved season holds Meridian club ids
+and has to keep finding its parks while an MBD world is on the field for
+exhibitions. And all three moved out of `ui/app.ts` into `data/teams.ts`, which
+is where pure functions about a league belong and — not coincidentally — where
+they can be tested.
+
+Four tests now cover it: cycling stays inside the loaded league and comes back
+where it started, the avoid-this-club rule holds in both directions, all
+thirty-two imported clubs get their own park rather than a shared default, and a
+Meridian club id still resolves while an MBD world is loaded.
+
+### A default that is not a decision
+
+The other bug was subtler and appeared while verifying the first one. The boot
+default called `loadSampleWorld()`, which persisted the choice — so the first
+launch wrote `{world: 'mbd'}` into storage before the player had chosen
+anything.
+
+That is fine until the day the default changes, at which point every existing
+install is pinned to the old one by a decision nobody made. Worse, it makes a
+deliberate choice of the Meridian Circuit indistinguishable from never having
+opened the game.
+
+So `restoreWorld()` now returns three things rather than two — a world, the
+string `'meridian'`, or `null` for a genuine first run — and the default does
+not write. Only the World screen does. The verification probe that caught it was
+checking `localStorage` was empty on a first visit, which it now is.
+
+### What the choice governs
+
+Quick Play, Practice, the Derby and Clubs & Rosters — everything the contract
+calls exhibition play. Seasons and the cup stay on the Meridian Circuit, and the
+rows now say so in their own hint rather than only in a toast after you press
+them, which is the difference between a rule and a dead end.
+
+Verified on a brand-new browser profile against the deployed build: nothing
+stored, thirty-two clubs loaded, seven distinct ballparks, the main menu reading
+`WORLD  MBD · 32`, Quick Play opening on New York at Philadelphia, cycling
+staying inside the league, and a real game starting Cleveland at Philadelphia in
+The Foundry. Zero console errors.
+
+---
+
 ## Tests performed
 
-- **Automated:** 278 Vitest tests across 24 files — RNG determinism, ball-flight
+- **Automated:** 282 Vitest tests across 24 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,

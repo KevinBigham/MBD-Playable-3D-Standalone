@@ -2,11 +2,16 @@
 
 **An original arcade baseball game for the browser — on a laptop or a phone.**
 
-Ten fictional clubs, eight fictional ballparks and about two hundred fictional
-ballplayers make up the Meridian Circuit. Games are fast, contact is loud, and
-you hold the controls for every pitch, every swing, every throw and every
-runner. There is no simulation to sit and watch: if something happens on the
-field, somebody pressed a button to make it happen.
+Games are fast, contact is loud, and you hold the controls for every pitch,
+every swing, every throw and every runner. There is no simulation to sit and
+watch: if something happens on the field, somebody pressed a button to make it
+happen.
+
+It opens on the **thirty-two franchises of Mr. Baseball Dynasty** — it is the
+arcade half of the MBD arcade-world bridge, and can be handed a real dynasty's
+rosters and ratings. Its own league, the ten-club **Meridian Circuit**, is one
+row away under *World* and is what seasons and the cup are played on. Eight
+ballparks serve both.
 
 MOONSHOT NINE is a spiritual successor to the fast, personality-filled console
 baseball games of the late 1990s. Everything in it — the league, the players,
@@ -91,8 +96,13 @@ them, and hand back a factual receipt. **Main menu -> World.**
 | Row | What it loads |
 |---|---|
 | The Meridian Circuit | This game's own ten clubs. Seasons and the cup live here. |
-| MBD Sample World | All thirty-two MBD franchises, built in. The clubs are real; the players are generated, because MBD has no exporter yet. |
+| MBD Sample World | All thirty-two MBD franchises, built in — **this is what a fresh install opens in.** The clubs are real; the players are generated, because MBD has no exporter yet. |
 | Import an MBD World… | A `.json` bundle exported from a save. |
+
+The chosen world governs **Quick Play, Practice, the Derby and Clubs & Rosters**
+— everything the contract calls exhibition play. It survives a reload; the boot
+default deliberately does not write itself into storage, so it stays a default
+rather than becoming a decision nobody made.
 
 The rule the whole bridge is built around: **MBD is the world authority.** This
 game never owns contracts, promotions, trades, ratings development, schedule
@@ -331,8 +341,16 @@ npm run preview &
 npx tsx scripts/capture.ts     # screenshots + gameplay recording
 npx tsx scripts/perf.ts        # frame rate, heap and GPU resource growth
 npm run test:phone             # the phone audit, in WebKit, with real touches
+npm run test:world             # a first visit lands in the right league, everywhere
 npm run icons                  # re-rasterise the PNG icons from the SVGs
 ```
+
+`npm run test:world` runs in a fresh browser context — no stored settings, no
+stored world — because the bug it exists for does not throw. When a menu walks a
+different league than the one on the field, nothing crashes: the labels just
+name clubs that are not in the game and every ballpark collapses to the same
+default. Point it at the live site with `CAPTURE_URL=<url>` to check the real
+deploy rather than a local build.
 
 None of them is needed to play the game.
 
