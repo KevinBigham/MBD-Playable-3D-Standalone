@@ -397,7 +397,7 @@ function updatePrePlay(state: GameState, dt: number, inputs: InputPair): void {
 
   // Batter cursor is live before the pitch so the hitter can set up.
   if (batInput) {
-    moveCursor(state, batInput, dt);
+    aimCursor(state, batInput, dt);
     if (batInput.bunt) state.batter.bunting = !state.batter.bunting;
     // Before the pitch the diamond is the swing selector, so a steal has to be
     // asked for explicitly (hold the modifier). This is what stops a hitter
@@ -417,8 +417,17 @@ function updatePrePlay(state: GameState, dt: number, inputs: InputPair): void {
       // rides on `dive`, which is the raw special button.
       if (pitchInput.dive) setAlignment(state, 'normal', true);
     } else {
-      pr.aimX = clamp(pr.aimX + pitchInput.moveX * AIM_SPEED * dt, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
-      pr.aimY = clamp(pr.aimY + pitchInput.moveY * AIM_SPEED * dt, CURSOR_Y_MIN, CURSOR_Y_MAX);
+      // Pointing beats steering here for the same reason it does at the plate,
+      // and the order matters: the target is set before the pitch is read, so a
+      // front end that says "this pitch, to that spot" in one act gets the spot
+      // it asked for rather than the one left over from the last hitter.
+      if (pitchInput.aimAbsolute) {
+        pr.aimX = clamp(pitchInput.aimX, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
+        pr.aimY = clamp(pitchInput.aimY, CURSOR_Y_MIN, CURSOR_Y_MAX);
+      } else {
+        pr.aimX = clamp(pr.aimX + pitchInput.moveX * AIM_SPEED * dt, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
+        pr.aimY = clamp(pr.aimY + pitchInput.moveY * AIM_SPEED * dt, CURSOR_Y_MIN, CURSOR_Y_MAX);
+      }
       if (pitchInput.pitchSlot >= 0) {
         if (pr.ready > 0) {
           pushEvent(state, { kind: 'denied', text: 'Not set yet' });
@@ -503,6 +512,27 @@ function reconsiderDefense(state: GameState): void {
 function repertoireOf(state: GameState): PitchType[] {
   const p = lookupPlayer(state, state.pitcher.playerId);
   return (p.repertoire && p.repertoire.length ? p.repertoire : ['fastball']) as PitchType[];
+}
+
+/**
+ * Where the hitter is trying to make contact.
+ *
+ * Two ways to say it, and they are genuinely different statements. A stick says
+ * "further left", integrated for as long as it is held. A finger says "here".
+ * The second one cannot be expressed by the first at any speed, which is why
+ * `aimAbsolute` exists rather than the touch layer faking a very fast stick.
+ *
+ * Both end at the same clamp, so pointing cannot reach anywhere steering could
+ * not.
+ */
+function aimCursor(state: GameState, input: InputFrame, dt: number): void {
+  const b = state.batter;
+  if (input.aimAbsolute) {
+    b.cx = clamp(input.aimX, -CURSOR_X_LIMIT, CURSOR_X_LIMIT);
+    b.cy = clamp(input.aimY, CURSOR_Y_MIN, CURSOR_Y_MAX);
+    return;
+  }
+  moveCursor(state, input, dt);
 }
 
 function moveCursor(state: GameState, input: InputFrame, dt: number): void {
@@ -688,7 +718,7 @@ function beginWindup(state: GameState, type: PitchType, aimX: number, aimY: numb
 
 function updateWindup(state: GameState, dt: number, inputs: InputPair): void {
   const batInput = inputFor(state, battingSide(state), inputs);
-  if (batInput) moveCursor(state, batInput, dt);
+  if (batInput) aimCursor(state, batInput, dt);
   stepRunnersPreplay(state, dt);
   idleFielders(state, dt);
   if (state.phaseT >= 0.42) {
@@ -734,7 +764,7 @@ function updatePitchFlight(state: GameState, dt: number, inputs: InputPair): voi
   const bs = state.batter;
   if (batInput) {
     if (bs.swingT < 0) {
-      moveCursor(state, batInput, dt);
+      aimCursor(state, batInput, dt);
       if (batInput.bunt) bs.bunting = !bs.bunting;
       if (batInput.swing || batInput.power || (bs.bunting && batInput.take === false && false)) {
         startSwing(

@@ -13,7 +13,13 @@ import { cssColor } from '../render/palette';
 import type { GameWorld } from '../render/world';
 import type { InputManager } from './input';
 import { PlateView } from './plateview';
-import { type ControlLabels, type PromptAction, controlLabels, promptPairs } from './controls';
+import {
+  type ControlLabels,
+  type PromptAction,
+  type TapContext,
+  controlLabels,
+  promptPairs,
+} from './controls';
 
 /**
  * In-game HUD.
@@ -162,13 +168,13 @@ export class Hud {
   // -------------------------------------------------------------------------
 
   /** Returns what the controls currently mean, so the touch pad can say so too. */
-  update(dt: number, state: GameState, world: GameWorld): ControlLabels {
+  update(dt: number, state: GameState, world: GameWorld, tap?: TapContext): ControlLabels {
     // Practice is explicitly not scored, so the scoreboard must not claim to be
     // keeping score. The count, the outs and the bases still matter, so they stay.
     const practice = !!state.setup.practice;
     this.root.classList.toggle('practice', practice);
     this.lineBox.style.display = practice || !this.showLineScore ? 'none' : '';
-    const labels = controlLabels(state, this.input.isHeld('p1', 'modifier'));
+    const labels = controlLabels(state, this.input.isHeld('p1', 'modifier'), tap);
     this.updateScore(state);
     this.updateMatchup(state);
     this.updateBanner(state);

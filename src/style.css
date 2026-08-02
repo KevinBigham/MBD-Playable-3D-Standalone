@@ -1651,6 +1651,99 @@ body.reduced-motion .boot-bar i {
   display: block;
 }
 
+/* ------------------------------------------------------------ touch to hit --
+
+   The field itself is the control. There is no widget here on purpose: the
+   target is the strike zone the plate view is already drawing, and putting a
+   second rectangle on top of it would be drawing the same thing twice and
+   inviting the two to disagree. So this layer is invisible, covers everything,
+   and sits under every button — the pad and the pause key still win where they
+   overlap it. */
+.t-zone {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  touch-action: none;
+}
+
+#touch.tapping .t-zone {
+  pointer-events: auto;
+}
+
+/* A floating stick that owns the left half would swallow every touch on the
+   left half of the zone — and at the plate it has nothing to steer anyway. */
+#touch.tapping .t-stickzone {
+  pointer-events: none;
+}
+
+#touch.tapping .t-stick {
+  display: none;
+}
+
+/* Where the finger landed. It has to outlive the finger and be bigger than it,
+   because a thumb covers the spot it just chose — otherwise the only feedback
+   for the most important input in the game is hidden under the hand that made
+   it. */
+.t-ripple {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 82px;
+  height: 82px;
+  margin: -41px 0 0 -41px;
+  border-radius: 50%;
+  border: 4px solid var(--gold);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.t-ripple[data-kind='power'] {
+  border-color: var(--hot);
+}
+
+.t-ripple[data-kind='aim'] {
+  border-color: rgba(244, 239, 227, 0.6);
+}
+
+.t-ripple[data-kind='pitch'] {
+  border-color: var(--cool);
+}
+
+.t-ripple.go {
+  animation: tap-ripple 0.42s ease-out forwards;
+}
+
+@keyframes tap-ripple {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.34);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* The armed swing, or the armed pitch. Distinct from `latched`, which pulses
+   because it is about to be spent; this one is a standing choice and should
+   read as settled rather than urgent. */
+.t-btn.armed {
+  border-color: var(--gold);
+  background: rgba(255, 209, 92, 0.22);
+  color: var(--gold);
+}
+
+.t-btn.armed::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 16px;
+  height: 3px;
+  margin-left: -8px;
+  background: var(--gold);
+}
+
 /* The stick zone is always live so the stick can be summoned anywhere in the
    left half; the action pad only appears when there is something to press. */
 .t-stickzone {
@@ -1793,6 +1886,7 @@ body.reduced-motion .boot-bar i {
 .t-right { right: 0; top: 50%; transform: translateY(-50%); }
 
 .t-btn {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;

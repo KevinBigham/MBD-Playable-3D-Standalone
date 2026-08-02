@@ -11,7 +11,7 @@ shown. Nothing here is an estimate.
 npx vitest run
 ```
 
-**Result: 21 files, 226 tests, 226 passed, 0 failed. 65 s wall clock.**
+**Result: 22 files, 235 tests, 235 passed, 0 failed. 77 s wall clock.**
 
 | File | Tests | What it protects |
 |---|---|---|
@@ -36,6 +36,7 @@ npx vitest run
 | `timing.test.ts` | 4 | Input lag correction: pressing four ticks late while declaring four ticks of lag produces a timing figure identical to pressing on time to nine decimals; the same press without the declaration is measurably late (the control); and an implausible declared lag is capped rather than credited |
 | `governor.test.ts` | 8 | The automatic graphics servo, tested mostly for what it refuses to do: silent until enabled, deaf to a catastrophic single frame inside an otherwise healthy window, motionless in the band between its thresholds, slow to climb and quick to fall, and — fed the frame times of a thermally limited phone that is comfortable at one rung and drowning at the next — it settles instead of oscillating forever |
 | `haptics.test.ts` | 8 | Vibration restraint: silent until enabled, refuses to enable where the platform has no API, never fires twice inside 40 ms, every pattern under 200 ms total, and contact genuinely varies with how well the ball was struck |
+| `tap.test.ts` | 9 | The phone control scheme: an absolute aim lands the cursor exactly where it was told and clamps to the same limits a stick could reach; steering still steers when nothing was touched; the pitcher's target is taken from the touch in the same step that releases the ball. Then the promise itself, as the whole precision curve over eight seeds — on the crossing point is hard contact every time, a hand's width off is in play but never hard, a forearm off is a foul, forty centimetres off is a swing through it. Plus the screen-to-plate solve inverting its own projection to sub-millimetre accuracy, converging from a bad starting guess, and returning null rather than a plausible lie when the camera is edge-on |
 
 ---
 

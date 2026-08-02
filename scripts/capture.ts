@@ -387,10 +387,56 @@ async function main(): Promise<void> {
       labels,
     };
   });
-  if (!padOk.on || !padOk.labels.includes('SWING')) {
+  if (!padOk.on || !padOk.labels.includes('CONTACT')) {
     console.log(`  (warning: touch pad not ready for 23-phone-at-bat: ${JSON.stringify(padOk)})`);
   }
   await phone.screenshot({ path: join(SHOT_DIR, '23-phone-at-bat.png') });
+
+  // --- the swing itself ----------------------------------------------------
+  // Touching the spot the pitch is going to cross, as a real touch event at a
+  // real pixel — the pixel computed by projecting the crossing point through
+  // the live camera, which is the same trip a thumb makes in reverse. What the
+  // shot proves is where the contact cursor ends up: on the spot that was
+  // touched, wherever that is, including outside the drawn zone.
+  await phone.waitForFunction(
+    () => {
+      const app = (window as unknown as { moonshot?: { game?: { phase: string } } }).moonshot;
+      return app?.game?.phase === 'pitch';
+    },
+    undefined,
+    { timeout: 30000 },
+  );
+  const tapped = await phone.evaluate(() => {
+    interface Api {
+      game: { phase: string; currentPitch: { plateX: number; plateY: number } | null };
+      world: { project(x: number, y: number, z: number): { x: number; y: number } };
+      touch: { tapModeNow(): string };
+    }
+    const app = (window as unknown as { moonshot: Api }).moonshot;
+    const info = app.game.currentPitch;
+    const canvas = document.getElementById('gl') as HTMLCanvasElement;
+    if (!info || !canvas) return null;
+    const r = canvas.getBoundingClientRect();
+    const p = app.world.project(info.plateX, info.plateY, 0.62);
+    const clientX = r.left + p.x * r.width;
+    const clientY = r.top + p.y * r.height;
+    const el = document.elementFromPoint(clientX, clientY);
+    el?.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 1,
+        clientX,
+        clientY,
+        bubbles: true,
+        cancelable: true,
+        pointerType: 'touch',
+      }),
+    );
+    return { mode: app.touch.tapModeNow(), on: el?.className ?? 'none' };
+  });
+  if (!tapped || tapped.mode !== 'swing' || !String(tapped.on).includes('t-zone')) {
+    console.log(`  (warning: touch-to-swing not exercised for 25: ${JSON.stringify(tapped)})`);
+  }
+  await phone.screenshot({ path: join(SHOT_DIR, '25-phone-touch-to-swing.png') });
   await phoneCtx.close();
 
   // --- the same game on a phone that will not rotate -----------------------

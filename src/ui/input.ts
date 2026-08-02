@@ -254,6 +254,11 @@ export class InputManager {
       // the player would say they pressed.
       if (t !== undefined && t > stamp) stamp = t;
     }
+    return this.age(stamp);
+  }
+
+  /** Seconds between an event timestamp and the frame being assembled. */
+  private age(stamp: number): number {
     if (stamp < 0) return 0;
     const age = (this.frameNow - stamp) / 1000;
     return age > 0 && age < MAX_REPORTED_AGE ? age : 0;
@@ -363,14 +368,38 @@ export class InputManager {
     const modifier = this.held(player, 'modifier') || padHeld(6);
     const switchF = this.pressed(player, 'switchFielder') || padEdge(4);
 
+    // A finger on the strike zone. It carries a place *and* an instant, which
+    // is exactly the pair a swing is made of, so one touch says everything a
+    // stick plus a button used to say between them.
+    const tap = player === 'p1' ? (this.touch?.takeZoneTap() ?? null) : null;
+    if (tap) {
+      frame.aimAbsolute = true;
+      frame.aimX = tap.x;
+      frame.aimY = tap.y;
+    }
+
     // Batting meanings.
-    frame.swing = dDown;
-    frame.power = dRight;
+    frame.swing = dDown || tap?.kind === 'contact';
+    frame.power = dRight || tap?.kind === 'power';
     frame.bunt = dLeft;
     frame.take = dUp;
 
-    // Pitching meanings: the diamond selects a pitch slot.
-    frame.pitchSlot = dLeft ? 0 : dDown ? 1 : dRight ? 2 : dUp ? 3 : -1;
+    // Pitching meanings: the diamond selects a pitch slot. A tap throws the one
+    // already armed — it deliberately does not go through the diamond, because
+    // the diamond's other meaning is the four bases and a swing must never be
+    // able to send a runner.
+    frame.pitchSlot =
+      tap?.kind === 'pitch'
+        ? (this.touch?.armedSlotNow() ?? 0)
+        : dLeft
+          ? 0
+          : dDown
+            ? 1
+            : dRight
+              ? 2
+              : dUp
+                ? 3
+                : -1;
 
     // Fielding and baserunning: the diamond IS the diamond.
     frame.base = dDown ? 0 : dRight ? 1 : dUp ? 2 : dLeft ? 3 : -1;
@@ -386,11 +415,13 @@ export class InputManager {
     // only the two buttons that swing are aged. A gamepad is polled rather than
     // evented and carries no timestamp; it reports nothing and loses nothing it
     // was not already losing.
-    frame.pressAge = dDown
-      ? this.pressAge(player, 'diamondDown')
-      : dRight
-        ? this.pressAge(player, 'diamondRight')
-        : 0;
+    frame.pressAge = tap
+      ? this.age(tap.at)
+      : dDown
+        ? this.pressAge(player, 'diamondDown')
+        : dRight
+          ? this.pressAge(player, 'diamondRight')
+          : 0;
   }
 
   /** Called by the app after the first simulation step consumes the frame. */

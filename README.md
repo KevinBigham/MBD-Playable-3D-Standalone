@@ -60,19 +60,25 @@ aliases (`4 5 6 8`, `0`, `7`) work too.
 
 ### On a phone
 
-Touch the screen and an on-screen pad appears: a floating stick in the left half
-— put a thumb down anywhere and that is where the stick is — and the four action
-buttons laid out as the literal base diamond in the bottom-right corner. Every
-button is captioned with what it does *in the situation you are in*: `SWING`,
-`2ND`, `SL`. The modifier latches instead of being held, and arming it re-labels
-the four buttons, so `DEFENCE` turns the diamond into `DP` / `IN` / `CORNERS` /
-`NO XBH` in front of you.
+**You bat by touching the strike zone where you think the ball is going to
+cross.** The swing happens there. One touch carries both halves of a swing — the
+spot and the moment — because that is exactly what a touch is: a place and an
+instant. No cursor to steer, no button to press, nothing to do with your other
+thumb. Touch the corner you think he is painting; if you are right you barrel
+it, and if you are a hand's width off you foul it back.
 
-The diamond is hit-tested as **one control**: a press anywhere in its square —
-including the gap in the middle and the corners, which used to do nothing at all
-— takes whichever button lies in that direction. The circles are labels, not
-targets, which is the only sensible arrangement for a target your own thumb is
-sitting on top of.
+The four buttons stop swinging and start choosing *which* swing — `CONTACT`,
+`POWER`, `BUNT`, `TAKE` — and they stay where you put them, because a hitter has
+an approach. On the mound it is the same idea in the order a pitcher thinks in:
+pick the pitch on the diamond, touch the spot, and that is where it goes.
+
+Everything else is still there under it. A floating stick in the left half — put
+a thumb down anywhere and that is where the stick is — runs fielders and
+runners. The modifier latches instead of being held, and arming it re-labels the
+diamond, so `DEFENCE` turns it into `DP` / `IN` / `CORNERS` / `NO XBH` in front
+of you. The diamond is hit-tested as **one control**: a press anywhere in its
+square, including the gap in the middle and the corners, takes whichever button
+lies in that direction.
 
 Everything else the phone does to a game is handled rather than ignored:
 
@@ -127,7 +133,8 @@ need to win the duel is drawn on the strike zone itself:
 How much of the read you are given is the difficulty setting — Rookie shows it
 early, Pro shows it late, Ace never shows it. The CPU hitter receives none of it,
 and no ball physics change on any setting. The entire overlay can be switched off
-under **Settings → Plate view**.
+under **Settings → Plate view** — except on a phone with touch-to-swing on,
+where the zone is the thing you are aiming at and so cannot be hidden.
 
 ## Managing the defence
 

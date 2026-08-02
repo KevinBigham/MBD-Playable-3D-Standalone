@@ -62,10 +62,32 @@ const NONE: ControlLabels = {
  * — which is how a player finds out the modifier exists without reading a
  * manual: press it, watch four captions change, let go.
  */
-export function controlLabels(state: GameState, modifierArmed = false): ControlLabels {
+/**
+ * How the controls are being driven, when that changes what a button means.
+ *
+ * Tap-to-hit is not a skin on the button scheme, it is a different scheme: the
+ * field carries the swing and the pitch, and the diamond stops performing them
+ * and starts choosing which one a tap will be. SWING becomes CONTACT, and it is
+ * a mode rather than an act.
+ */
+export interface TapContext {
+  /** The field is the control: touching it aims, swings or throws. */
+  active: boolean;
+  /** Which swing a tap will be. */
+  swingMode: 'contact' | 'power';
+}
+
+export function controlLabels(
+  state: GameState,
+  modifierArmed = false,
+  tap?: TapContext,
+): ControlLabels {
   const batting = humanIsBatting(state);
   const pitching = humanIsPitching(state);
   const inPlay = state.phase === 'inplay';
+  // Only at the plate and on the mound. Once the ball is in play the diamond is
+  // the four bases again for everybody, because there is nothing to aim at.
+  const tapping = !!tap?.active && !inPlay;
 
   if (inPlay && batting) {
     return {
@@ -117,6 +139,27 @@ export function controlLabels(state: GameState, modifierArmed = false): ControlL
         switchFielder: '',
       };
     }
+    if (tapping) {
+      // The bat is the finger. The four buttons stop being the swing and become
+      // the *kind* of swing, which is a decision you make before the pitch and
+      // then leave alone — so they read as settings, and the armed one is lit.
+      return {
+        situation: 'batting',
+        verb: tap.swingMode === 'power' ? 'POWER SWING' : 'CONTACT SWING',
+        // The instruction goes in the caption box rather than the diamond's
+        // heading: it is a sentence, the box is built for one, and the box sits
+        // where the left thumb used to be — which is exactly the thumb that has
+        // just been given nothing to do.
+        stick: 'TOUCH WHERE IT WILL CROSS',
+        diamondUp: 'TAKE',
+        diamondLeft: state.batter.bunting ? 'BUNTING' : 'BUNT',
+        diamondDown: 'CONTACT',
+        diamondRight: 'POWER',
+        special: '',
+        modifier: canSteal ? 'STEAL' : '',
+        switchFielder: '',
+      };
+    }
     return {
       situation: 'batting',
       verb: 'AT BAT',
@@ -150,6 +193,24 @@ export function controlLabels(state: GameState, modifierArmed = false): ControlL
         diamondRight: 'CORNERS',
         diamondDown: 'NO XBH',
         special: 'NORMAL',
+        modifier: 'DEFENCE',
+        switchFielder: 'AROUND',
+      };
+    }
+    if (tapping) {
+      // The mirror of the plate, and the order a pitcher actually thinks in:
+      // pick the pitch, pick the spot, throw. The diamond arms; the touch
+      // releases. Steering the ball afterwards is still the stick's job, which
+      // is why the hint below changes once the ball is gone.
+      return {
+        situation: 'pitching',
+        verb: 'PITCH',
+        stick: state.phase === 'preplay' ? 'TOUCH WHERE TO PUT IT' : 'STEER',
+        diamondLeft: slot(0),
+        diamondDown: slot(1),
+        diamondRight: slot(2),
+        diamondUp: slot(3),
+        special: '',
         modifier: 'DEFENCE',
         switchFielder: 'AROUND',
       };

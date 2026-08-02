@@ -14,7 +14,8 @@ import { swingProfile, zoneBounds } from '../sim/contact';
 import { getAudio, type SfxName } from '../audio/audio';
 import { Hud } from './hud';
 import { InputManager, type ActionId } from './input';
-import { TouchControls } from './touch';
+import { type TapMode, TouchControls } from './touch';
+import { type ZonePoint, screenToZone } from './zonepick';
 import type { ControlLabels } from './controls';
 import {
   detectDevice,
@@ -188,7 +189,10 @@ export class App implements AppApi {
   private frameTimes: number[] = [];
   private resultShown = false;
 
-  constructor(canvas: HTMLCanvasElement, uiRoot: HTMLDivElement) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    uiRoot: HTMLDivElement,
+  ) {
     this.uiRoot = uiRoot;
     this.customs = loadCustomPlayers();
     this.teams = buildLeague();
@@ -198,6 +202,7 @@ export class App implements AppApi {
     this.world = new GameWorld(canvas);
     this.hud = new Hud(this.input);
     this.touch = new TouchControls(() => this.requestPause());
+    this.touch.setZoneMapper(this.zoneAt);
     this.input.attachTouch(this.touch);
     this.uiRoot.appendChild(this.touch.root);
     this.applySettings();
@@ -628,18 +633,75 @@ export class App implements AppApi {
     this.world.render();
 
     if (this.mode === 'game' && this.game) {
-      const labels = this.hud.update(dt, this.game, this.world);
+      const tapMode = this.tapModeFor(this.game);
+      this.touch.setTapMode(tapMode);
+      const labels = this.hud.update(dt, this.game, this.world, {
+        active: tapMode !== 'off',
+        swingMode: this.touch.swingModeNow(),
+      });
       this.touch.setLabels(labels);
       // The pad goes away entirely while the CPU has the half-inning; leaving
       // dead buttons on screen is worse than having none.
       this.touch.setVisible(!this.paused && labels.situation !== 'idle');
     } else if (this.mode === 'derby' && this.derby) {
+      this.touch.setTapMode('off');
       this.touch.setLabels(DERBY_LABELS);
       this.touch.setVisible(!this.paused && this.derby.phase !== 'final');
     } else {
+      this.touch.setTapMode('off');
       this.touch.setVisible(false);
     }
   }
+
+  /**
+   * What a touch on the field means at this instant.
+   *
+   * The three live answers are the three moments a player is actually deciding
+   * something: setting up before the pitch, swinging at one, and choosing where
+   * to put one. Everything else — the ball in play, the CPU's half-inning, a
+   * dead ball — is `off`, and the stick gets the screen back, because a fielder
+   * still has to be run down and that is a job for a stick.
+   */
+  private tapModeFor(state: GameState): TapMode {
+    if (!this.settings.tapToHit || !this.touch.isEnabled() || this.paused) return 'off';
+    if (humanIsBatting(state)) {
+      if (state.phase === 'pitch') return 'swing';
+      // Before the pitch there is nothing to swing at, but there is still
+      // somewhere to stand: a tap sets the approach and leaves it there.
+      if (state.phase === 'preplay' || state.phase === 'windup') return 'aim';
+      return 'off';
+    }
+    // The mound only takes a touch while the pitcher is set. Once the ball is
+    // gone the left half goes back to being the stick, which is what steers it.
+    if (humanIsPitching(state) && state.phase === 'preplay') return 'pitch';
+    return 'off';
+  }
+
+  /**
+   * Turns a screen pixel into a spot on the plate, for the touch layer.
+   *
+   * The conversion is against the live camera rather than the drawn zone's
+   * rectangle, so it stays correct through a camera move, a field-of-view
+   * change, or the game having rotated itself a quarter turn — the projection
+   * is the same one the zone was drawn with, so the two cannot disagree.
+   */
+  private zoneAt = (clientX: number, clientY: number): ZonePoint | null => {
+    const r = this.canvas.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return null;
+    // A rotated game has its canvas turned a quarter turn under the finger, and
+    // getBoundingClientRect reports the axis-aligned box rather than the canvas
+    // — so the two axes swap and one of them runs backwards. Same inverse the
+    // touch layer uses for the pad.
+    const rotated = isAppRotated();
+    const sx = rotated ? (clientY - r.top) / r.height : (clientX - r.left) / r.width;
+    const sy = rotated ? (r.width - (clientX - r.left)) / r.width : (clientY - r.top) / r.height;
+    // Seeding the solve with the cursor's current spot means a tap near the last
+    // one converges on the first iteration.
+    const from = this.game
+      ? { x: this.game.batter.cx, y: this.game.batter.cy }
+      : { x: 0, y: 0.95 };
+    return screenToZone((x, y, z) => this.world.project(x, y, z), sx, sy, from);
+  };
 
   private drawDerby(dt: number): void {
     const d = this.derby!;

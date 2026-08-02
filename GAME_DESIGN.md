@@ -638,6 +638,48 @@ Opening defaults on a touch device are Relaxed tempo, Auto graphics and no line
 score. All three are ordinary settings, and a value the player has chosen
 themselves is never overwritten — including choosing them back.
 
+### The bat is your finger
+
+The button scheme asks a phone player to do two things at once with two thumbs:
+steer a cursor onto a spot with the left, and press a button at the right
+instant with the right. Both are approximations of one decision — *swing there,
+now* — and splitting that decision across two thumbs is the reason a stick and a
+button feel wrong on glass. The stick is a slow way of pointing and the button
+is a placeless way of timing.
+
+A touch is neither. It is a place and an instant, delivered together, which is
+exactly what a swing is made of. So on a phone the bat is your finger: touch the
+strike zone where you think the pitch is going to cross and the swing happens
+there. Nothing to steer, nothing to press.
+
+The contact model did not change to accommodate this and did not need to — it
+always took a position and a timing error, and a touch simply supplies both more
+directly than a stick and a button could. What changed is one thing in the
+engine: `InputFrame` gained an *absolute* aim alongside its relative one,
+because "further left, and keep going" and "here" are genuinely different
+statements and no amount of stick speed turns the first into the second.
+
+The precision is real and it is measured. Touch the spot the ball actually
+crosses and you strike it hard, every time. A hand's width off and it is in play
+but never hard. A forearm off and you foul it back. Forty centimetres off and
+you swing through it. That curve is a test, not a hope — if the scheme ever
+stops rewarding accuracy it becomes a button with extra steps, and the test
+fails as loudly for that as it would for the scheme not working at all.
+
+The four buttons keep their positions and lose their verbs. They stop *being*
+the swing and start choosing *which* swing — contact, power, bunt, take — and
+they stay where you put them, because a hitter has an approach and does not
+re-choose it every pitch. That also closes a trap: the button that used to mean
+SWING is the same button that means "send the runner home", and re-captioning it
+without disarming it would have left the second meaning live.
+
+The mound gets the same idea in the order a pitcher actually thinks in. Pick the
+pitch on the diamond — it arms and lights — then touch the spot you want it to
+cross, and that is where it goes. Choosing a shape and choosing a location stop
+being two presses separated by a cursor drag. Once the ball is gone the stick
+comes back, because steering a pitch in flight *is* a direction held over time,
+and that is the one job a stick does better than a finger.
+
 ### A target you cannot see is not a target
 
 Four circles at the points of a square cover about a third of it. The rest — the

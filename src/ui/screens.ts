@@ -88,6 +88,11 @@ export interface GameSettings {
   quality: 'auto' | 'high' | 'balanced' | 'performance';
   /** Stretch on the pitch clock. Copied into every GameSetup the app starts. */
   pitchTempo: PitchTempo;
+  /**
+   * Touch the strike zone to swing there, and to place a pitch. The phone
+   * control scheme; see the tap-mode notes in touch.ts and controls.ts.
+   */
+  tapToHit: boolean;
   /** Vibration feedback on the on-screen pad. Android only; see haptics.ts. */
   haptics: boolean;
   /** Mirrors the on-screen pad: stick right, buttons left. */
@@ -107,6 +112,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   muted: false,
   quality: 'high',
   pitchTempo: DEFAULT_PITCH_TEMPO,
+  tapToHit: true,
   haptics: true,
   lefty: false,
   lastDifficulty: 'pro',
@@ -954,6 +960,9 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
       label: 'Plate view',
       value: () => onOff(s.plateView),
       hint: 'The strike zone, contact cursor, pitch tracker and swing feedback at the plate. Turn off for a clean camera; the game plays identically either way.',
+      // Touch-to-swing aims at the drawn zone, so it cannot be the control
+      // scheme and invisible at the same time.
+      disabled: () => app.isTouch() && s.tapToHit,
       onLeft: toggle('plateView'),
       onRight: toggle('plateView'),
       onSelect: toggle('plateView'),
@@ -997,6 +1006,28 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
     },
     ...(app.isTouch()
       ? [
+          {
+            id: 'taptohit',
+            label: 'Touch to swing',
+            value: () => (s.tapToHit ? 'ON' : 'OFF'),
+            hint: 'Touch the strike zone where you think the ball will cross, and the swing happens there — one touch carries both the spot and the timing. The four buttons choose which swing it will be. On the mound, pick a pitch and touch the spot to throw it. Turn this off to steer a cursor with the stick and swing with a button instead.',
+            onSelect: () => {
+              s.tapToHit = !s.tapToHit;
+              // The zone is the target, so it has to be on screen to aim at.
+              if (s.tapToHit) s.plateView = true;
+              app.saveSettings();
+            },
+            onLeft: () => {
+              s.tapToHit = !s.tapToHit;
+              if (s.tapToHit) s.plateView = true;
+              app.saveSettings();
+            },
+            onRight: () => {
+              s.tapToHit = !s.tapToHit;
+              if (s.tapToHit) s.plateView = true;
+              app.saveSettings();
+            },
+          } as MenuRow,
           {
             id: 'lefty',
             label: 'Left-handed pad',

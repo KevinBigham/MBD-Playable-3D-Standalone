@@ -14,8 +14,10 @@ Complete and playable end to end.
 - Human control of batting, pitching, fielding, baserunning and the defensive
   alignment
 - Local two-player on one keyboard, or with two gamepads
-- Playable on a phone: an on-screen pad with situation-aware captions and
-  direction-based hit-testing, a landscape layout, a portrait fallback that can
+- Playable on a phone: you bat by touching the strike zone where you think the
+  ball will cross, and place a pitch the same way. Plus an on-screen pad with
+  situation-aware captions and direction-based hit-testing, a landscape layout,
+  a portrait fallback that can
   rotate the game instead of the phone, left-handed mirroring, vibration,
   automatic graphics, and installation to the home screen with offline play
 - A game in progress survives a locked phone, a backgrounded tab or a discarded
@@ -779,9 +781,100 @@ because a hashed URL can never mean two different things.
 
 ---
 
+## The bat is your finger
+
+The phone rounds up to here made the existing control scheme survive a
+touchscreen. This one replaces it at the plate, because the existing scheme was
+never the right one for glass — it was the keyboard's scheme with buttons drawn
+on.
+
+Swinging with a stick and a button asks two thumbs to co-operate on one
+decision: steer a cursor onto a spot, press a button at an instant. But *swing
+there, now* is a single thought, and a touch expresses it in a single act — a
+place and a moment, delivered together. That is exactly the pair a swing is made
+of. So on a phone you touch the strike zone where you think the ball is going to
+cross, and the swing happens there.
+
+### What it cost the engine
+
+One field. `InputFrame` gained an absolute aim next to its relative one, because
+"further left, and keep going" and "here" are different statements and no stick
+speed converts the first into the second. It clamps to the same limits the
+relative path uses, so pointing cannot reach anywhere steering could not, and it
+is cleared by `clearEdges` like every other edge — pointing is an act, not a
+held position. The contact model is untouched: it always took a position and a
+timing error, and a touch just supplies both more directly.
+
+### Screen back to plate
+
+There is no inverse-project to call — a pixel is a ray, not a point. But it is a
+point once the depth is fixed, and everything on the zone sits at the contact
+plane, so the map is smooth and invertible. `ui/zonepick.ts` inverts it by
+solving against `GameWorld.project` itself: three Newton steps, seeded from the
+cursor's current spot.
+
+Fitting a homography to the four drawn zone corners would also have worked, and
+would have been a second description of the camera that could quietly disagree
+with the real one. Solving against the projection cannot disagree with it,
+because it *is* it — and it follows a camera move or a field-of-view change for
+free. Measured against the live camera at 844×390, the round trip is exact:
+**0.0 mm across the whole cursor range**, including the corners.
+
+### The precision curve
+
+The claim is only worth making if missing costs you, so the test is the whole
+curve rather than a pass mark, measured over eight seeds:
+
+| Off the crossing point | Result |
+|---|---|
+| 0 | solid or barrelled, 8/8 |
+| 12 cm | in play every time, hard never |
+| 24 cm | fouled off, 8/8 |
+| 40 cm | swung through it, 8/8 |
+| 30 cm sideways | mostly missed — the zone is narrower than it is tall |
+
+If the scheme ever stops rewarding accuracy it has become a button with extra
+steps, and that fails as loudly as it not working at all.
+
+### The buttons keep their positions and lose their verbs
+
+They stop *being* the swing and start choosing which swing: `CONTACT`, `POWER`,
+`BUNT`, `TAKE`, sticky, with the armed one lit. Sticky because a hitter has an
+approach and does not re-pick it every pitch.
+
+That also closed a trap rather than opening one. The button that said SWING is
+the same button that means "send the runner home" — re-captioning it without
+disarming it would have left the second meaning live under the new label, which
+is precisely the shape of the steal bug found two rounds ago. In tap mode the
+press is consumed by the pad and never reaches the engine at all.
+
+### The mound, in the order a pitcher thinks
+
+Pick the pitch on the diamond — it arms and lights — then touch the spot you
+want it to cross. The diamond no longer throws; the touch does, and it sets the
+target in the same simulation step that releases the ball, so a pitcher can
+never throw to the spot he was looking at a moment ago. Verified in the browser:
+arming the changeup left the phase in `preplay`, and touching a spot threw a
+changeup to it with 0 mm of error.
+
+Once the ball is gone the stick comes back. Steering a pitch in flight genuinely
+*is* a direction held over time, and that is the one job a stick does better
+than a finger.
+
+### The stick gets out of the way
+
+A floating stick that owns the left half of the screen would swallow every touch
+on the left half of the zone. While the field is the control the stick zone
+stops listening and the stick is hidden — it has nothing to steer at the plate
+anyway. Verified by hit-testing: with tap mode live, the open field returns the
+tap surface everywhere including the far left, while the diamond, the aux
+buttons and the pause key still win where they sit.
+
+---
+
 ## Tests performed
 
-- **Automated:** 226 Vitest tests across 21 files — RNG determinism, ball-flight
+- **Automated:** 235 Vitest tests across 22 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,

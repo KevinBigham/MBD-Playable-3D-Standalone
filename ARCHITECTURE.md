@@ -163,6 +163,26 @@ buttons themselves are `pointer-events: none`; they are labels. The border is on
 three sides only: below the diamond is the aux row, and slop that reaches over
 `DIVE` or `SWITCH` would not widen a target, it would steal one.
 
+**`InputFrame.aimAbsolute` carries a place rather than a direction.** `moveX`/
+`moveY` are the only thing a stick can say: a direction, integrated over time. A
+finger can say something a stick cannot — *there* — and the phone control scheme
+is built entirely on that difference. The engine clamps an absolute aim to the
+same limits the relative path uses, so pointing cannot reach anywhere steering
+could not, and `aimAbsolute` is cleared by `clearEdges` like every other edge:
+pointing is a single act, not a held position. Read by the hitter's cursor and
+the pitcher's target, false everywhere else.
+
+The screen-to-plate direction is `ui/zonepick.ts`, and it is deliberately *not*
+a second description of the camera. Everything on the zone lives at one depth,
+so the map from a plate coordinate to a pixel is smooth and invertible — and it
+is inverted by solving against `GameWorld.project` itself, three Newton steps
+from the cursor's current spot. Fitting a homography to the drawn zone corners
+would work too, and would be a second model that could drift from the real
+camera; this one cannot, because it *is* the real camera. It follows a camera
+move, a field-of-view change or a replaced projection for free. Measured against
+the live camera at handset size it round-trips to 0.0 mm across the whole cursor
+range.
+
 **`InputFrame.pressAge` carries measured input lag.** Input is sampled once a
 frame, so a press is discovered up to a frame after it happened — 17 ms of
 random, always-late error on a 60 Hz phone, which is a third of a swing

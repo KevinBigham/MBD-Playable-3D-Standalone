@@ -2,6 +2,21 @@ import type { ActionId } from './input';
 import type { ControlLabels } from './controls';
 import { type Buzz, getHaptics } from './haptics';
 import { isAppRotated } from './device';
+import type { ZonePoint } from './zonepick';
+
+export type TapMode = 'off' | 'aim' | 'swing' | 'pitch';
+
+/** A finger landing on the strike zone: where, when, and what it meant. */
+export interface ZoneTap {
+  /** Metres from the middle of the plate; positive toward first base. */
+  x: number;
+  /** Metres above the ground. */
+  y: number;
+  /** Event timestamp, on the clock rAF uses. See InputFrame.pressAge. */
+  at: number;
+  /** What the tap is asking for, from the mode it was made in. */
+  kind: 'aim' | 'contact' | 'power' | 'pitch';
+}
 
 /**
  * ON-SCREEN CONTROLS.
@@ -29,6 +44,18 @@ import { isAppRotated } from './device';
 const STICK_RADIUS = 52;
 /** Below this the stick reads as centred, so a resting thumb does not drift. */
 const STICK_DEADZONE = 0.16;
+
+/**
+ * The diamond read as pitch slots, matching `InputFrame.pitchSlot` in the
+ * engine and the repertoire order on the HUD chips. One table, both directions.
+ */
+const DIAMOND_SLOT: Partial<Record<ActionId, number>> = {
+  diamondLeft: 0,
+  diamondDown: 1,
+  diamondRight: 2,
+  diamondUp: 3,
+};
+const SLOT_DIAMOND: ActionId[] = ['diamondLeft', 'diamondDown', 'diamondRight', 'diamondUp'];
 
 interface StickTouch {
   id: number;
@@ -58,6 +85,25 @@ export class TouchControls {
   private padEl: HTMLDivElement;
   private verbEl: HTMLDivElement;
   private diamondEl: HTMLDivElement;
+  private zoneEl: HTMLDivElement;
+  private rippleEl: HTMLElement;
+
+  /**
+   * What a touch on the field means right now.
+   *
+   *   off       nothing; the field is scenery and the stick owns the left half
+   *   aim       point at the plate, but there is nothing to swing at yet
+   *   swing     point at the plate and swing there
+   *   pitch     point at the plate and throw the armed pitch there
+   */
+  private tapMode: TapMode = 'off';
+  /** Converts a screen pixel into a spot on the plate; supplied by the app. */
+  private zoneMapper: ((clientX: number, clientY: number) => ZonePoint | null) | null = null;
+  private zoneTap: ZoneTap | null = null;
+  /** Which swing a tap performs. Sticky, because a hitter has an approach. */
+  private swingMode: 'contact' | 'power' = 'contact';
+  /** Which pitch a tap throws, as an index into the repertoire. */
+  private armedSlot = 0;
 
   /** Latched modifier: armed by a tap, spent by the next action press. */
   private modifierLatched = false;
@@ -70,6 +116,7 @@ export class TouchControls {
     this.root = document.createElement('div');
     this.root.id = 'touch';
     this.root.innerHTML = `
+      <div class="t-zone"><i class="t-ripple"></i></div>
       <div class="t-stickzone">
         <div class="t-stick"><i class="t-nub"></i></div>
         <div class="t-stickhint"></div>
@@ -97,6 +144,10 @@ export class TouchControls {
     this.padEl = this.root.querySelector('.t-pad') as HTMLDivElement;
     this.verbEl = this.root.querySelector('.t-verb') as HTMLDivElement;
     this.diamondEl = this.root.querySelector('.t-diamond') as HTMLDivElement;
+    this.zoneEl = this.root.querySelector('.t-zone') as HTMLDivElement;
+    this.rippleEl = this.root.querySelector('.t-ripple') as HTMLElement;
+    this.zoneEl.addEventListener('pointerdown', this.onZoneDown);
+    this.zoneEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
     for (const el of this.root.querySelectorAll<HTMLButtonElement>('.t-btn')) {
       const action = el.dataset.a as ActionId;
@@ -167,10 +218,110 @@ export class TouchControls {
     document.body.classList.toggle('lefty', on);
   }
 
+  // ------------------------------------------------------------ tap the zone
+
+  /** Supplies the screen-pixel-to-plate conversion. See zonepick.ts. */
+  setZoneMapper(fn: (clientX: number, clientY: number) => ZonePoint | null): void {
+    this.zoneMapper = fn;
+  }
+
+  /**
+   * Turns the field itself into the control, and takes the stick away while it
+   * is. Both halves of that matter: a floating stick that owns the left half of
+   * the screen would swallow every tap on the left half of the zone, and the
+   * stick has nothing to steer at the plate anyway.
+   */
+  setTapMode(mode: TapMode): void {
+    if (this.tapMode === mode) return;
+    this.tapMode = mode;
+    this.root.classList.toggle('tapping', mode !== 'off');
+    this.root.dataset.tap = mode;
+    if (mode === 'off') this.zoneTap = null;
+    this.paintArmed();
+  }
+
+  tapModeNow(): TapMode {
+    return this.tapMode;
+  }
+
+  /** Which swing a tap will be. Shown on the pad, so it is never a guess. */
+  swingModeNow(): 'contact' | 'power' {
+    return this.swingMode;
+  }
+
+  /** Which pitch a tap will throw, as a repertoire index. */
+  armedSlotNow(): number {
+    return this.armedSlot;
+  }
+
+  /** Lights whichever diamond button a tap is currently going to act as. */
+  private paintArmed(): void {
+    const armed =
+      this.tapMode === 'aim' || this.tapMode === 'swing'
+        ? this.swingMode === 'power'
+          ? 'diamondRight'
+          : 'diamondDown'
+        : this.tapMode === 'pitch'
+          ? SLOT_DIAMOND[this.armedSlot]
+          : null;
+    for (const [action, el] of this.buttons) {
+      if (action === 'modifier') continue;
+      el.classList.toggle('armed', action === armed);
+    }
+  }
+
+  /** The tap made this frame, if any. Cleared at the end of the frame. */
+  takeZoneTap(): ZoneTap | null {
+    return this.zoneTap;
+  }
+
+  private onZoneDown = (e: PointerEvent): void => {
+    if (this.tapMode === 'off') return;
+    e.preventDefault();
+    this.markAvailable();
+    const spot = this.zoneMapper?.(e.clientX, e.clientY);
+    // No mapper, or a camera that is not looking at the plate. Doing nothing is
+    // the only honest response — there is no sensible place to put a swing.
+    if (!spot) return;
+    this.zoneTap = {
+      x: spot.x,
+      y: spot.y,
+      at: e.timeStamp,
+      kind:
+        this.tapMode === 'pitch'
+          ? 'pitch'
+          : this.tapMode === 'swing'
+            ? this.swingMode
+            : 'aim',
+    };
+    this.showRipple(e.clientX, e.clientY, this.zoneTap.kind);
+    this.feedback(this.tapMode === 'aim' ? 'modifier' : 'press');
+  };
+
+  /**
+   * A mark where the finger landed. On a phone the thumb covers the spot it
+   * just chose, so the confirmation has to be bigger than the thumb and outlive
+   * it — otherwise the only feedback for the most important input in the game
+   * is a cursor you cannot see under your own hand.
+   */
+  private showRipple(clientX: number, clientY: number, kind: ZoneTap['kind']): void {
+    const p = this.toGamePoint(clientX, clientY);
+    const r = this.rippleEl;
+    r.dataset.kind = kind;
+    r.style.left = `${p.x}px`;
+    r.style.top = `${p.y}px`;
+    // Restart the animation: without the reflow, a second tap inside the first
+    // ripple's lifetime does not replay it and reads as a press that was lost.
+    r.classList.remove('go');
+    void r.offsetWidth;
+    r.classList.add('go');
+  }
+
   private reset(): void {
     this.held.clear();
     this.edges.clear();
     this.edgeAt.clear();
+    this.zoneTap = null;
     this.pointerButton.clear();
     this.stick = null;
     this.modifierLatched = false;
@@ -237,6 +388,28 @@ export class TouchControls {
     at: number,
   ): void {
     this.pointerButton.set(pointerId, action);
+
+    // With the field itself carrying the swing and the pitch, the diamond stops
+    // performing them and starts *choosing* which one a tap will be. The press
+    // is consumed here and never reaches the engine, which matters: the button
+    // that used to mean SWING also means "send the runner home", and a caption
+    // change alone would leave that second meaning armed.
+    if (this.tapMode === 'aim' || this.tapMode === 'swing') {
+      if (action === 'diamondDown' || action === 'diamondRight') {
+        this.swingMode = action === 'diamondRight' ? 'power' : 'contact';
+        this.paintArmed();
+        this.feedback('modifier');
+        return;
+      }
+    } else if (this.tapMode === 'pitch') {
+      const slot = DIAMOND_SLOT[action];
+      if (slot !== undefined) {
+        this.armedSlot = slot;
+        this.paintArmed();
+        this.feedback('modifier');
+        return;
+      }
+    }
 
     if (action === 'modifier') {
       // A latch, not a hold. Tapping it again puts it away.
@@ -348,6 +521,7 @@ export class TouchControls {
   endFrame(): void {
     this.edges.clear();
     this.edgeAt.clear();
+    this.zoneTap = null;
     if (this.spendLatch) {
       this.spendLatch = false;
       this.modifierLatched = false;
@@ -406,6 +580,13 @@ export class TouchControls {
       this.modifierLatched = false;
       this.buttons.get('modifier')?.classList.remove('latched');
     }
+
+    // A pitcher with three pitches must not open with the fourth one armed
+    // because the last pitcher had four.
+    if (this.buttons.get(SLOT_DIAMOND[this.armedSlot])?.classList.contains('empty')) {
+      this.armedSlot = 0;
+    }
+    this.paintArmed();
   }
 }
 

@@ -13,6 +13,28 @@ export interface InputFrame {
   /** -1..1 depth for fielders and runners. Positive is toward centre field. */
   moveZ: number;
 
+  /**
+   * PUT THE CURSOR HERE, rather than nudge it from where it was.
+   *
+   * `moveX`/`moveY` describe a stick or an arrow key: a direction, integrated
+   * over time. That is the only thing a stick can say. A finger on a screen can
+   * say something a stick cannot — *there* — and on a phone that is the whole
+   * game: you touch the spot the ball is going to cross and the swing happens
+   * at that spot. Steering a cursor across a zone with a thumb while a ball is
+   * in the air is a worse version of a job the finger already did by pointing.
+   *
+   * `aimX`/`aimY` are in the same units as everything else at the plate: metres
+   * from the centre of the plate, and metres above the ground. The engine clamps
+   * them to the same limits the relative path uses, so a front end cannot reach
+   * anywhere a stick could not.
+   *
+   * Read by the hitter (contact cursor) and by the pitcher (target). False for
+   * the CPU, for tests, and for any front end that only has a stick.
+   */
+  aimAbsolute: boolean;
+  aimX: number;
+  aimY: number;
+
   swing: boolean;
   power: boolean;
   bunt: boolean;
@@ -59,6 +81,9 @@ export function emptyInput(): InputFrame {
     moveX: 0,
     moveY: 0,
     moveZ: 0,
+    aimAbsolute: false,
+    aimX: 0,
+    aimY: 0,
     swing: false,
     power: false,
     bunt: false,
@@ -76,6 +101,10 @@ export function emptyInput(): InputFrame {
 }
 
 export function clearEdges(f: InputFrame): void {
+  // An absolute aim is a single act of pointing, not a held position: it must
+  // land on exactly one simulation step, like every other edge here. The
+  // coordinates are left alone because nothing reads them without the flag.
+  f.aimAbsolute = false;
   f.swing = false;
   f.power = false;
   f.bunt = false;

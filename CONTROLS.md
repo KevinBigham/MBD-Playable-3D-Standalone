@@ -54,10 +54,45 @@ turn it on, and a laptop with a touchscreen keeps its keyboard until you
 actually touch the glass. It drives Player 1 only; two thumbs on one phone is
 not a two-player control scheme.
 
+### Touch to swing
+
+**This is how you bat on a phone.** Touch the strike zone where you think the
+ball is going to cross, and the swing happens there. One touch carries both
+halves of a swing — the spot and the moment — because that is what a touch is:
+a place and an instant. There is no cursor to steer and no button to press.
+
+Touch anywhere on the field, not just inside the drawn rectangle: chasing a
+pitch low and away is a decision a hitter is allowed to make, and it is
+punished by the same contact model as everything else. The zone is drawn as the
+reference, not as a fence.
+
+The four buttons stop swinging and start deciding *which* swing:
+
+| Button | What it does |
+|---|---|
+| `CONTACT` | The next touch is a contact swing. Lit when armed. |
+| `POWER` | The next touch is a power swing — bigger reward, smaller sweet spot. |
+| `BUNT` | Squares round. Reads `BUNTING` while it is on. |
+| `TAKE` | Checks the swing, if you get it up in time. |
+
+They are sticky, because a hitter has an approach and does not re-choose it
+every pitch. Between pitches a touch still counts — it sets where you are
+standing, and leaves the cursor there.
+
+**On the mound it is the same idea in the same order a pitcher thinks in:**
+pick the pitch on the diamond (it arms and lights up), then touch the spot you
+want it to cross. The diamond no longer throws; the touch does. Once the ball is
+gone the stick comes back to steer it.
+
+Turn it off under **Settings → Touch to swing** and the stick-and-button scheme
+below returns.
+
+### Every control
+
 | Control | Where it is | What it is |
 |---|---|---|
-| Stick | Anywhere in the left half | **Floating.** There is no circle to hit — put a thumb down and that is where the stick is. Drag past the edge and it follows, so a long swipe never runs out of travel. |
-| The four buttons | Bottom right, laid out as the base diamond | Captioned with what they do *right now* — `SWING`, or `2ND`, or `SL`. A caption you cannot use is not drawn and cannot be pressed. **The whole diamond is one control**, not four: a press anywhere in the square — the gap in the middle, a corner, or a little outside the edge — takes the button in that direction from the centre. The circles are labels; the target is the square. |
+| Stick | Anywhere in the left half | **Floating.** There is no circle to hit — put a thumb down and that is where the stick is. Drag past the edge and it follows, so a long swipe never runs out of travel. Hidden at the plate while touch-to-swing is on, because there is nothing left for it to steer. |
+| The four buttons | Bottom right, laid out as the base diamond | Captioned with what they do *right now* — `CONTACT`, or `2ND`, or `SL`. A caption you cannot use is not drawn and cannot be pressed. **The whole diamond is one control**, not four: a press anywhere in the square — the gap in the middle, a corner, or a little outside the edge — takes the button in that direction from the centre. The circles are labels; the target is the square. |
 | `DEFENCE` / `STEAL` / `BACK` | Below the diamond | The modifier. It **latches** rather than being held: tap it, it lights up, the next press spends it. Tap it again to put it away. |
 | `NORMAL` / `ALL` / `DIVE` | Below the diamond | Special, whatever it means in the situation. |
 | `AROUND` / `SWITCH` | Below the diamond | Switch-fielder. |
@@ -110,9 +145,13 @@ on undocumented behaviour of a form control, so on an iPhone the row reads
 
 ### Opening defaults on a touch device
 
-All changeable in **Settings**: pitch tempo **Relaxed**, graphics **Auto**, line
-score **off**. A setting you have changed yourself is never overwritten,
-including changing it back.
+All changeable in **Settings**: touch to swing **on**, pitch tempo **Relaxed**,
+graphics **Auto**, line score **off**. A setting you have changed yourself is
+never overwritten, including changing it back.
+
+Touch-to-swing aims at the drawn strike zone, so it keeps **Plate view** on —
+the zone cannot be the control and invisible at the same time. Turn touch-to-
+swing off and the plate view goes back to being optional.
 
 ## Gamepad (either player)
 
@@ -138,6 +177,10 @@ drift and small inputs still register.
 ## What the buttons do, by situation
 
 ### Batting
+
+**On a phone this table describes what the four buttons *choose*, not what they
+do** — the swing itself is a touch on the strike zone. See "Touch to swing"
+above. The effects below are identical either way; only the gesture differs.
 
 | Input | Effect |
 |---|---|
