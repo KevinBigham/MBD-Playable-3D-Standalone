@@ -34,6 +34,50 @@ npm run dev
 
 Then open the URL Vite prints (by default `http://localhost:5173`).
 
+## Playing it on a phone
+
+MOONSHOT NINE is a phone game that happens to run on a desktop, and the fastest
+way to get it onto a handset is over your own wifi:
+
+```bash
+npm run phone
+```
+
+That builds the production bundle and serves it on every network interface.
+Vite prints two addresses; the **Network** one — something like
+`http://192.168.1.194:4173` — is the one to type into the phone's browser, with
+the phone on the same wifi as the computer. Nothing is installed and nothing
+leaves the house.
+
+Two things do not work over that address, both because they require HTTPS and
+not because of anything the game does: the **service worker**, so there is no
+offline play, and the **wake lock**, so the screen will dim on its own. Both
+come back on a real https origin.
+
+### A permanent URL
+
+`.github/workflows/deploy.yml` publishes `dist/` to GitHub Pages on every push
+to `main`, gated behind the test suite. It does nothing until Pages is switched
+on for the repository:
+
+```bash
+gh api -X POST repos/:owner/:repo/pages -f build_type=workflow
+```
+
+or **Settings → Pages → Source → GitHub Actions** on github.com. After that the
+game lives at `https://<user>.github.io/<repo>/`, which is https, which means
+offline play and the wake lock work — and the site is public, so switch it on
+deliberately rather than by accident.
+
+### On the home screen
+
+Installed, the game gets the whole screen with no address bar taking an inch off
+the field, its own icon and place in the app switcher, and — because of the
+service worker — it runs with the wifi off. The main menu offers **Add to Home
+Screen** when the device can do it: a one-tap system dialog on Android, and the
+Share-sheet instructions on iOS, which gives a web page no way to ask for
+itself. It is offered once and never nags.
+
 ## Controls
 
 The four action buttons are laid out like the bases, and always mean the base
@@ -219,7 +263,7 @@ measure frame rate and memory, first download the browser Playwright drives
 (once per machine):
 
 ```bash
-npx playwright install chromium
+npx playwright install chromium webkit
 ```
 
 then:
@@ -229,9 +273,22 @@ npm run build
 npm run preview &
 npx tsx scripts/capture.ts     # screenshots + gameplay recording
 npx tsx scripts/perf.ts        # frame rate, heap and GPU resource growth
+npm run test:phone             # the phone audit, in WebKit, with real touches
+npm run icons                  # re-rasterise the PNG icons from the SVGs
 ```
 
-Neither is needed to play the game.
+None of them is needed to play the game.
+
+`npm run test:phone` is the one worth running after any change to the touch
+layer, the layout or the page shell. It drives the production build in
+**WebKit** — Safari's engine, not Chromium — at an iPhone's size and pixel
+density, with a touchscreen instead of a mouse, and fails the run if the page
+can be zoomed or scrolled, if a control is off-screen or under 44×44, if any
+part of the strike zone is behind a button, or if touching the crossing point
+does not produce a hit. It exists because Chromium is a good stand-in for
+Android and a poor one for the iPhone: it will happily report that
+`user-scalable=no` stopped a pinch zoom, which on iOS Safari it has not done
+since iOS 10.
 
 ## Known limitations
 

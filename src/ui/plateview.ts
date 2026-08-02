@@ -88,8 +88,15 @@ export class PlateView {
   private aimDot: SVGCircleElement;
   private cursor: SVGEllipseElement;
   private cursorCross: SVGPathElement;
+  /** The gap between where the bat was and where the ball was, after a swing. */
+  private miss: SVGGElement;
+  private missLine: SVGLineElement;
+  private missBat: SVGCircleElement;
+  private missBall: SVGCircleElement;
 
   private verdict: HTMLDivElement;
+  private coachEl: HTMLDivElement;
+  private coachText: string | null = null;
   private enabled = true;
 
   constructor() {
@@ -123,6 +130,14 @@ export class PlateView {
     this.cursor = el('ellipse', { class: 'pv-cursor' });
     this.cursorCross = el('path', { class: 'pv-cursor-cross' });
 
+    this.miss = el('g', { class: 'pv-miss' });
+    this.missLine = el('line', { class: 'pv-miss-line' });
+    this.missBat = el('circle', { class: 'pv-miss-bat' });
+    this.missBall = el('circle', { class: 'pv-miss-ball' });
+    this.miss.appendChild(this.missLine);
+    this.miss.appendChild(this.missBat);
+    this.miss.appendChild(this.missBall);
+
     for (const node of [
       this.zoneShadow,
       this.zoneFill,
@@ -150,6 +165,9 @@ export class PlateView {
     this.svg.appendChild(this.aim);
     this.svg.appendChild(this.cursor);
     this.svg.appendChild(this.cursorCross);
+    // Last, so the answer to the swing that just happened sits over everything
+    // that led up to it.
+    this.svg.appendChild(this.miss);
 
     this.verdict = document.createElement('div');
     this.verdict.className = 'pv-verdict';
@@ -165,6 +183,19 @@ export class PlateView {
         <div class="pv-ends"><span>EARLY</span><span>ON TIME</span><span>LATE</span></div>
       </div>`;
     this.root.appendChild(this.verdict);
+
+    this.coachEl = document.createElement('div');
+    this.coachEl.className = 'pv-coach';
+    this.root.appendChild(this.coachEl);
+  }
+
+  /**
+   * What to say on the zone, or null for nothing. Set by the app, which owns
+   * the question of whether this player still needs telling; the plate view
+   * only owns the question of where the zone is. See Coach.
+   */
+  setCoach(text: string | null): void {
+    this.coachText = text;
   }
 
   setEnabled(v: boolean): void {
@@ -214,7 +245,9 @@ export class PlateView {
     this.drawTracker(state, p, zoneH);
     this.drawLiveMarkers(state, p, p3, batting, pitching, zoneH);
     this.drawIntent(state, p, batting, pitching, batter, zoneH);
+    this.drawMiss(state, p, batting, zoneH);
     this.drawVerdict(state, p, z, batting, safeBottom);
+    this.drawCoach(state, p, z, safeBottom);
   }
 
   // -------------------------------------------------------------- the zone
@@ -464,6 +497,126 @@ export class PlateView {
       arc.setAttribute('d', path.join(''));
       arc.setAttribute('stroke', cssColor(PITCHES[type].color));
     }
+  }
+
+  // ------------------------------------------------------------- the coach
+
+  /**
+   * The instruction, sitting on the zone itself.
+   *
+   * Under the zone, not over it, for two reasons. It must not cover the ball it
+   * is telling you to watch, and above the zone is the middle of the screen,
+   * which is where the game shouts TOP 1ST and the club's name at the start of
+   * every half-inning — a hint that has to fight a banner for the same pixels
+   * loses, and looks broken while it is losing.
+   *
+   * Under the zone is also exactly where the verdict panel goes, which is
+   * deliberate rather than a collision: they are two answers to the same
+   * question and they are never both worth having. One place on the screen
+   * always means "about your swing".
+   */
+  private drawCoach(
+    state: GameState,
+    p: (x: number, y: number) => Pt,
+    z: ReturnType<typeof zoneBounds>,
+    safeBottom: number,
+  ): void {
+    const busy = !!state.lastSwing && state.lastSwing.t > 0;
+    if (!this.coachText || busy) {
+      this.coachEl.style.opacity = '0';
+      return;
+    }
+    const anchor = p(0, z.bottom);
+    const h = this.coachEl.offsetHeight || 26;
+    // The same clamp the verdict uses, including its floor. Without the floor a
+    // short viewport — a phone held sideways is 320 points tall — pulls the box
+    // up past the zone entirely and lands it on the pitcher, which is both wrong
+    // and the exact thing moving it below the zone was meant to avoid.
+    const top = Math.min(anchor.y + 20, Math.max(anchor.y + 4, safeBottom - h - 8));
+    this.coachEl.textContent = this.coachText;
+    this.coachEl.style.left = `${anchor.x.toFixed(0)}px`;
+    this.coachEl.style.top = `${top.toFixed(0)}px`;
+    this.coachEl.style.opacity = '1';
+  }
+
+  // ------------------------------------------------------------- the gap
+
+  /**
+   * WHERE YOU SWUNG, AND WHERE IT WAS.
+   *
+   * The verdict panel already says *how* a swing was wrong — early, under, over.
+   * That is the right answer for a control scheme where you steer a cursor and
+   * press a button, because the two errors are made separately and you fix them
+   * separately.
+   *
+   * Touching the zone collapses them into one act. The player made a single
+   * decision — that spot, now — so the useful feedback is a single picture:
+   * here is the spot you picked, here is the spot the ball went through, and
+   * that is the distance between them. Six inches high reads instantly as six
+   * inches high; "UNDER" has to be translated first.
+   *
+   * Drawn for whatever the swing did, not only for misses — on a barrel the
+   * ring lands on the ball and the line vanishes, which is a better picture of
+   * "yes, exactly there" than any word for it. In practice a ball put in play
+   * takes the camera to the field and this goes with it, so what it mostly ends
+   * up explaining is the strikes, which is the right bias: nobody needs telling
+   * why the double was a double.
+   */
+  private drawMiss(
+    state: GameState,
+    p: (x: number, y: number) => Pt,
+    batting: boolean,
+    zoneH: number,
+  ): void {
+    const s = state.lastSwing;
+    // The finite check is not paranoia about the engine, which always writes all
+    // four. It is about a game resumed from a snapshot taken by an older build,
+    // where `lastSwing` exists and these four fields do not — the alternative to
+    // skipping the drawing is an SVG full of the string "NaN" for a second and a
+    // half, and throwing away somebody's saved game over a decoration would be
+    // the worse trade.
+    const known =
+      !!s &&
+      Number.isFinite(s.atX) &&
+      Number.isFinite(s.atY) &&
+      Number.isFinite(s.ballX) &&
+      Number.isFinite(s.ballY);
+    if (!batting || !s || !known || s.t <= 0 || s.kind === 'none') {
+      this.miss.style.display = 'none';
+      return;
+    }
+    this.miss.style.display = '';
+    // The first third of its life at full strength, then out — long enough to
+    // read at a glance, gone before the next pitch is on the way.
+    this.miss.style.opacity = String(Math.min(1, s.t * 2.4));
+
+    const bat = p(s.atX, s.atY);
+    const ball = p(s.ballX, s.ballY);
+    // Sized off the drawn zone like everything else here, so it stays
+    // proportionate on a phone and on a television.
+    const r = Math.max(3, zoneH * 0.055);
+    this.missBat.setAttribute('cx', bat.x.toFixed(1));
+    this.missBat.setAttribute('cy', bat.y.toFixed(1));
+    this.missBat.setAttribute('r', (r * 1.35).toFixed(1));
+    this.missBall.setAttribute('cx', ball.x.toFixed(1));
+    this.missBall.setAttribute('cy', ball.y.toFixed(1));
+    this.missBall.setAttribute('r', r.toFixed(1));
+
+    // The line is the whole point when there is a gap, and noise when there is
+    // not — two marks on top of each other joined by a stub reads as a smudge.
+    const gap = Math.hypot(ball.x - bat.x, ball.y - bat.y);
+    if (gap > r * 1.6) {
+      this.missLine.style.display = '';
+      this.missLine.setAttribute('x1', bat.x.toFixed(1));
+      this.missLine.setAttribute('y1', bat.y.toFixed(1));
+      this.missLine.setAttribute('x2', ball.x.toFixed(1));
+      this.missLine.setAttribute('y2', ball.y.toFixed(1));
+    } else {
+      this.missLine.style.display = 'none';
+    }
+
+    const contact = s.grade !== 'miss' && s.grade !== 'foul' && s.grade !== 'foultip';
+    this.miss.dataset.tone = contact ? 'good' : s.grade === 'miss' ? 'bad' : 'warn';
   }
 
   // ----------------------------------------------------------- the verdict

@@ -54,6 +54,13 @@ turn it on, and a laptop with a touchscreen keeps its keyboard until you
 actually touch the glass. It drives Player 1 only; two thumbs on one phone is
 not a two-player control scheme.
 
+The page itself does not move. Double-tap-to-zoom and pinch-to-zoom are both
+refused, because the game is already sized to the viewport to the pixel and
+every control is anchored to an edge of it — a zoomed game is not a bigger game,
+it is a game with its buttons off the side of the screen and no way to scroll to
+them. The nearest accidental pinch is two thumbs resting on the glass while you
+wait on a pitch, which is the normal way to hold a phone.
+
 ### Touch to swing
 
 **This is how you bat on a phone.** Touch the strike zone where you think the
@@ -86,6 +93,28 @@ gone the stick comes back to steer it.
 
 Turn it off under **Settings → Touch to swing** and the stick-and-button scheme
 below returns.
+
+### Learning it, and being left alone afterwards
+
+Nothing on a phone screen says the field is the input, so for a player's first
+three swings the game says it: **TOUCH WHERE IT WILL CROSS**, printed under the
+strike zone. It is dismissed by doing it rather than by reading it, the count is
+kept forever rather than per game, and batting and pitching are counted apart —
+somebody with a hundred swings behind them may still never have stood on a
+mound. After three it is gone and does not come back.
+
+### Where you swung, and where it was
+
+Every swing leaves two marks on the zone for about a second and a half: a
+**hollow ring** where your finger was and a **filled dot** where the ball
+actually crossed, joined by a dashed line when there is a gap. Green means
+contact, gold a foul, red a swing through it — but the shapes differ too, so it
+reads with the colour taken away.
+
+It is there because "UNDER" is a word you have to translate and *six inches
+high* is a picture you do not. A ball put in play takes the camera to the field
+and the marks go with it, so what this mostly ends up explaining is the strikes,
+which is the right bias — nobody needs telling why the double was a double.
 
 ### Every control
 

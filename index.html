@@ -25,6 +25,15 @@
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192" />
+    <!--
+      iOS ignores an SVG apple-touch-icon. Without this line, Add to Home Screen
+      does not fall back to the favicon — it screenshots the page, so the game
+      lands on the home screen wearing a picture of its own loading card. The
+      PNG is generated from icon.svg by scripts/icons.ts; regenerate rather than
+      edit it.
+    -->
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180" />
     <title>MOONSHOT NINE</title>
   </head>
   <body>

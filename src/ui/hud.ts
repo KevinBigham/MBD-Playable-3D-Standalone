@@ -80,6 +80,11 @@ export class Hud {
     this.lineBox.style.display = v ? '' : 'none';
   }
 
+  /** What the zone should say to a player still learning the touch scheme. */
+  setCoach(text: string | null): void {
+    this.plate.setCoach(text);
+  }
+
   /** Turns the whole strike-zone overlay off for players who want a clean view. */
   setPlateViewEnabled(v: boolean): void {
     this.plate.setEnabled(v);

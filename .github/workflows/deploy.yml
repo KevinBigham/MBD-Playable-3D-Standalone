@@ -1,0 +1,70 @@
+# Publishes MOONSHOT NINE to GitHub Pages.
+#
+# The game has no server, no account and no telemetry — it is a folder of static
+# files — so a static host is not a compromise, it is the correct shape. Pages
+# is free, needs no card on file, and gives the one thing a phone actually
+# requires: an HTTPS origin. That matters beyond the padlock. A service worker
+# will not register over plain http, and neither will the wake lock, so the
+# offline play and the screen-stays-on that were built for phones only exist on
+# a site served this way.
+#
+# Nothing here deploys until Pages has been switched on for the repository with
+# its source set to GitHub Actions; until then this workflow builds, tests and
+# stops. See README, "Playing it on a phone".
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # So a deploy can be re-run without an empty commit to push at it.
+  workflow_dispatch:
+
+# The least the deploy needs and nothing more: read the code, write the site,
+# and mint the OIDC token Pages uses instead of a stored secret.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, newest wins. Two pushes in a minute should not race each
+# other onto the same URL.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # The suite runs before the build, not after, and a failure stops the
+      # deploy. The alternative is a red main branch that is also live.
+      - name: Test
+        run: npm test
+
+      - name: Typecheck and build
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

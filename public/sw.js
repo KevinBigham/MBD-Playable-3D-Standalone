@@ -23,10 +23,24 @@
  * with their cache generation.
  */
 
-const CACHE = 'moonshot9-v1';
+const CACHE = 'moonshot9-v2';
 
 /** The minimum needed to boot to a playable state with no network at all. */
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-maskable.svg'];
+const SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon.svg',
+  './icon-maskable.svg',
+  // The raster icons matter offline for a different reason than the others: an
+  // installed copy that cannot fetch its own icon is a home screen tile with a
+  // hole in it, and the home screen is the only part of an installed game a
+  // person sees before deciding to open it.
+  './apple-touch-icon.png',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

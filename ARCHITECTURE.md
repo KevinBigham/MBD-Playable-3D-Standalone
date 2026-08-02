@@ -201,6 +201,8 @@ Four modules exist only because a phone is not a small computer:
 | `ui/lifecycle.ts` | The screen sleeps mid-pitch; a notification hides the page mid-swing; the tab can be discarded without warning. Wake lock, auto-pause, and a synchronous `pagehide` write. |
 | `render/governor.ts` | Phones throttle as they warm. A fixed quality setting is wrong for part of every game, so `quality: 'auto'` is a servo on the median frame time. |
 | `ui/haptics.ts` | Glass gives no feedback. Android only; iOS Safari has no vibration API and the module says so rather than pretending. |
+| `ui/coach.ts` | Touching the zone to swing is a better control scheme that no phone screen advertises. Says so for three swings, remembers forever, counts batting and pitching apart. |
+| `ui/install.ts` | Installed and in a tab are different games on a phone. Catches Chromium's `beforeinstallprompt` to replay from a menu row; iOS has no API, so it names the Share sheet instead. |
 
 None of them is reachable from `sim/`, and `save/resume.ts` is the only one that
 touches `GameState` at all — read-only, through one destructure.
@@ -217,6 +219,20 @@ The two things a CSS rotation cannot fix are handled explicitly rather than left
 to break: media queries and `vh`/`vw` describe the *phone*, so the portrait
 media block is gated on `html:not(.rotated)` and the pad sizes itself from
 `--gw`/`--gh`, which `App.onResize` writes from the game box.
+
+Two page-level defences sit outside all of that, because they are properties of
+the document rather than of the game. `touch-action: manipulation` on the page
+shell removes double-tap-to-zoom, and `refusePageZoom()` in `ui/device.ts`
+refuses iOS's proprietary `gesture*` events to remove pinch. Both exist because
+`user-scalable=no` in the viewport tag is honoured by Chromium and ignored by
+iOS Safari, and neither is a thing the game could survive: it is sized to the
+viewport to the pixel with every control anchored to an edge, so a zoomed game
+is one with its buttons off the side of the screen and no way to scroll to them.
+The gesture refusal is installed for touch devices only — browser zoom on a
+desktop belongs to the person using the browser.
+
+`scripts/phone-check.ts` is the regression net for all of it: the production
+build, in WebKit, with real touches, failing the run rather than reporting.
 
 ## Determinism
 

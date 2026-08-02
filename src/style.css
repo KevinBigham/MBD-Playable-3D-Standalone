@@ -45,6 +45,13 @@ body {
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* iOS Safari has ignored `user-scalable=no` since iOS 10, so the viewport tag
+     alone does not stop a double-tap on the strike zone from zooming the game.
+     `manipulation` is the attribute it does honour, and it is exactly the right
+     one: it removes double-tap-to-zoom and leaves everything else — including
+     the scrolling the longer menus genuinely need — untouched. Pinch is a
+     separate gesture that touch-action does not reach; see refusePageZoom. */
+  touch-action: manipulation;
 }
 
 body.touch-mode {
@@ -57,6 +64,11 @@ body.touch-mode {
 
 #app {
   position: relative;
+  /* Stated again on the game box rather than left to the ancestor chain: this
+     is the element every pixel of the game lives inside, and a future change to
+     the page shell must not be able to hand double-tap zoom back to the field
+     by accident. */
+  touch-action: manipulation;
   /* --vw/--vh are written by the app from visualViewport, because vh on mobile
      measures the page as if the browser toolbars were not there and they are.
      The fallbacks keep this honest before the first frame and on old engines. */
@@ -1092,6 +1104,88 @@ html.rotated #touch {
   stroke: #fff;
   stroke-width: 2;
   opacity: 0.85;
+}
+
+/* The coach: the one sentence that makes the touch scheme visible, on the zone
+   for a player's first three swings and then gone forever. It hangs under the
+   zone, in the same place the verdict panel appears — one spot on the screen
+   that always means "about your swing", and never over the ball. */
+
+.pv-coach {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 0.3em 0.75em;
+  border: 2px solid var(--gold);
+  border-radius: 4px;
+  background: rgba(11, 16, 32, 0.82);
+  color: var(--gold);
+  font-size: clamp(11px, calc(var(--gh, 100vh) * 0.026), 17px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  animation: coach-breathe 2.4s ease-in-out infinite;
+}
+
+/* A slow pulse, not a flash. It has to catch an eye that is looking at the
+   pitcher without becoming the thing being watched. */
+@keyframes coach-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 209, 92, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(255, 209, 92, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-coach {
+    animation: none;
+  }
+}
+
+/* The gap: where the swing went, and where the ball went. Two marks and the
+   distance between them, which is the only question a player has after touching
+   the wrong spot. Coloured by outcome, and told apart by shape as well as
+   colour — the bat is a hollow ring, the ball is a filled dot — so it still
+   reads with the colour taken away. */
+
+.pv-miss-bat {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  opacity: 0.9;
+}
+
+.pv-miss-ball {
+  fill: #fff;
+  stroke: rgba(11, 16, 32, 0.8);
+  stroke-width: 1.5;
+}
+
+.pv-miss-line {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+}
+
+.pv-miss[data-tone='good'] .pv-miss-bat,
+.pv-miss[data-tone='good'] .pv-miss-line {
+  stroke: var(--good);
+}
+
+.pv-miss[data-tone='warn'] .pv-miss-bat,
+.pv-miss[data-tone='warn'] .pv-miss-line {
+  stroke: var(--gold);
+}
+
+.pv-miss[data-tone='bad'] .pv-miss-bat,
+.pv-miss[data-tone='bad'] .pv-miss-line {
+  stroke: var(--bad);
 }
 
 /* The verdict panel: what the bat actually did, anchored under the zone. */

@@ -11,7 +11,7 @@ shown. Nothing here is an estimate.
 npx vitest run
 ```
 
-**Result: 22 files, 235 tests, 235 passed, 0 failed. 77 s wall clock.**
+**Result: 23 files, 243 tests, 243 passed, 0 failed. 93 s wall clock.**
 
 | File | Tests | What it protects |
 |---|---|---|
@@ -36,6 +36,7 @@ npx vitest run
 | `timing.test.ts` | 4 | Input lag correction: pressing four ticks late while declaring four ticks of lag produces a timing figure identical to pressing on time to nine decimals; the same press without the declaration is measurably late (the control); and an implausible declared lag is capped rather than credited |
 | `governor.test.ts` | 8 | The automatic graphics servo, tested mostly for what it refuses to do: silent until enabled, deaf to a catastrophic single frame inside an otherwise healthy window, motionless in the band between its thresholds, slow to climb and quick to fall, and — fed the frame times of a thermally limited phone that is comfortable at one rung and drowning at the next — it settles instead of oscillating forever |
 | `haptics.test.ts` | 8 | Vibration restraint: silent until enabled, refuses to enable where the platform has no API, never fires twice inside 40 ms, every pattern under 200 ms total, and contact genuinely varies with how well the ball was struck |
+| `coach.test.ts` | 8 | Teaching the touch scheme and then shutting up: the hint appears for batting and pitching with different sentences, says nothing when the field is not the control, retires permanently after three swings, refuses to count aiming between pitches as a swing, keeps batting and pitching separate, and survives a corrupt or hand-edited count. Plus the four numbers the "how far off were you" picture is drawn from — that the engine records where the bat was *and* where the ball was on the swing it describes, and that they are two measurements rather than one written down twice |
 | `tap.test.ts` | 9 | The phone control scheme: an absolute aim lands the cursor exactly where it was told and clamps to the same limits a stick could reach; steering still steers when nothing was touched; the pitcher's target is taken from the touch in the same step that releases the ball. Then the promise itself, as the whole precision curve over eight seeds — on the crossing point is hard contact every time, a hand's width off is in play but never hard, a forearm off is a foul, forty centimetres off is a swing through it. Plus the screen-to-plate solve inverting its own projection to sub-millimetre accuracy, converging from a bad starting guess, and returning null rather than a plausible lie when the camera is edge-on |
 
 ---
@@ -466,8 +467,8 @@ four-out half-inning — are covered by `bookkeeping.test.ts` and `derby.test.ts
 
 Stated plainly rather than implied:
 
-- **Safari and Firefox were not available in this environment.** No
-  Chromium-only API is used, but they are formally unverified.
+- **Firefox was not available in this environment.** No Chromium-only API is
+  used, but it is formally unverified. Safari now is — see section 11.
 - **Physical gamepad hardware was not available.** The implementation follows
   the standard Gamepad API mapping with radial dead zones; it was exercised
   through the API surface, not through a device.
@@ -476,20 +477,74 @@ Stated plainly rather than implied:
 - **Audio was verified functionally** — that it unlocks, that volumes apply,
   that it never throws — but the subjective quality of the synthesis has not
   been judged by a listener in this environment.
-- **No real phone was available, again.** Everything in the touch and phone
-  work below was verified at handset viewports in a desktop Chromium, with the
-  pad driven by synthesised `PointerEvent`s and a real handset browser context
-  (`isMobile`, `hasTouch`, iOS user agent, 2× scale) for the screenshots. That
-  proves layout, hit-testing, label wiring, coordinate mapping under rotation,
-  and that a press reaches the engine. It is not a thumb on glass. Specifically
-  unverified on hardware: multi-touch under real load, actual touch latency,
-  vibration (no vibration API exists in the test browser at all — the motor code
-  has never physically run), the wake lock, tab discard and recovery, and how
-  the graphics servo behaves against a genuine thermal throttle rather than a
-  synthetic frame-time sequence.
+- **No real phone was available, again — but the gap is much narrower.** The
+  touch and phone work is now verified in **WebKit**, Safari's own engine, with
+  real `touchstart`/`touchend` rather than synthesised `PointerEvent`s, and the
+  production build was loaded and rendered in **actual Mobile Safari** on an
+  iOS 26.4 iPhone 17 simulator. See section 11. That closes the class of bug
+  that only Safari has — and it found two of them. It is still not a thumb on
+  glass. Specifically unverified on hardware: multi-touch under real load,
+  actual touch latency, vibration (no vibration API exists in any test browser
+  here, and iOS has none at all — the motor code has never physically run), the
+  wake lock, tab discard and recovery, and how the graphics servo behaves
+  against a genuine thermal throttle rather than a synthetic frame-time
+  sequence. The safe-area insets are also reported as zero by a headless WebKit,
+  so the "nothing under the notch" check passes vacuously there; the iOS
+  simulator screenshots are what stand behind that claim instead.
 - **The plate view has not been through an independent review.** The two
   evaluators quoted in section 9 attacked the build that preceded it. Its
   measurements here — zone size, resolution sweep, node counts, the noise ratio
   in `plate.test.ts` — are objective, but "is it actually easier to read now?"
   is a judgement, and the person who built it is not the right authority on
   that.
+
+## 11. The phone audit, in Safari's engine
+
+Everything in section 8 runs in Chromium. That is a good stand-in for an Android
+handset and a poor one for an iPhone, which is most of the phones this will ever
+run on — and the ways the two engines differ are exactly the ways a phone game
+breaks. Chromium honours `user-scalable=no`; iOS Safari has ignored it since
+iOS 10.
+
+`scripts/phone-check.ts` (`npm run test:phone`) therefore drives the production
+build in **WebKit** with a touchscreen instead of a mouse, at an iPhone 15's
+size and pixel density, in both orientations. It is an auditor rather than a
+screenshotter: **52 checks, non-zero exit on any failure.**
+
+| Stage | What it establishes |
+|---|---|
+| 1. The page | Double-tap zoom is off over the field, the zone, the menus and the game box, walking the whole `touch-action` chain the way the engine does. Nothing scrolls. Pull-to-refresh cannot fire. A `gesturestart` is refused — probed by firing one and asking whether anybody prevented it, not by looking for a flag. |
+| 2. The viewport | `--vh` equals `visualViewport.height`, and the game box fills the visible viewport to the pixel — 393×659 portrait, 734×320 landscape. |
+| 3. The pad | A real `touchstart` turns the controls on. Every visible control is fully on-screen, at least 44×44 (Apple's own minimum), and outside the safe-area insets. |
+| 4. The map | Three probes including two corners of the reachable range, tapped for real and read back: **0.51–0.92 px** round-trip error. Measured in pixels, not millimetres — a phone held sideways gives the zone about ninety pixels, so a millimetre figure would flatter a big screen and libel a small one. |
+| 5. The swing | A touch on the crossing point, timed 200 ms out, graded `ok` in both orientations. |
+| 6. The reach | An 81-point grid over the whole cursor range, each point asked *who would receive this touch* — **81/81 belong to the zone.** No part of the strike zone is behind a button. |
+| 7. The gap | A deliberate 35 cm miss, and the two marks explaining it are confirmed drawn. |
+| 8. The menus | The part somebody meets first, on a phone held upright: 10 rows, shortest 52 px, none wider than the screen. The pad was built for fingers by hand; the menus were laid out for a keyboard and then inherited a touchscreen, which is exactly how a 30-pixel row survives review. |
+
+Also checked there: that a first-time player is actually told what to touch.
+
+Run against this round's build: **all 52 checks pass, zero console errors, both
+orientations.**
+
+### Two bugs it found that Chromium could not
+
+- **Double-tap-to-zoom was live over the entire game.** The viewport tag says
+  `user-scalable=no`, which Chromium obeys and iOS Safari does not. A double-tap
+  on the strike zone — two quick swings at a pitch, the most natural thing in
+  the world here — would have zoomed the page. Fixed with
+  `touch-action: manipulation` on the page shell and again on the game box.
+- **Pinch-to-zoom was live.** `touch-action` does not reach it; iOS routes pinch
+  through proprietary `gesture*` events that fire above the touch stream. Fixed
+  by refusing them, on touch devices only, so a desktop Safari user keeps
+  browser zoom.
+
+### And in actual Mobile Safari
+
+The production build was served over the LAN and loaded in **Safari on an
+iOS 26.4 iPhone 17 simulator** — real WebKit, real iOS, real Safari chrome. It
+boots, renders the title with the live attract game behind it, and lays out
+correctly under the Dynamic Island and above the floating address bar.
+Screenshots were taken; the simulator could not be driven by touch from here, so
+the interaction evidence is the WebKit harness above and the visual evidence is
+the simulator.

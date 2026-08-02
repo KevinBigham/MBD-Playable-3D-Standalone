@@ -275,6 +275,9 @@ export class TouchControls {
     return this.zoneTap;
   }
 
+  /** Notified for every zone touch this layer accepts. Set by the app. */
+  onZoneTap: ((kind: ZoneTap['kind']) => void) | null = null;
+
   private onZoneDown = (e: PointerEvent): void => {
     if (this.tapMode === 'off') return;
     e.preventDefault();
@@ -296,6 +299,10 @@ export class TouchControls {
     };
     this.showRipple(e.clientX, e.clientY, this.zoneTap.kind);
     this.feedback(this.tapMode === 'aim' ? 'modifier' : 'press');
+    // Announced here rather than counted from the swing result, because this is
+    // the one place a zone touch is born and the only place that knows for
+    // certain one happened. A swing can also come from a keyboard.
+    this.onZoneTap?.(this.zoneTap.kind);
   };
 
   /**

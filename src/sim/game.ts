@@ -945,6 +945,10 @@ function resolveSwingNow(state: GameState, timingError: number, profile: ReturnT
     timingLabel: res.timingLabel,
     planeLabel: res.planeLabel,
     note: res.note,
+    atX: bs.cx,
+    atY: bs.cy,
+    ballX: info.plateX,
+    ballY: info.plateY,
     t: 1.6,
   };
 

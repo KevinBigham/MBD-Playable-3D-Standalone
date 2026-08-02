@@ -221,6 +221,22 @@ export interface SwingFeedback {
   timingLabel: string;
   planeLabel: string;
   note: string;
+  /**
+   * WHERE THE BAT WAS, AND WHERE THE BALL WAS — both at the plate, in metres.
+   *
+   * The words above say *how* the swing was wrong; these two points say *where*,
+   * and on a phone that is the more useful of the two. The whole control scheme
+   * is "touch the spot", so the only question a player has after a miss is how
+   * far off the spot they were and in which direction. A sentence cannot answer
+   * that as fast as two marks and the gap between them.
+   *
+   * Recorded rather than recomputed because by the time anything draws this the
+   * pitch is over and the cursor has moved on.
+   */
+  atX: number;
+  atY: number;
+  ballX: number;
+  ballY: number;
   /** Seconds of display life remaining. */
   t: number;
 }

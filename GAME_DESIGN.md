@@ -742,6 +742,42 @@ different path, and it survived the HUD because the prompt bar was advertising
 the intent rather than the behaviour. Before the pitch, the modifier no longer
 selects "go back"; going back is a live-ball decision and stays one.
 
+### Making an invisible control scheme visible
+
+Touching the zone is better than steering a cursor and there is nothing on a
+phone screen that says so. A person who has held a controller before will hunt
+for the button, find one labelled CONTACT, press it and watch strike three go
+by. A control scheme nobody discovers is a control scheme nobody has.
+
+The fix is a sentence under the zone — **TOUCH WHERE IT WILL CROSS** — and two
+rules about when it goes away. It is dismissed by doing the thing rather than by
+reading about it: three touch swings and it is gone. And the count is kept
+forever rather than per game, because a hint that comes back every time you
+press Play is not a hint, it is a label, and a label you have read a hundred
+times is noise you have trained yourself not to see. Batting and pitching are
+counted apart — a hundred swings says nothing about whether somebody has ever
+stood on a mound.
+
+### After the swing, a picture instead of a word
+
+The plate view already named the error: EARLY, UNDER, OVER. That is the right
+feedback for steering a cursor and pressing a button, because those are two
+separate mistakes made at two separate moments.
+
+Touching the zone makes it one decision — *that spot, now* — so it deserves one
+picture. Every swing leaves a hollow ring where the finger went and a filled dot
+where the ball actually crossed, joined by a dashed line across the gap. Green
+for contact, gold for a foul, red for a swing through it, and different shapes
+as well as different colours so it survives being colour-blind or being read at
+arm's length.
+
+Six inches high reads instantly as six inches high. "UNDER" has to be translated
+first, and translating it is exactly the work a hitter does not have time to do.
+
+A ball put in play takes the camera to the field and the marks go with it, so
+what this mostly ends up explaining is the strikes — which is the right bias.
+Nobody needs telling why the double was a double.
+
 ---
 
 ## Presentation

@@ -872,9 +872,153 @@ buttons and the pause key still win where they sit.
 
 ---
 
+## Get it on the phone
+
+The previous three rounds made a game that plays well on a handset. None of them
+made one a person could actually *reach* from a handset — it lived on
+`localhost`, on a laptop. That is the difference between "phone-ready" and
+"ready to play on my phone", and closing it turned out to be less about the game
+than about the four things around it.
+
+### A URL
+
+`npm run phone` builds and serves on every interface, so a phone on the same
+wifi can play the production bundle immediately. That is enough to play today
+and it is deliberately not the whole answer, because plain http costs two
+things: a service worker will not register, so there is no offline play, and
+neither will the wake lock, so the screen dims mid-inning. Both are HTTPS-only
+by specification, and neither is a bug that can be fixed in the game.
+
+So `.github/workflows/deploy.yml` publishes `dist/` to GitHub Pages on push to
+`main`, gated behind the suite — a red branch should not also be live. The game
+has no server, no account and no telemetry; it is a folder of static files, so a
+static host is not a compromise, it is the correct shape. The workflow ships
+inert: nothing deploys until Pages is switched on for the repository, because
+turning a private prototype into a public website is a decision with an owner
+and the owner is not the build system.
+
+### An icon that is not a screenshot of the loading card
+
+The icons were SVG only, which was quietly broken on the platform it mattered
+most on. **iOS ignores an SVG `apple-touch-icon` entirely** — and it does not
+fail loudly or fall back to the favicon. It screenshots the page. Add to Home
+Screen would have put a grey rectangle of the game's own boot card on the home
+screen, so the game looked broken before it had run once.
+
+`scripts/icons.ts` rasterises the PNGs from the same SVGs with the Playwright
+already in devDependencies. Three shapes because three launchers want different
+things: square corners and opaque for iOS, which rounds them itself and would
+otherwise round an already-rounded icon and show the page colour through the
+gap; as-drawn for anything that places it verbatim; and art inside the middle
+80% for the launchers that crop.
+
+### Being asked, once
+
+Installed and in a tab are different games on a phone: full screen, its own
+place in the app switcher, and it survives the wifi. All free, all off by
+default because nobody knows to ask. Android fires `beforeinstallprompt`, which
+is caught, suppressed and replayed later from a menu row — a game that opens by
+asking to be installed is a pop-up; one that mentions it under Settings, after
+everything a person came here to do, is an offer. iOS fires nothing and has no
+API at all, so the honest thing there is to name the control in the Share sheet
+and stop pretending a button could do it.
+
+### The engine that will actually run it
+
+Every phone claim this project had made was measured in Chromium with
+synthesised pointer events. That is a good stand-in for Android and a poor one
+for the iPhone, which is most of the phones this will ever run on — and the
+places the two engines differ are exactly the places a phone game breaks.
+
+`scripts/phone-check.ts` runs the production build in **WebKit**, Safari's
+engine, with a touchscreen instead of a mouse, at an iPhone's size and pixel
+density, in both orientations. It is an auditor rather than a screenshotter: 52
+checks and a non-zero exit. It found two real bugs on its first run.
+
+**Double-tap-to-zoom was live over the whole game.** The viewport tag says
+`user-scalable=no`; Chromium obeys that and iOS Safari has ignored it since
+iOS 10 for accessibility reasons. Two quick taps at a pitch — the most natural
+thing in the world in a game whose entire control scheme is tapping — would have
+zoomed the page. `touch-action: manipulation` is the attribute Safari does
+honour, and it is exactly the right one: it removes double-tap zoom and leaves
+alone the scrolling the longer menus genuinely need.
+
+**Pinch-to-zoom was live too**, and `touch-action` does not reach it. iOS routes
+pinch through proprietary `gesture*` events above the touch stream, so the only
+way to say no is to refuse them. Refused for touch devices only — a desktop
+Safari user pinching a trackpad is asking their browser to zoom, and that is
+theirs to ask for.
+
+The harness also caught one thing it turned out to be wrong about: a 237 mm
+error on a rotated phone, which was the *test's* forward projection, not the
+game's inverse. Worth keeping rather than deleting, because a forward map worked
+out independently from the transform is what makes the round trip evidence
+instead of a tautology. Corrected, it reads **0.51–0.92 px** — measured in pixels
+rather than millimetres, because a phone held sideways gives the strike zone
+about ninety pixels and a millimetre figure would flatter a large screen and
+libel a small one.
+
+And it answered a question nobody had asked: **is the whole strike zone actually
+touchable?** The swing is a touch on the field and the buttons are also on the
+field, so anywhere they overlap is a part of the zone a hitter simply does not
+have — no amount of accuracy in the solve fixes it. An 81-point grid over the
+full cursor range, each point asked who would receive that touch: 81 of 81
+belong to the zone.
+
+Finally, the production build was served over the LAN and opened in **actual
+Mobile Safari** on an iOS 26.4 iPhone 17 simulator. Real WebKit, real iOS, real
+Safari chrome. It boots and lays out correctly under the Dynamic Island and
+above the floating address bar.
+
+### Making the scheme visible, and then shutting up
+
+Touching the zone is a better control scheme than steering a cursor and it is
+completely invisible. Nothing on a phone screen says the field is the input, so
+somebody who has held a controller before looks for the button, finds one
+labelled CONTACT, presses it, and watches strike three.
+
+So for the first three swings the game says it, under the zone: **TOUCH WHERE IT
+WILL CROSS**. Two rules keep it from becoming furniture. It is dismissed by
+doing it rather than by reading it — three touches and it is gone. And the count
+is kept forever rather than per game, because a hint that returns every time you
+press Play is not a hint, it is a label, and a label you have read a hundred
+times is noise you have learned to look past. Batting and pitching are counted
+apart; a hundred swings says nothing about whether somebody has ever stood on a
+mound.
+
+It sits *under* the zone rather than over it, which took a bug to work out. Over
+the zone is the middle of the screen, which is where the game shouts TOP 1ST and
+the club's name at the start of every half-inning, and a hint that has to fight
+a banner for the same pixels loses and looks broken while losing. Under the zone
+is where the verdict panel already goes — which is not a collision but the
+point: two answers to the same question, never both worth having, and one place
+on screen that always means "about your swing".
+
+### Where you swung, and where it was
+
+The verdict panel already said *how* a swing was wrong — early, under, over. That
+is the right answer for a scheme where you steer a cursor and press a button,
+because the two errors are made separately and fixed separately. Touching the
+zone collapses them into one act: the player made a single decision, that spot,
+now. So the useful feedback is a single picture. A hollow ring where the finger
+went, a filled dot where the ball actually crossed, a dashed line across the
+gap, coloured by outcome and told apart by shape as well as colour.
+
+Six inches high reads instantly as six inches high. "UNDER" has to be translated
+first.
+
+The two points are recorded on the swing rather than recomputed, because by the
+time anything draws them the pitch is over and the cursor has moved on — four
+display-only numbers on a struct whose own comment already says nothing in the
+rules or the physics reads it. A ball put in play takes the camera to the field
+and the marks go with it, so what this mostly ends up explaining is the strikes.
+That is the right bias: nobody needs telling why the double was a double.
+
+---
+
 ## Tests performed
 
-- **Automated:** 235 Vitest tests across 22 files — RNG determinism, ball-flight
+- **Automated:** 243 Vitest tests across 23 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,
@@ -891,6 +1035,18 @@ buttons and the pause key still win where they sit.
   controls screen and the player creator.
 - **Production build:** built clean and captured through `vite preview` with
   Playwright at 1600×900. Zero console errors across the whole capture run.
+- **WebKit phone audit:** `npm run test:phone` — the production build driven in
+  Safari's own engine with real touches, at an iPhone's size and pixel density,
+  in both orientations. 52 checks, all passing, zero console errors. It covers
+  the things only Safari gets wrong (double-tap and pinch zoom), the things only
+  a real touch proves (that `touchstart` turns the pad on and that touching the
+  crossing point grades a hit), and one thing nobody had checked in any engine:
+  that all 81 sampled points of the reachable strike zone belong to the zone and
+  not to a button sitting on top of it.
+- **Real Mobile Safari:** the production build served over the LAN and loaded in
+  Safari on an iOS 26.4 iPhone 17 simulator. Renders and lays out correctly; the
+  simulator could not be driven by touch from this environment, so it is visual
+  evidence and the WebKit harness is the interaction evidence.
 - **Save/restore:** season created, saved, page reloaded, resumed; corrupted and
   truncated save payloads confirmed to degrade to "no save" rather than throw.
 - **Audio:** confirmed the engine reaches `unlocked` after a gesture, that
@@ -933,9 +1089,11 @@ Evidence: `docs/screenshots/` and `docs/recordings/gameplay.webm`, all produced 
   mapped individually without knowing which way the phone was turned. The
   rotated layout clears the largest inset on all four sides instead: wasteful,
   never wrong, and untested against a real notch.
-- **The service worker was not tested offline.** It is registered only in
-  production builds and the capture harness runs against `vite preview` with a
-  live network. The strategy is deliberately the conservative one — the page
+- **The service worker still has not been tested offline, and now cannot be
+  locally.** It is registered only in production builds *and only over HTTPS*,
+  which `vite preview` on a LAN address is not — so the one route to exercising
+  it is the Pages deploy, which has not been switched on. "Install it, turn off
+  the wifi, open it" remains unperformed. The strategy is deliberately the conservative one — the page
   itself is network-first so a bad deploy cannot pin itself — but "install it,
   turn off the wifi, open it" has not been performed.
 - **iOS Safari has no Fullscreen API**, so the fullscreen setting will do nothing

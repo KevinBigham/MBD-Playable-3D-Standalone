@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173",
+    "phone": "npm run build && vite preview --host --port 4173",
+    "icons": "tsx scripts/icons.ts",
     "test": "vitest run",
+    "test:phone": "tsx scripts/phone-check.ts",
     "test:watch": "vitest",
     "sim": "tsx scripts/simulate.ts",
     "typecheck": "tsc --noEmit"

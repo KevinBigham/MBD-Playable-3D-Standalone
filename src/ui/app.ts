@@ -21,10 +21,13 @@ import {
   detectDevice,
   isAppRotated,
   isPortrait,
+  refusePageZoom,
   setAppRotated,
   toggleFullscreen,
   viewportSize,
 } from './device';
+import { Coach } from './coach';
+import { Install } from './install';
 import { Lifecycle } from './lifecycle';
 import { type Buzz, getHaptics } from './haptics';
 import {
@@ -175,6 +178,8 @@ export class App implements AppApi {
   /** Inning+half of the last resume snapshot, so one is taken per half-inning. */
   private lastSavedHalf = '';
 
+  private coach = new Coach();
+  private install = new Install();
   private governor = new FrameGovernor((step) => this.applyQualityStep(step));
   private accumulator = 0;
   private lastTime = 0;
@@ -203,6 +208,8 @@ export class App implements AppApi {
     this.hud = new Hud(this.input);
     this.touch = new TouchControls(() => this.requestPause());
     this.touch.setZoneMapper(this.zoneAt);
+    // Three touches and the game stops explaining itself. See Coach.
+    this.touch.onZoneTap = (kind) => this.coach.note(kind);
     this.input.attachTouch(this.touch);
     this.uiRoot.appendChild(this.touch.root);
     this.applySettings();
@@ -236,6 +243,10 @@ export class App implements AppApi {
     };
     window.addEventListener('touchstart', firstTouch, { passive: true });
     if (this.device.touchPrimary) this.setTouchMode(true);
+    // Installed for fingers only, and before the first frame — a pinch that
+    // lands during the loading card would zoom a game that never gets a chance
+    // to say no. See refusePageZoom.
+    if (this.device.touchPrimary || 'ontouchstart' in window) refusePageZoom();
 
     this.onResize();
   }
@@ -635,6 +646,7 @@ export class App implements AppApi {
     if (this.mode === 'game' && this.game) {
       const tapMode = this.tapModeFor(this.game);
       this.touch.setTapMode(tapMode);
+      this.hud.setCoach(this.coach.hint(tapMode));
       const labels = this.hud.update(dt, this.game, this.world, {
         active: tapMode !== 'off',
         swingMode: this.touch.swingModeNow(),
@@ -1024,8 +1036,50 @@ export class App implements AppApi {
             this.goto(s);
           },
         },
+        // Last, and only when there is something to install. A game that opens
+        // by asking to be installed is a pop-up; a game that mentions it under
+        // Settings, after everything a person came here to do, is an offer.
+        ...this.installRows(),
       ]),
     );
+  }
+
+  /**
+   * The Add to Home Screen row, in whichever form this device can honour it.
+   * Empty on a desktop, on an installed copy, and for anybody who has said no.
+   * See Install.
+   */
+  private installRows(): MenuRow[] {
+    const offer = this.install.offer();
+    if (offer === 'none') return [];
+    if (offer === 'prompt') {
+      return [
+        {
+          id: 'install',
+          label: 'Add to Home Screen',
+          hint: 'Install it: full screen with no address bar, its own icon, and it plays with the wifi off.',
+          onSelect: () => {
+            void this.install.accept().then((ok) => {
+              if (ok) this.toast('INSTALLED — LAUNCH IT FROM YOUR HOME SCREEN');
+              this.gotoMainMenu();
+            });
+          },
+        },
+      ];
+    }
+    return [
+      {
+        id: 'install',
+        label: 'Add to Home Screen',
+        hint: 'Tap the Share button in Safari, then "Add to Home Screen". Full screen, its own icon, and it plays with the wifi off.',
+        onSelect: () => {
+          // There is no API to call here. iOS gives a web page no way to ask,
+          // so the honest thing is to say where the control is and stop
+          // pretending a button could do it.
+          this.toast('SAFARI: SHARE ⇧ → ADD TO HOME SCREEN');
+        },
+      },
+    ];
   }
 
   // --------------------------------------------------------------- quick play

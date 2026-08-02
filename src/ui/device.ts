@@ -87,6 +87,34 @@ export function isAppRotated(): boolean {
   return rotated;
 }
 
+/**
+ * NO PINCHING THE BALLPARK.
+ *
+ * There are two ways to zoom a page on a phone and the viewport tag stops
+ * neither of them on an iPhone. Double-tap is closed in CSS with
+ * `touch-action: manipulation`. Pinch is not a touch gesture as far as Safari
+ * is concerned — it is a proprietary `gesture*` event that fires above the
+ * touch stream, and refusing it here is the only way to say no.
+ *
+ * Why say no at all: the game is already sized to the viewport to the pixel,
+ * and every control is anchored to an edge of it. A zoomed game is not a bigger
+ * game, it is a game with its buttons off the side of the screen and no way to
+ * scroll to them. The nearest accidental pinch is two thumbs resting on the
+ * glass while waiting on a pitch, which is the normal way to hold a phone.
+ *
+ * Only for devices that are actually driven by fingers — a desktop Safari user
+ * pinching a trackpad is asking their *browser* to zoom, and that is theirs to
+ * ask for. Returns a function that puts it back, for tests.
+ */
+export function refusePageZoom(): () => void {
+  const stop = (e: Event): void => e.preventDefault();
+  const kinds = ['gesturestart', 'gesturechange', 'gestureend'];
+  for (const k of kinds) document.addEventListener(k, stop, { passive: false });
+  return () => {
+    for (const k of kinds) document.removeEventListener(k, stop);
+  };
+}
+
 export async function toggleFullscreen(): Promise<void> {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
