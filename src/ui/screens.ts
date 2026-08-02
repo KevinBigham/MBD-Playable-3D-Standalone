@@ -359,11 +359,20 @@ export class TitleScreen extends Screen {
   }
 
   override render(): void {
+    // The tagline names the league that is actually on the field. A title card
+    // reading "Meridian Circuit Baseball" over an attract game full of MBD
+    // clubs is a small lie, and small lies on a title screen are the ones a
+    // player notices first.
+    const mbd = this.app.teams.length > TEAM_IDENTITIES.length;
+    const tag = mbd ? 'Mr. Baseball Dynasty' : 'Meridian Circuit Baseball';
+    const foot = mbd
+      ? `An original game. ${this.app.teams.length} clubs, eight parks.`
+      : 'An original game. Ten clubs, eight parks, one cup.';
     this.root.innerHTML = `
       <div class="title-mark">MOONSHOT<em>NINE</em></div>
-      <div class="title-tag">Meridian Circuit Baseball</div>
+      <div class="title-tag">${escapeHtml(tag)}</div>
       <div class="title-press">Press Enter or Space<span class="only-touch">Tap to start</span></div>
-      <div class="title-foot">An original game. Ten clubs, eight parks, one cup.</div>
+      <div class="title-foot">${escapeHtml(foot)}</div>
     `;
     // The whole title is the button. This is also the first user gesture of the
     // session, which is the only moment a browser will let the audio start —
