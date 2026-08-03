@@ -1711,7 +1711,7 @@ were still arriving in two thirds of a second.
 
 ## Tests performed
 
-- **Automated:** 288 Vitest tests across 24 files — RNG determinism, ball-flight
+- **Automated:** 289 Vitest tests across 24 files — RNG determinism, ball-flight
   calibration and frame-rate independence, the swing model, the plate upgrade's
   noise ratio and overlay honesty, baseball rules driven through the real engine,
   runner invariants, season and cup integrity, the derby, box-score bookkeeping,

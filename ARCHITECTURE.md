@@ -32,7 +32,8 @@ src/
     types.ts      the shared data model
 
   data/         static content, deterministic generation
-    teams.ts      ten club identities, biases, hand-authored stars, roster generation
+    teams.ts      the Meridian Circuit's ten clubs, biases, hand-authored stars,
+                  roster generation, and the league the app is currently in
     names.ts      invented name banks
     stadiums.ts   eight parks, fence interpolation
     pitches.ts    ten pitch profiles
@@ -50,8 +51,16 @@ src/
     input.ts      the InputFrame the engine consumes
     autoplay.ts   headless driver + state validator
 
+  bridge/       the MBD arcade-world seam. pure, and it owns no state
+    contract.ts   the v1 wire types, transcribed from the handoff
+    rating.ts     MBD's 0-550 to this game's 20-99, monotonic, one direction
+    validate.ts   fail-closed bundle checks; rejects rather than repairs
+    adapt.ts      a validated bundle into a playable league
+    receipt.ts    what happened, reconciled against the package it came from
+    franchises.ts, fixture.ts
+
   modes/        wrappers around the engine
-    season.ts, championship.ts, homerun.ts
+    season.ts, championship.ts, homerun.ts, creator.ts
 
   save/         localStorage, versioned and defensive
 
@@ -66,9 +75,25 @@ src/
     controls.ts   what every button means right now — one source, two consumers
     touch.ts      the on-screen pad
     device.ts     touch/phone detection and the real viewport size
+    world.ts      which league is loaded, and remembering the choice
+    zonepick.ts   screen pixels to the plate plane, for touch-to-swing
+    coach.ts, haptics.ts, install.ts, lifecycle.ts
 
-  tests/        vitest
-scripts/        simulate, tune-physics, verify-fixes, capture
+  tests/        vitest — 289 tests across 24 files
+
+scripts/        every one of them runnable, none of them needed to play
+  simulate.ts       batch CPU-vs-CPU games; the balance and deadlock hunt
+  hitting.ts        the same, but with a *human* at the plate and wrong on purpose
+  capture.ts        the screenshot set and the gameplay recording
+  phone-check.ts    the 55-check phone audit, in WebKit, with real touches
+  world-check.ts    a first visit lands in the right league, everywhere
+  model-shot.ts     close-ups of the player models
+  swing-shot.ts     a frame strip across the instant of contact
+  perf.ts           frame rate, heap and GPU resource growth
+  icons.ts          rasterises the app icons from the SVGs
+  export-mbd-world.ts  runs MBD's own generator out of an MBD checkout
+  tune-physics.ts   ball-flight calibration table
+  verify-season.ts, verify-fixes.ts, verify-foulout.ts, verify-extras.ts
 ```
 
 ## The plate view is a reader, not a writer

@@ -196,9 +196,17 @@ So the pitch's flight from release to the contact plane is now stretched by a
 
 | Tempo | Factor | Fastball | Curveball |
 |---|---|---|---|
-| Brisk | 1.00 | 0.45 s | 0.54 s |
-| Standard *(default)* | 1.30 | 0.59 s | 0.70 s |
-| Relaxed *(default on touch)* | 1.60 | 0.72 s | 0.86 s |
+| Brisk | 1.00 | 0.50 s | 0.60 s |
+| Standard | 1.30 | 0.65 s | 0.78 s |
+| Relaxed | 1.60 | 0.80 s | 0.96 s |
+| **Sandlot** *(default)* | **4.00** | **2.00 s** | **2.40 s** |
+
+Sandlot is the default because half a second more than Brisk turned out to be the
+wrong order of magnitude. Reading the pitch is only the first of three things a
+hitter here has to do — read it, get a thumb to where it will cross, and commit —
+and on a phone the middle one is a hand travelling across glass. Two seconds is
+what makes that a decision instead of a reflex test. The faster tiers are all
+still on the options screen.
 
 What is and is not slowed matters:
 

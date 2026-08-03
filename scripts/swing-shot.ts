@@ -24,7 +24,7 @@
  * seeing the bat hit anything. A strip across the contact frame is the only way
  * to see whether all three are fixed.
  */
-import { writeFileSync } from 'node:fs';
+import { readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { chromium, type Page } from 'playwright';
 
 const BASE = process.env.SHOT_URL ?? 'http://localhost:4178';
@@ -218,6 +218,14 @@ async function main(): Promise<void> {
   const dist = (f: Frame): number => (f.swingT < 0 ? Infinity : Math.abs(f.swingT - CONTACT_AT));
   let best = 0;
   for (let i = 1; i < frames.length; i++) if (dist(frames[i]) < dist(frames[best])) best = i;
+
+  // Clear the previous strip first. The filenames carry the millisecond each
+  // frame was taken at, which is the useful part of them and also means a second
+  // run leaves its predecessor's frames lying beside its own — a set of stills
+  // from two different swings, presented as one.
+  for (const f of readdirSync(OUT)) {
+    if (f.startsWith('swing-') && f.endsWith('.png')) unlinkSync(`${OUT}/${f}`);
+  }
 
   const picked = frames.slice(Math.max(0, best - 2), best + 5);
   picked.forEach((f, i) => {

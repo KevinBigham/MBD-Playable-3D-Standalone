@@ -174,7 +174,7 @@ on undocumented behaviour of a form control, so on an iPhone the row reads
 
 ### Opening defaults on a touch device
 
-All changeable in **Settings**: touch to swing **on**, pitch tempo **Relaxed**,
+All changeable in **Settings**: touch to swing **on**, pitch tempo **Sandlot**,
 graphics **Auto**, line score **off**. A setting you have changed yourself is
 never overwritten, including changing it back.
 
@@ -234,9 +234,15 @@ about both. The Meridian Circuit pitches from 68 feet rather than 60 feet
 
 | Tempo | A fastball from release to the mitt |
 |---|---|
-| Brisk | ~0.45 s — real time, real baseball |
-| Standard *(default)* | ~0.59 s |
-| Relaxed *(default on a phone)* | ~0.72 s |
+| Brisk | ~0.50 s — real time, real baseball |
+| Standard | ~0.65 s |
+| Relaxed | ~0.80 s |
+| Sandlot *(default)* | **~2.0 s** |
+
+Sandlot is the default because reading the pitch is only the first of three
+things this game asks for inside the flight — read it, get a thumb to where it
+will cross, and commit — and on a phone the middle one is a hand travelling
+across glass. The faster tiers are all still there.
 
 The ball takes the same path through the air at every setting — same release,
 same break, same spot at the plate — it just travels it more slowly. Nothing
@@ -261,7 +267,7 @@ Everything you need is drawn on and around the strike zone.
 | **The yellow oval** | Your contact cursor, drawn at the true size of your hitter's sweet spot. It turns orange on a power swing (smaller) and green dashed on a bunt. |
 | **Numbered dots** | Every pitch of this at-bat, where it crossed. Colour says what it did — the legend at the bottom of the screen names all five. Three pitches in, you can see the pattern being worked on you. |
 | **The bright arc** | The ball's flight path. On Rookie and Pro it fills in from the pitcher's hand part-way through the pitch, in that pitch's own colour; on Ace you get a short tail and nothing else. |
-| **The ring on the zone** | Where the pitch is going to cross. Same assist, same timing — Rookie sees it early, Pro sees it late, Ace never sees it. |
+| **The ring on the zone** | Where the pitch is going to cross. Same assist, same timing — Rookie sees it about a third of a second in, Pro about eight tenths, Ace never. |
 | **The needle under the zone** | Where your bat actually arrived. Green band = contact, amber = you foul it off, past that you missed. Two words say it plainly: EARLY or LATE, UNDER IT or OVER IT. |
 
 All of it can be switched off in **Settings → Plate view**. The game plays

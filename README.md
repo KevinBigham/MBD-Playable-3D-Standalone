@@ -1,5 +1,16 @@
 # MR. BASEBALL DYNASTY
 
+## ▶ [**PLAY IT NOW**](https://kevinbigham.github.io/MBD-Playable-3D-Standalone/)
+
+**https://kevinbigham.github.io/MBD-Playable-3D-Standalone/**
+
+No install, no account, no download. Open it on a laptop and press Enter; open it
+on a phone, turn it sideways and touch the strike zone. Every push to `main`
+republishes it, gated behind the test suite, so that link is always this
+repository's `main` branch running.
+
+---
+
 **An original arcade baseball game for the browser — on a laptop or a phone.**
 
 Games are fast, contact is loud, and you hold the controls for every pitch,
@@ -144,10 +155,16 @@ and other non-dynasty modes" and "produces no importable dynasty receipt".
 the field, about 78 kB gzipped. It is produced by
 
 ```bash
-npx tsx scripts/export-mbd-world.ts --mbd ../MBD --out public/mbd-world.json
+npx tsx scripts/export-mbd-world.ts --mbd <path-to-MBD-checkout> --out public/mbd-world.json
 ```
 
-which **imports MBD's own `generateLeaguePlayers`, `buildRosterState` and
+`--mbd` is wherever the MBD repository is on your machine; there is no MBD
+checkout on this one, so the command above cannot be run here as written. The
+file it produced is committed, is self-describing (`snapshotSchemaVersion 48`,
+`sourceSnapshotHash mbd-newgame-seed-1`) and is validated as data by the test
+suite, so the game does not need the exporter to run.
+
+It **imports MBD's own `generateLeaguePlayers`, `buildRosterState` and
 franchise table out of a checkout** and mirrors `buildNewGameState`'s opening
 sequence. It does not re-implement them: a port of a 36 kB generator would be a
 second copy of MBD's canon that drifts the moment either side is touched, and
@@ -324,17 +341,17 @@ you can hit against it.
 npm test
 ```
 
-Runs the full Vitest suite: RNG determinism, ball-flight calibration, the swing
-model, baseball rules driven through the real engine, runner invariants,
-situational baseball (alignments, tag-ups, contested steals), season and cup
-mode integrity, the derby, box-score bookkeeping, and a batch of 100
-CPU-versus-CPU games checked for deadlocks, invalid states and believable
-statistics.
+**289 tests across 24 files, about 70 seconds.** RNG determinism, ball-flight
+calibration, the swing model, baseball rules driven through the real engine,
+runner invariants, situational baseball (alignments, tag-ups, contested steals),
+season and cup integrity, the derby, box-score bookkeeping, the MBD bridge
+against the contract's own safety rules, and a batch of 100 CPU-versus-CPU games
+checked for deadlocks, invalid states and believable statistics.
 
-Extra harnesses:
+Extra harnesses, none of them needed to play:
 
 ```bash
-npx tsx scripts/simulate.ts 100 9 pro    # games, innings, difficulty
+npm run sim -- 120 9 pro brisk           # games, innings, difficulty, tempo
 npm run hitting -- 12 9 pro              # the same, but with a *human* at the plate
 npx tsx scripts/tune-physics.ts          # ball-flight calibration table
 npx tsx scripts/verify-fixes.ts          # box-score bookkeeping
@@ -431,10 +448,21 @@ These are documented deliberately; none of them blocks a complete game.
 - **A created player replaces the weakest player at his position** on the club
   you assign him to, rather than expanding the roster. Roster sizes stay fixed
   so the league stays balanced.
-- **The catcher and umpire are not drawn during the at-bat.** The plate camera is
-  a long lens standing roughly where the umpire's head would be, and a figure
-  that close to it covers the strike zone rather than framing it. Both are drawn
-  in every other shot.
+- **The pitch clock is stretched, and the ball on screen is not moving at the
+  speed the radar prints.** At the default Sandlot tempo a fastball takes about
+  two seconds to travel a path it would cover in half of one. The path through
+  space is untouched — same release, same break, same spot at the plate — and
+  nothing else in the game is slowed. This is the largest deliberate departure
+  from real baseball in the project, it exists because reading a pitch, moving a
+  thumb onto it and committing does not fit inside half a second, and it is not
+  hidden: the setting is on the options screen with four tiers including real
+  time, and the last-pitch readout prints the true flight time in seconds next to
+  the true velocity.
+- **The catcher and umpire are not drawn during the at-bat**, or during the beat
+  after contact while the swing finishes. The plate camera is a long lens
+  standing roughly where the umpire's head would be, and a figure that close to
+  it covers the strike zone rather than framing it. Both are drawn in every other
+  shot.
 - **Vibration is Android-only.** Safari on iPhone has no vibration API and the
   workarounds for it depend on undocumented behaviour, so the setting reports
   itself unsupported there instead of pretending.
@@ -458,3 +486,34 @@ These are documented deliberately; none of them blocks a complete game.
 - [TEST_REPORT.md](TEST_REPORT.md) — what was tested and what was found
 - [BUILD_LOG.md](BUILD_LOG.md) — decisions, defects, fixes, remaining risks
 - [LICENSES.md](LICENSES.md) — dependencies and originality statement
+
+## Reviewing this repository
+
+Every number in the documentation is measured output from a command in here, and
+the fastest way to check any of them is to run it. Nothing needs a key, an
+account or a network.
+
+```bash
+npm install
+npm test                                   # 289 tests, 24 files, ~70 s
+npm run build                              # type-checks, then bundles
+npm run build && npx vite preview --port 4178 &
+npm run test:phone                         # 55 checks in WebKit, real touches
+npm run test:world                         # first-visit league wiring
+npm run sim -- 120 9 pro brisk             # the CPU-vs-CPU balance batch
+npm run hitting -- 10 9 pro                # the same, with a human at the plate
+```
+
+Three things worth knowing before reading the claims:
+
+- **The screenshots under `docs/` are all regenerated from the current build**
+  by `capture.ts`, `phone-check.ts`, `model-shot.ts` and `swing-shot.ts`. There
+  are no hand-made images anywhere in the repository.
+- **[BUILD_LOG.md](BUILD_LOG.md) is a log, not a summary.** Earlier entries state
+  numbers that later entries change, deliberately — the tuning history is the
+  point. [GAME_DESIGN.md](GAME_DESIGN.md) and [TEST_REPORT.md](TEST_REPORT.md)
+  carry the current figures.
+- **[TEST_REPORT.md § 10](TEST_REPORT.md) lists what is *not* covered**, and the
+  honest gap is large: no real phone hardware was ever available. Vibration, true
+  touch latency, the wake lock, tab discard and thermal throttling are unverified
+  on glass, and every phone figure in here comes from an emulated viewport.
