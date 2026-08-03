@@ -9,8 +9,8 @@ import type { MbdArcadeWorldBundleV1 } from '../bridge/contract';
  * WHICH WORLD ARE WE PLAYING IN.
  * ==============================
  *
- * MOONSHOT NINE has its own league — ten clubs on the Meridian Circuit — and it
- * can also be handed one: a Mr. Baseball Dynasty world, thirty-two franchises
+ * This game has its own league — ten invented clubs on the Meridian Circuit —
+ * and it can also be handed one: an MBD dynasty world, thirty-two franchises
  * with real rosters out of a real save. This module owns the choice between
  * them and nothing else; the translation lives in `bridge/`, which is pure and
  * knows nothing about menus or storage.

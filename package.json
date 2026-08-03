@@ -1,8 +1,8 @@
 {
-  "name": "moonshot-nine",
+  "name": "mr-baseball-dynasty",
   "private": true,
   "version": "1.0.0",
-  "description": "MOONSHOT NINE — an original arcade baseball game for the browser, on desktop or phone.",
+  "description": "Mr. Baseball Dynasty — an original arcade baseball game for the browser, on desktop or phone.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "preview": "vite preview --port 4173",
     "phone": "npm run build && vite preview --host --port 4173",
     "icons": "tsx scripts/icons.ts",
+    "shots": "tsx scripts/model-shot.ts",
     "test": "vitest run",
     "test:phone": "tsx scripts/phone-check.ts",
     "test:world": "tsx scripts/world-check.ts",

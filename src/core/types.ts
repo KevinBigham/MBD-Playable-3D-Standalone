@@ -1,4 +1,4 @@
-/** Shared data model for MOONSHOT NINE. */
+/** Shared data model for Mr. Baseball Dynasty. */
 
 import type { PitchTempo } from './constants';
 

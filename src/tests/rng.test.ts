@@ -169,6 +169,9 @@ describe('hashString', () => {
     expect(hashString('ironport')).toBe(250786980);
     expect(hashString('')).toBe(2166136261);
     expect(hashString('a')).toBe(3826002220);
+    // An arbitrary fixture string that happens to be the game's former name.
+    // Its value here is that the number next to it must never move; rewording
+    // it to match the rename would throw away the only thing it is for.
     expect(hashString('MOONSHOT NINE')).toBe(1052969904);
   });
 

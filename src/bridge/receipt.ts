@@ -40,7 +40,7 @@ import {
  */
 
 /** Identifies which build produced a receipt, for MBD's audit trail. */
-export const ARCADE_BUILD_ID = 'moonshot-nine/1.0';
+export const ARCADE_BUILD_ID = 'mbd-arcade/1.0';
 
 export interface ReceiptInput {
   bundle: MbdArcadeWorldBundleV1;
@@ -94,7 +94,7 @@ export function buildReceipt(input: ReceiptInput): MbdArcadeGameReceiptV1 | null
         walks: b?.bb ?? 0,
         strikeouts: b?.so ?? 0,
         hitByPitch: b?.hbp ?? 0,
-        // MOONSHOT does not separate a sacrifice fly from other productive
+        // The arcade game does not separate a sacrifice fly from other productive
         // outs in the box score, so this is honestly zero rather than a guess.
         sacrificeFlies: 0,
       },

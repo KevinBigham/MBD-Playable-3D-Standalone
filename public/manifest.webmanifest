@@ -1,7 +1,7 @@
 {
-  "name": "MOONSHOT NINE",
-  "short_name": "Moonshot Nine",
-  "description": "An original arcade baseball game. Ten clubs, eight parks, one cup.",
+  "name": "Mr. Baseball Dynasty",
+  "short_name": "MBD",
+  "description": "An original arcade baseball game. Thirty-two clubs, eight parks, one cup.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

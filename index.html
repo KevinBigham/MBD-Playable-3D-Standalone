@@ -18,10 +18,12 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Moonshot Nine" />
+    <!-- Kept short on purpose: iOS truncates a home-screen label at roughly a
+         dozen characters, and "Mr. Baseball…" is not a name. -->
+    <meta name="apple-mobile-web-app-title" content="MBD" />
     <meta
       name="description"
-      content="MOONSHOT NINE - an original arcade baseball game for the browser, on a desktop or a phone."
+      content="Mr. Baseball Dynasty - an original arcade baseball game for the browser, on a desktop or a phone."
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
@@ -34,19 +36,19 @@
       edit it.
     -->
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180" />
-    <title>MOONSHOT NINE</title>
+    <title>Mr. Baseball Dynasty</title>
   </head>
   <body>
     <div id="app">
       <canvas id="gl"></canvas>
       <div id="ui"></div>
       <div id="boot">
-        <div class="boot-mark">MOONSHOT<span>NINE</span></div>
+        <div class="boot-mark">MR. BASEBALL<span>DYNASTY</span></div>
         <div class="boot-bar"><i></i></div>
-        <div class="boot-note">Building the Meridian Circuit…</div>
+        <div class="boot-note">Taking the field…</div>
       </div>
       <noscript>
-        <div class="noscript">MOONSHOT NINE needs JavaScript enabled to run.</div>
+        <div class="noscript">Mr. Baseball Dynasty needs JavaScript enabled to run.</div>
       </noscript>
     </div>
     <script type="module" src="/src/main.ts"></script>

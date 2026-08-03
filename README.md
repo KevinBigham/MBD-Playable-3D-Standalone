@@ -1,4 +1,4 @@
-# MOONSHOT NINE
+# MR. BASEBALL DYNASTY
 
 **An original arcade baseball game for the browser — on a laptop or a phone.**
 
@@ -14,7 +14,7 @@ bridge and can be handed a dynasty save's rosters the same way. Its own league, 
 row away under *World* and is what seasons and the cup are played on. Eight
 ballparks serve both.
 
-MOONSHOT NINE is a spiritual successor to the fast, personality-filled console
+Mr. Baseball Dynasty is a spiritual successor to the fast, personality-filled console
 baseball games of the late 1990s. Everything in it — the league, the players,
 the parks, the art, the sound, the music and the code — is original and
 generated at runtime. No third-party game assets are used anywhere: there is not
@@ -42,7 +42,7 @@ Then open the URL Vite prints (by default `http://localhost:5173`).
 
 ## Playing it on a phone
 
-MOONSHOT NINE is a phone game that happens to run on a desktop, and the fastest
+Mr. Baseball Dynasty is a phone game that happens to run on a desktop, and the fastest
 way to get it onto a handset is over your own wifi:
 
 ```bash
@@ -90,7 +90,7 @@ itself. It is offered once and never nags.
 
 ## Playing a Mr. Baseball Dynasty world
 
-MOONSHOT NINE is the **arcade consumer** in the MBD arcade-world bridge: it can
+This game is the **arcade consumer** in the MBD arcade-world bridge: it can
 be handed a dynasty's franchises, rosters and ratings, play one game inside
 them, and hand back a factual receipt. **Main menu -> World.**
 
@@ -312,7 +312,7 @@ you can hit against it.
 | **Quick Play** | One exhibition game. Pick both clubs, the park, 3 / 6 / 9 innings, the difficulty, day or night, and whether each club is Player 1, Player 2 or the CPU. Set both to CPU to watch. |
 | **Season** | A saved season of 18, 36 or 54 games per club with standings, league leaders, a full schedule, a four-team postseason and the Meridian Cup. Games you are not in are simulated instantly. Saves automatically after every game. |
 | **Championship** | A standalone eight-club single-elimination bracket. Three wins takes the cup. Saved separately from Season. |
-| **Moonshot Derby** | The home-run challenge. Ten outs each, anything that is not a home run is an out, ties go to a three-out swing-off and then to the longest blast. Two to four hitters, up to two of them human. |
+| **Home Run Derby** | The home-run challenge. Ten outs each, anything that is not a home run is an out, ties go to a three-out swing-off and then to the longest blast. Two to four hitters, up to two of them human. |
 | **Practice** | Endless drills for batting, pitching, fielding and baserunning. Nothing is scored; three outs simply resets the situation. |
 | **Player Creator** | Build an original ballplayer — name, number, position, handedness, build, appearance — and spend a fixed pool of rating points. He joins the club you choose and plays in every mode. Saved locally; deleting him restores the club's original player. |
 | **Clubs & Rosters** | Browse every club's line-up, bench, rotation and ratings. Your creations are tagged. |
@@ -368,8 +368,15 @@ npx tsx scripts/capture.ts     # screenshots + gameplay recording
 npx tsx scripts/perf.ts        # frame rate, heap and GPU resource growth
 npm run test:phone             # the phone audit, in WebKit, with real touches
 npm run test:world             # a first visit lands in the right league, everywhere
+npm run shots                  # close-ups of the player models, five framings
 npm run icons                  # re-rasterise the PNG icons from the SVGs
 ```
+
+`npm run shots` is for model work specifically. It parks the real camera two
+metres from a player and writes a PNG per framing, because at 1600×900 a head is
+nine pixels tall and a cap can be missing its entire crown without anybody
+noticing — which is exactly what happened. It needs the preview server on port
+4178, or `SHOT_URL` pointed somewhere else.
 
 `npm run test:world` runs in a fresh browser context — no stored settings, no
 stored world — because the bug it exists for does not throw. When a menu walks a

@@ -1,7 +1,7 @@
 /**
  * Deterministic, seedable pseudo-random number generation.
  *
- * Every stochastic element in MOONSHOT NINE draws from an Rng instance so that
+ * Every stochastic element in the game draws from an Rng instance so that
  * a (seed, input-sequence) pair always reproduces the same game. Nothing in the
  * simulation may call Math.random().
  */

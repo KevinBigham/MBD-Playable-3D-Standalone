@@ -1,14 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Moonshot Nine">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Mr. Baseball Dynasty">
   <rect width="512" height="512" rx="96" fill="#0b1020"/>
-  <circle cx="256" cy="256" r="150" fill="#f4efe3"/>
+  <circle cx="256" cy="292" r="134" fill="#f4efe3"/>
   <!-- Seams: two opposed arcs, the way a ball reads at a glance. -->
-  <g fill="none" stroke="#c4392b" stroke-width="14" stroke-linecap="round">
-    <path d="M147 154a190 190 0 0 1 0 204"/>
-    <path d="M365 154a190 190 0 0 0 0 204"/>
+  <g fill="none" stroke="#c4392b" stroke-width="13" stroke-linecap="round">
+    <path d="M159 200a170 170 0 0 1 0 184"/>
+    <path d="M353 200a170 170 0 0 0 0 184"/>
   </g>
-  <g fill="none" stroke="#c4392b" stroke-width="9" stroke-linecap="round" opacity="0.85">
-    <path d="M172 176l-22-12M164 212l-26-6M162 250l-27 0M164 288l-26 6M172 324l-22 12"/>
-    <path d="M340 176l22-12M348 212l26-6M350 250l27 0M348 288l26 6M340 324l22 12"/>
+  <g fill="none" stroke="#c4392b" stroke-width="8" stroke-linecap="round" opacity="0.85">
+    <path d="M181 220l-20-11M174 252l-23-5M172 286l-24 0M174 320l-23 5M181 352l-20 11"/>
+    <path d="M331 220l20-11M338 252l23-5M340 286l24 0M338 320l23 5M331 352l20 11"/>
   </g>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="#ffd15c" stroke-width="16"/>
+  <circle cx="256" cy="292" r="134" fill="none" stroke="#ffd15c" stroke-width="13"/>
+  <!--
+    The crown carries the half of the name a baseball cannot. A ball on its own
+    is every baseball game ever made; "Dynasty" is the word that says which one
+    this is. It sits ON the ball rather than beside it so the mark stays a
+    single silhouette, which is all a 60px home-screen tile can hold.
+  -->
+  <path
+    d="M150 178V96l54 46 52-60 52 60 54-46v82z"
+    fill="#ffd15c"
+    stroke="#0b1020"
+    stroke-width="12"
+    stroke-linejoin="round"
+  />
 </svg>

@@ -4,6 +4,15 @@
  * crashing on load. There is no account, no server and no network call.
  */
 
+/**
+ * Deliberately still the pre-rename namespace. Every key a player already has —
+ * their season, their created players, their settings, the game they were part
+ * way through — is stored under it, and localStorage has no rename. Changing
+ * this would not migrate those saves, it would orphan them, and the first
+ * symptom would be a player opening the game to find their season gone.
+ *
+ * A migration could be written. It has not been, so this stays.
+ */
 const NS = 'moonshot9';
 export const SAVE_VERSION = 3;
 

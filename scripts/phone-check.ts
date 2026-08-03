@@ -89,8 +89,8 @@ async function waitPhase(page: Page, phases: string[], maxMs = 25000): Promise<b
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const s = await page.evaluate(() => {
-      const g = (window as unknown as { moonshot: { game?: { phase: string; half: string } } })
-        .moonshot?.game;
+      const g = (window as unknown as { mbd: { game?: { phase: string; half: string } } })
+        .mbd?.game;
       return g ? { phase: g.phase, half: g.half } : null;
     });
     if (s && s.half === 'top' && phases.includes(s.phase)) return true;
@@ -101,7 +101,7 @@ async function waitPhase(page: Page, phases: string[], maxMs = 25000): Promise<b
 
 async function startGame(page: Page, setup: Record<string, unknown>): Promise<void> {
   await page.evaluate((s) => {
-    (window as unknown as { moonshot: { startGame: (x: unknown) => void } }).moonshot.startGame(s);
+    (window as unknown as { mbd: { startGame: (x: unknown) => void } }).mbd.startGame(s);
   }, setup);
 }
 
@@ -326,9 +326,9 @@ async function pixelForPlatePoint(
 ): Promise<{ px: number; py: number; turned: boolean }> {
   return page.evaluate(([px, py]) => {
     const m = window as unknown as {
-      moonshot: { world: { project: (a: number, b: number, c: number) => { x: number; y: number } } };
+      mbd: { world: { project: (a: number, b: number, c: number) => { x: number; y: number } } };
     };
-    const p = m.moonshot.world.project(px, py, 0.62);
+    const p = m.mbd.world.project(px, py, 0.62);
     const app = document.getElementById('app')!.getBoundingClientRect();
     const turned = document.documentElement.classList.contains('rotated');
     return {
@@ -441,8 +441,8 @@ async function auditAim(page: Page): Promise<void> {
         [at.px, at.py],
       );
       const before = await page.evaluate(() => {
-        const g = (window as unknown as { moonshot: { game?: { batter: { cx: number; cy: number } } } })
-          .moonshot.game!;
+        const g = (window as unknown as { mbd: { game?: { batter: { cx: number; cy: number } } } })
+          .mbd.game!;
         return { cx: g.batter.cx, cy: g.batter.cy };
       });
       await page.touchscreen.tap(at.px, at.py);
@@ -450,9 +450,9 @@ async function auditAim(page: Page): Promise<void> {
       const cur = await page.evaluate(() => {
         const g = (
           window as unknown as {
-            moonshot: { game?: { batter: { cx: number; cy: number }; phase: string; half: string } };
+            mbd: { game?: { batter: { cx: number; cy: number }; phase: string; half: string } };
           }
-        ).moonshot.game!;
+        ).mbd.game!;
         return { cx: g.batter.cx, cy: g.batter.cy, phase: g.phase, half: g.half };
       });
       if (cur.half !== 'top' || !['preplay', 'windup', 'pitch'].includes(cur.phase)) continue;
@@ -601,9 +601,9 @@ async function auditSwing(page: Page): Promise<void> {
   const pitch = await page.evaluate(() => {
     const g = (
       window as unknown as {
-        moonshot: { game?: { currentPitch: { plateX: number; plateY: number } | null } };
+        mbd: { game?: { currentPitch: { plateX: number; plateY: number } | null } };
       }
-    ).moonshot.game;
+    ).mbd.game;
     return g?.currentPitch ? { x: g.currentPitch.plateX, y: g.currentPitch.plateY } : null;
   });
   check('the crossing point is known at release', pitch !== null);
@@ -620,11 +620,11 @@ async function auditSwing(page: Page): Promise<void> {
     () => {
       const g = (
         window as unknown as {
-          moonshot: {
+          mbd: {
             game?: { phase: string; ball: { t: number }; currentPitch: { T: number } | null };
           };
         }
-      ).moonshot.game;
+      ).mbd.game;
       if (!g || g.phase !== 'pitch' || !g.currentPitch) return false;
       return g.currentPitch.T - g.ball.t <= 0.2;
     },
@@ -640,8 +640,8 @@ async function auditSwing(page: Page): Promise<void> {
   while (Date.now() < deadline && !grade) {
     grade = await page.evaluate(
       () =>
-        (window as unknown as { moonshot: { game?: { lastSwing: { grade: string } | null } } })
-          .moonshot.game?.lastSwing?.grade ?? '',
+        (window as unknown as { mbd: { game?: { lastSwing: { grade: string } | null } } })
+          .mbd.game?.lastSwing?.grade ?? '',
     );
     if (!grade) await page.waitForTimeout(40);
   }
@@ -678,9 +678,9 @@ async function auditGapPicture(page: Page): Promise<void> {
     const pitch = await page.evaluate(() => {
       const g = (
         window as unknown as {
-          moonshot: { game?: { currentPitch: { plateX: number; plateY: number } | null } };
+          mbd: { game?: { currentPitch: { plateX: number; plateY: number } | null } };
         }
-      ).moonshot.game;
+      ).mbd.game;
       return g?.currentPitch ? { x: g.currentPitch.plateX, y: g.currentPitch.plateY } : null;
     });
     if (!pitch) continue;
@@ -690,11 +690,11 @@ async function auditGapPicture(page: Page): Promise<void> {
         () => {
           const g = (
             window as unknown as {
-              moonshot: {
+              mbd: {
                 game?: { phase: string; ball: { t: number }; currentPitch: { T: number } | null };
               };
             }
-          ).moonshot.game;
+          ).mbd.game;
           if (!g || g.phase !== 'pitch' || !g.currentPitch) return false;
           return g.currentPitch.T - g.ball.t <= 0.2;
         },
@@ -784,7 +784,7 @@ async function main(): Promise<void> {
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto(BASE, { waitUntil: 'load' });
     await page.waitForFunction(
-      () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+      () => !!(window as unknown as { mbd?: unknown }).mbd,
       undefined,
       { timeout: 20000 },
     );
@@ -792,7 +792,7 @@ async function main(): Promise<void> {
     return [context, page];
   };
 
-  console.log(`\nMOONSHOT NINE — phone audit in WebKit against ${BASE}`);
+  console.log(`\nMr. Baseball Dynasty — phone audit in WebKit against ${BASE}`);
   console.log(`iPhone profile: ${IPHONE.viewport.width}x${IPHONE.viewport.height} @${IPHONE.deviceScaleFactor}x, touch=${IPHONE.hasTouch}\n`);
 
   // ---- portrait: the way a phone is picked up

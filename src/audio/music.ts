@@ -1,5 +1,5 @@
 /**
- * MOONSHOT NINE — procedural music.
+ * Mr. Baseball Dynasty — procedural music.
  *
  * Every note here is synthesised from oscillators and JS-authored noise; the
  * project ships no audio assets of any kind.

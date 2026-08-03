@@ -30,14 +30,14 @@ const ok = (n: string, c: boolean, d = '') => { console.log(`  ${c ? 'PASS' : 'F
   page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   page.on('pageerror', (e) => errs.push(String(e)));
   await page.goto(BASE, { waitUntil: 'load' });
-  await page.waitForFunction(() => !!(window as any).moonshot);
+  await page.waitForFunction(() => !!(window as any).mbd);
   await page.waitForTimeout(1500);
 
   const stored = await page.evaluate(() => localStorage.getItem('moonshot9:world'));
   ok('nothing was stored before this visit', stored === null || stored === undefined, String(stored).slice(0, 40));
 
   const league = await page.evaluate(() => {
-    const m = (window as any).moonshot;
+    const m = (window as any).mbd;
     return { n: m.teams.length, ids: m.teams.slice(0, 3).map((t: any) => t.id), parks: [...new Set(m.teams.map((t: any) => t.homeStadium))].length };
   });
   ok('a first run opens in the MBD world', league.n === 32, `${league.n} clubs: ${league.ids.join(', ')}`);
@@ -48,7 +48,7 @@ const ok = (n: string, c: boolean, d = '') => { console.log(`  ${c ? 'PASS' : 'F
   // stacked Kansas City franchise, and he only exists if MBD's own generator
   // produced this roster.
   const kc = await page.evaluate(() => {
-    const t = (window as any).moonshot.teams.find((x: any) => x.id === 'kc');
+    const t = (window as any).mbd.teams.find((x: any) => x.id === 'kc');
     if (!t) return null;
     const best = [...t.players].sort((a: any, b: any) =>
       (b.pitch ? b.pitch.velocity + b.pitch.movement : 0) - (a.pitch ? a.pitch.velocity + a.pitch.movement : 0),
@@ -76,7 +76,7 @@ const ok = (n: string, c: boolean, d = '') => { console.log(`  ${c ? 'PASS' : 'F
   console.log(`  ....  away=${away.replace(/\n/g, ' ')} | home=${home.replace(/\n/g, ' ')} | ${park.replace(/\n/g, ' ')}`);
 
   // Cycle the away club with the keyboard and make sure it stays in the league.
-  const before = await page.evaluate(() => (window as any).moonshot.teams.map((t: any) => t.id));
+  const before = await page.evaluate(() => (window as any).mbd.teams.map((t: any) => t.id));
   for (let i = 0; i < 6; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(60); }
   const cycled = (await page.locator('.menu-item').allInnerTexts()).find((r) => /Away club/i.test(r)) ?? '';
   const cityOk = before.length === 32 && !/ANCHORS|COMETS|STINGRAYS/i.test(cycled);
@@ -86,7 +86,7 @@ const ok = (n: string, c: boolean, d = '') => { console.log(`  ${c ? 'PASS' : 'F
   await page.locator('.menu-item .label', { hasText: /^Play ball/i }).first().click();
   await page.waitForTimeout(2500);
   const game = await page.evaluate(() => {
-    const g = (window as any).moonshot.game;
+    const g = (window as any).mbd.game;
     return g ? { away: g.away.id, home: g.home.id, park: g.setup.stadiumId } : null;
   });
   ok('the game starts with MBD clubs', !!game && game.away !== game.home, JSON.stringify(game));

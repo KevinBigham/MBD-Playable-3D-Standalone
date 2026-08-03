@@ -6,7 +6,7 @@ import type { ArcadeRating } from './contract';
  *
  * MBD keeps ratings on an internal 0–550 scale and publishes three derived
  * views of each one: a 20–80 scouting grade, a 0–1 normalized value, and a
- * 0–99 arcade convenience. MOONSHOT NINE keeps its attributes on 20–99, which
+ * 0–99 arcade convenience. The arcade game keeps its attributes on 20–99, which
  * is a fourth scale, and getting between the two is the single most
  * consequential piece of arithmetic in the whole bridge — every swing, every
  * pitch and every throw in an imported game is downstream of it.
@@ -33,12 +33,12 @@ import type { ArcadeRating } from './contract';
 export const MBD_INTERNAL_MAX = 550;
 
 /**
- * MOONSHOT's attribute range. `attr01()` in core/constants is `(v - 20) / 79`,
+ * The arcade game's attribute range. `attr01()` in core/constants is `(v - 20) / 79`,
  * so 20 is the floor of the scale and 99 is the ceiling; these are that
  * function's own endpoints rather than a preference.
  */
-export const MOONSHOT_ATTR_MIN = 20;
-export const MOONSHOT_ATTR_MAX = 99;
+export const ARCADE_ATTR_MIN = 20;
+export const ARCADE_ATTR_MAX = 99;
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
@@ -63,7 +63,7 @@ export function makeRating(internal: number): ArcadeRating {
 }
 
 /**
- * A source rating as a MOONSHOT attribute.
+ * A source rating as an arcade attribute.
  *
  * Deliberately linear. A curve here would be a balance decision taken in the
  * one place nobody would look for it — halfway across a data bridge — and it
@@ -73,11 +73,11 @@ export function makeRating(internal: number): ArcadeRating {
  */
 export function toAttribute(r: ArcadeRating): number {
   const n = clamp(r.internal, 0, MBD_INTERNAL_MAX) / MBD_INTERNAL_MAX;
-  return Math.round(MOONSHOT_ATTR_MIN + n * (MOONSHOT_ATTR_MAX - MOONSHOT_ATTR_MIN));
+  return Math.round(ARCADE_ATTR_MIN + n * (ARCADE_ATTR_MAX - ARCADE_ATTR_MIN));
 }
 
 /**
- * A blend of source ratings as a MOONSHOT attribute, for the handful of places
+ * A blend of source ratings as an arcade attribute, for the handful of places
  * where this game asks a question MBD answers with two numbers.
  *
  * Weights must be non-negative and are normalised, which is what keeps the
@@ -93,13 +93,13 @@ export function blendAttribute(parts: Array<{ rating: ArcadeRating; weight: numb
     total += w;
     sum += w * (clamp(p.rating.internal, 0, MBD_INTERNAL_MAX) / MBD_INTERNAL_MAX);
   }
-  if (total <= 0) return MOONSHOT_ATTR_MIN;
+  if (total <= 0) return ARCADE_ATTR_MIN;
   const n = sum / total;
-  return Math.round(MOONSHOT_ATTR_MIN + n * (MOONSHOT_ATTR_MAX - MOONSHOT_ATTR_MIN));
+  return Math.round(ARCADE_ATTR_MIN + n * (ARCADE_ATTR_MAX - ARCADE_ATTR_MIN));
 }
 
 /**
- * A 0–100 personality score as a MOONSHOT attribute.
+ * A 0–100 personality score as an arcade attribute.
  *
  * Personality is on its own scale in MBD and is allowed to reach exactly one
  * thing here — the pitcher's composure, from mental toughness, which the
@@ -108,7 +108,7 @@ export function blendAttribute(parts: Array<{ rating: ArcadeRating; weight: numb
  */
 export function personalityToAttribute(v: number): number {
   const n = clamp(v, 0, 100) / 100;
-  return Math.round(MOONSHOT_ATTR_MIN + n * (MOONSHOT_ATTR_MAX - MOONSHOT_ATTR_MIN));
+  return Math.round(ARCADE_ATTR_MIN + n * (ARCADE_ATTR_MAX - ARCADE_ATTR_MIN));
 }
 
 /**

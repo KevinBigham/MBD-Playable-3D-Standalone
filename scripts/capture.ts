@@ -45,7 +45,7 @@ async function waitPhase(page: Page, phases: string[], maxMs = 15000): Promise<v
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     const p = await page.evaluate(
-      () => (window as unknown as { moonshot: { game?: { phase: string } } }).moonshot.game?.phase,
+      () => (window as unknown as { mbd: { game?: { phase: string } } }).mbd.game?.phase,
     );
     if (p && phases.includes(p)) return;
     await page.waitForTimeout(30);
@@ -57,11 +57,11 @@ async function flightProgress(page: Page): Promise<number> {
   return page.evaluate(() => {
     const g = (
       window as unknown as {
-        moonshot: {
+        mbd: {
           game?: { phase: string; ball: { t: number }; currentPitch: { T: number } | null };
         };
       }
-    ).moonshot.game;
+    ).mbd.game;
     if (!g || g.phase !== 'pitch' || !g.currentPitch) return 0;
     return g.ball.t / g.currentPitch.T;
   });
@@ -99,14 +99,14 @@ async function shotInFlight(page: Page, name: string, target = 0.68, attempts = 
 
 async function menu(page: Page): Promise<void> {
   await page.evaluate(() =>
-    (window as unknown as { moonshot: { gotoMainMenu(): void } }).moonshot.gotoMainMenu(),
+    (window as unknown as { mbd: { gotoMainMenu(): void } }).mbd.gotoMainMenu(),
   );
   await page.waitForTimeout(500);
 }
 
 async function startGame(page: Page, setup: Record<string, unknown>): Promise<void> {
   await page.evaluate((s) => {
-    (window as unknown as { moonshot: { startGame(x: unknown): void } }).moonshot.startGame(s);
+    (window as unknown as { mbd: { startGame(x: unknown): void } }).mbd.startGame(s);
   }, setup);
 }
 
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
 
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForFunction(
-    () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+    () => !!(window as unknown as { mbd?: unknown }).mbd,
     undefined,
     { timeout: 30000 },
   );
@@ -144,6 +144,17 @@ async function main(): Promise<void> {
   await shot(page, '03-quick-play');
   await choose(page, 'Away club');
   await shot(page, '04-team-select');
+
+  // Everything above is deliberately shot in the world the game opens in —
+  // MBD's thirty-two clubs — because that is what a player actually lands in.
+  // Seasons and the cup live in the Meridian Circuit and are disabled until the
+  // league is switched, so the rows below do not exist yet. This used to run
+  // straight into a locator timing out on a row that was never going to appear.
+  await menu(page);
+  await choose(page, 'World');
+  await shot(page, '33-world-menu');
+  await choose(page, 'The Meridian Circuit');
+  await page.waitForTimeout(700);
 
   await menu(page);
   await choose(page, 'Season');
@@ -163,7 +174,7 @@ async function main(): Promise<void> {
   await shot(page, '08-championship-bracket');
 
   await menu(page);
-  await choose(page, 'Moonshot Derby');
+  await choose(page, 'Home Run Derby');
   await shot(page, '09-derby-setup');
 
   await menu(page);
@@ -281,11 +292,11 @@ async function main(): Promise<void> {
     airborne = await page.evaluate(() => {
       const s = (
         window as unknown as {
-          moonshot: {
+          mbd: {
             game: { phase: string; ball: { mode: string; x: number; y: number; z: number } };
           };
         }
-      ).moonshot.game;
+      ).mbd.game;
       const d = Math.hypot(s.ball.x, s.ball.z);
       return s.phase === 'inplay' && s.ball.mode === 'batted' && s.ball.y > 6 && d > 28;
     });
@@ -317,8 +328,8 @@ async function main(): Promise<void> {
       await page.waitForTimeout(80);
       sawHomeRun = await page.evaluate(
         () =>
-          (window as unknown as { moonshot: { game?: { play?: { homeRunCelebration?: boolean } } } })
-            .moonshot.game?.play?.homeRunCelebration ?? false,
+          (window as unknown as { mbd: { game?: { play?: { homeRunCelebration?: boolean } } } })
+            .mbd.game?.play?.homeRunCelebration ?? false,
       );
       if (sawHomeRun) break;
     }
@@ -329,7 +340,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < 2600; i++) {
     await page.waitForTimeout(140);
     const done = await page.evaluate(() => {
-      const app = (window as unknown as { moonshot: { mode: string } }).moonshot;
+      const app = (window as unknown as { mbd: { mode: string } }).mbd;
       return app.mode === 'menu' && !!document.querySelector('.result-hero');
     });
     if (done) break;
@@ -357,7 +368,7 @@ async function main(): Promise<void> {
   phone.on('pageerror', (e) => errors.push('[phone] ' + String(e)));
   await phone.goto(BASE, { waitUntil: 'networkidle' });
   await phone.waitForFunction(
-    () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+    () => !!(window as unknown as { mbd?: unknown }).mbd,
     undefined,
     { timeout: 30000 },
   );
@@ -400,7 +411,7 @@ async function main(): Promise<void> {
   // touched, wherever that is, including outside the drawn zone.
   await phone.waitForFunction(
     () => {
-      const app = (window as unknown as { moonshot?: { game?: { phase: string } } }).moonshot;
+      const app = (window as unknown as { mbd?: { game?: { phase: string } } }).mbd;
       return app?.game?.phase === 'pitch';
     },
     undefined,
@@ -412,7 +423,7 @@ async function main(): Promise<void> {
       world: { project(x: number, y: number, z: number): { x: number; y: number } };
       touch: { tapModeNow(): string };
     }
-    const app = (window as unknown as { moonshot: Api }).moonshot;
+    const app = (window as unknown as { mbd: Api }).mbd;
     const info = app.game.currentPitch;
     const canvas = document.getElementById('gl') as HTMLCanvasElement;
     if (!info || !canvas) return null;
@@ -458,7 +469,7 @@ async function main(): Promise<void> {
   locked.on('pageerror', (e) => errors.push('[portrait] ' + String(e)));
   await locked.goto(BASE, { waitUntil: 'networkidle' });
   await locked.waitForFunction(
-    () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+    () => !!(window as unknown as { mbd?: unknown }).mbd,
     undefined,
     { timeout: 30000 },
   );
@@ -520,7 +531,7 @@ async function main(): Promise<void> {
 
   await vp.goto(BASE, { waitUntil: 'networkidle' });
   await vp.waitForFunction(
-    () => !!(window as unknown as { moonshot?: unknown }).moonshot,
+    () => !!(window as unknown as { mbd?: unknown }).mbd,
     undefined,
     { timeout: 30000 },
   );

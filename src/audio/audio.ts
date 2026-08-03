@@ -1,5 +1,5 @@
 /**
- * MOONSHOT NINE — audio engine.
+ * Mr. Baseball Dynasty — audio engine.
  *
  * Everything is synthesised at runtime with the Web Audio API: oscillators,
  * noise buffers filled in JavaScript, biquad filters, envelopes, a waveshaper

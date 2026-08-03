@@ -25,7 +25,7 @@ import { contactVelocity, pullDirection, resolveSwing, swingProfile } from '../s
 import type { InputFrame, InputPair } from '../sim/input';
 
 /**
- * MOONSHOT DERBY — the home-run challenge.
+ * HOME RUN DERBY — the home-run challenge.
  *
  * Rules (deliberately simple and stated on screen):
  *   - Each hitter gets ten outs.
@@ -120,7 +120,7 @@ export function createDerby(setup: DerbySetup): DerbyState {
     pitchT: 0,
     timeScale: PITCH_TEMPO[setup.pitchTempo ?? DEFAULT_PITCH_TEMPO],
     lastResult: null,
-    banner: 'MOONSHOT DERBY',
+    banner: 'HOME RUN DERBY',
     bannerSub: 'TEN OUTS EACH',
     bannerT: 2.4,
     rng: new Rng(setup.seed),

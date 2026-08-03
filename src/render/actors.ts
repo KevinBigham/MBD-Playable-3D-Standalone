@@ -314,7 +314,79 @@ function numberGeo(n: number, h: number): THREE.BufferGeometry {
   return mergedBoxes(`num:${text}:${h.toFixed(3)}`, parts);
 }
 
-/** A dome, for a cap crown or a helmet shell. */
+/**
+ * A cap crown, from the band up over the top of the head.
+ *
+ * This is a lathe rather than a dome because a cap is not half a ball: it rises
+ * from a band that grips the skull, swells slightly above it, and then rounds
+ * off. The small outward kick at the bottom is the whole trick — it is the cap's
+ * edge standing proud of the head, and it is what reads as *wearing* a hat
+ * rather than as a differently-coloured scalp.
+ *
+ * `h` is measured from the band to the button and has to clear the skull, which
+ * is the mistake that shipped: the crown was a squashed dome whose top sat below
+ * the top of the head, so every fielder wore a hat with a hole in it and a bare
+ * scalp coming through. Nobody spotted it from the wide shot, where a head is
+ * nine pixels tall.
+ */
+function capGeo(key: string, r: number, h: number): THREE.LatheGeometry {
+  return lathe(
+    key,
+    [
+      [0, 0],
+      [r * 0.99, 0],
+      [r, h * 0.08],
+      [r * 0.98, h * 0.26],
+      [r * 0.9, h * 0.52],
+      [r * 0.72, h * 0.76],
+      [r * 0.44, h * 0.93],
+      [0, h],
+    ],
+    16,
+  );
+}
+
+/**
+ * A bill: the front half of a flattened disc, and nothing behind the ears.
+ *
+ * The old one was a *whole* disc shoved forward, which put as much of itself
+ * around the back of the skull as out over the eyes. From the fielding camera —
+ * high, looking down, which is where a player spends most of a game — it read as
+ * a collar. Cylinder geometry takes a theta range, so the half that is not a
+ * bill simply never gets built.
+ */
+function billGeo(key: string, r: number, thick: number): THREE.CylinderGeometry {
+  let g = GEO_CACHE.get(key) as THREE.CylinderGeometry | undefined;
+  if (!g) {
+    // Theta is measured from +z, which is the model's front, so starting a
+    // half-turn at -90° sweeps exactly the forward half.
+    g = new THREE.CylinderGeometry(r, r * 0.93, thick, 14, 1, false, -Math.PI / 2, Math.PI);
+    GEO_CACHE.set(key, g);
+  }
+  return g;
+}
+
+/**
+ * The dark strip a face reads as at any distance this game actually gets to.
+ *
+ * An arc of a cylinder wall rather than a flat panel. A flat panel laid across a
+ * curved skull has to poke through at its corners in order to be visible at its
+ * centre — geometry, not tuning — and that is what put a dark rectangle out of
+ * the side of every head. An arc follows the skull, so it can sit a hair proud
+ * of it everywhere at once and never break the silhouette.
+ */
+function faceBandGeo(key: string, r: number, h: number): THREE.CylinderGeometry {
+  let g = GEO_CACHE.get(key) as THREE.CylinderGeometry | undefined;
+  if (!g) {
+    // Theta 0 is the model's front; ±40° is about as far around a head as a
+    // pair of eyes reaches.
+    g = new THREE.CylinderGeometry(r, r, h, 12, 1, true, -0.7, 1.4);
+    GEO_CACHE.set(key, g);
+  }
+  return g;
+}
+
+/** A dome, for a helmet shell. */
 function domeGeo(key: string, r: number, squash = 1): THREE.LatheGeometry {
   const pts: Profile = [];
   const steps = 7;
@@ -574,22 +646,29 @@ export class PlayerActor {
 
     // Button placket down the front. One thin vertical stripe is still the
     // cheapest thing that turns a coloured shape into a jersey.
+    //
+    // The model faces +z — that is where the face is, and every caller aims a
+    // player with atan2 so that +z points at whatever he is looking at. The
+    // placket and the number were both built on the opposite assumption and came
+    // out swapped: buttons down the spine, numbers across the chest, backwards.
     const placket = new THREE.Mesh(
       box(`${k}:placket`, torsoW * 0.09, torsoH * 0.72, 0.02),
       trim,
     );
-    placket.position.set(0, torsoH * 0.45, -torsoD * 0.5 - 0.012);
+    placket.position.set(0, torsoH * 0.45, torsoD * 0.5 + 0.012);
     this.torso.add(placket);
 
     // The number, on the back. The plate camera spends most of a game looking at
     // exactly this rectangle of jersey, and nothing else available at this
-    // budget says "a person is wearing a uniform" half as loudly.
+    // budget says "a person is wearing a uniform" half as loudly. The half turn
+    // faces the digits outward; it mirrors their order too, and the two
+    // cancel, so a two-digit number still reads left to right.
     if (jerseyNumber > 0) {
       const digits = new THREE.Mesh(
         numberGeo(jerseyNumber, torsoH * 0.3),
         mat(colors.trim),
       );
-      digits.position.set(0, torsoH * 0.62, torsoD * 0.5 + 0.008);
+      digits.position.set(0, torsoH * 0.62, -torsoD * 0.5 - 0.008);
       digits.rotation.y = Math.PI;
       this.torso.add(digits);
     }
@@ -612,20 +691,17 @@ export class PlayerActor {
     const skull = new THREE.Mesh(headGeo(`${k}:skull`, headR), smoothMat(colors.skin));
     skull.scale.z = 1.08;
     this.head.add(skull);
-    // A brow and two eyes, in one mesh and one colour. Separate meshes would be
-    // three draw calls per player and fifty-four across a fielding side, for
-    // eight triangles of detail; merged it is free. One dark tone for all three
-    // reads as a shadowed eye region, which at any distance this camera reaches
-    // is exactly what a face looks like.
+    // One dark band across the eyes, in one mesh and one colour. This was three
+    // flat boxes — a brow and two eyes — and they had to stand off the skull far
+    // enough to be seen, which meant their corners came out through the side of
+    // the head and, once there was a cap, out through the side of the cap. A
+    // band curved to the skull reads the same and cannot do that.
     const face = new THREE.Mesh(
-      mergedBoxes(`${k}:face`, [
-        { w: headR * 1.45, h: headR * 0.16, d: 0.02, x: 0, y: headR * 0.34, z: 0 },
-        { w: headR * 0.3, h: headR * 0.22, d: 0.02, x: -headR * 0.4, y: headR * 0.1, z: 0 },
-        { w: headR * 0.3, h: headR * 0.22, d: 0.02, x: headR * 0.4, y: headR * 0.1, z: 0 },
-      ]),
+      faceBandGeo(`${k}:face`, headR * 0.985, headR * 0.24),
       mat(shade(colors.skin, -0.5)),
     );
-    face.position.set(0, 0, headR * 1.01);
+    face.position.y = headR * 0.04;
+    face.scale.z = 1.08;
     this.head.add(face);
 
     let headgearShell: THREE.Mesh | null = null;
@@ -659,22 +735,37 @@ export class PlayerActor {
       peak.position.set(0, -headR * 0.12, headR * 0.82);
       this.head.add(peak);
     } else {
-      const crown = new THREE.Mesh(domeGeo(`${k}:crown`, headR * 1.04, 0.92), smoothMat(colors.jersey));
-      crown.scale.z = 1.06;
-      crown.position.y = -headR * 0.1;
+      // The band sits at the forehead, above the eyes and below the crown of
+      // the skull. The old one sat far lower and was still shorter than the
+      // head, which is how it managed to cover the eyes and expose the scalp at
+      // the same time.
+      const band = headR * 0.22;
+      const crown = new THREE.Mesh(
+        capGeo(`${k}:crown`, headR * 1.06, headR * 0.98),
+        smoothMat(colors.jersey),
+      );
+      // The skull is scaled 1.08 deep, so the cap has to be deeper still or the
+      // head pushes out through the back of its own hat.
+      crown.scale.z = 1.1;
+      crown.position.y = band;
       this.head.add(crown);
       headgearShell = crown;
       const button = new THREE.Mesh(
-        limbGeo(`${k}:capbutton`, headR * 0.2, headR * 0.13, headR * 0.11, 6),
+        limbGeo(`${k}:capbutton`, headR * 0.16, headR * 0.12, headR * 0.1, 6),
         smoothMat(colors.trim),
       );
-      button.position.y = headR * 0.88;
+      button.position.y = band + headR * 0.98;
       this.head.add(button);
-      // A curved brim, not a plank: a flattened disc pushed out over the eyes.
-      const brim = new THREE.Mesh(cyl(`${k}:brim`, headR * 0.96, headR * 0.96, 0.026, 14), trim);
-      brim.scale.set(1, 1, 1.5);
-      brim.position.set(0, -headR * 0.06, headR * 0.78);
-      this.head.add(brim);
+      // In the club's second colour, because a cap the same colour as the
+      // jersey below it is a silhouette with nothing in it at fielding
+      // distance — which is the distance this is nearly always seen from.
+      const bill = new THREE.Mesh(billGeo(`${k}:bill`, headR * 0.98, 0.028), trim);
+      // Narrower than the head and half again as long: a bill, not a brim. Kept
+      // shallow enough that it shades the eyes instead of deleting them.
+      bill.scale.set(0.8, 1, 1.5);
+      bill.position.set(0, band + headR * 0.02, 0);
+      bill.rotation.x = 0.07;
+      this.head.add(bill);
     }
     this.headScale = hs;
     // Just clear of the neck's top dome: the old figure left a gap the cap hid

@@ -540,7 +540,7 @@ count like a hitter rather than hacking at everything.
 
 Measured over 100 CPU-versus-CPU nine-inning games on Pro:
 
-| Statistic | MOONSHOT NINE | Real baseball | Note |
+| Statistic | Mr. Baseball Dynasty | Real baseball | Note |
 |---|---|---|---|
 | Runs per game (both clubs) | 9.4 | 8.6 | Deliberately above real baseball |
 | Hits per game | 18.9 | 17.0 | |
@@ -807,6 +807,16 @@ boxes stacked into a staircase; a chest is squashed front-to-back by scaling the
 mesh, because a torso is an oval from above and modelling that would have cost
 something. The head has a cranium and a jaw instead of a cube with a dark stripe
 painted across the front to say which way it faced.
+
+Headgear tells you who is doing what, so it has to survive being small. A batter
+wears a deep helmet shell with one ear flap; everybody else wears a cap — a
+turned crown that clears the top of the skull, a bill built as the forward half
+of a disc, and a button. The bill is in the club's second colour on purpose: a
+cap the same colour as the jersey under it is a silhouette with nothing in it
+from the fielding camera, which is where a player sees a fielder from almost all
+of the time. The face is one dark band curved to the skull rather than flat
+panels laid across it, because a flat panel on a curved head has to poke through
+at its corners to be visible at its centre.
 
 A limb went from 12 triangles to about 160 and **the draw calls did not move**,
 which is the only number a phone cares about. Eighteen players on the field is

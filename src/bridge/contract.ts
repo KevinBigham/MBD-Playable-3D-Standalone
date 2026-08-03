@@ -2,8 +2,8 @@
  * THE MBD ARCADE WORLD BRIDGE — v1 contract.
  * ==========================================
  *
- * Mr. Baseball Dynasty owns a world: thirty-two franchises, their rosters,
- * every player's ratings and age and injury and story. MOONSHOT NINE owns a
+ * MBD, the dynasty sim, owns a world: thirty-two franchises, their rosters,
+ * every player's ratings and age and injury and story. The arcade game owns a
  * game: a bat, a ball, nine fielders and a person holding a phone. This file is
  * the seam between them, and it is deliberately only a *description* — no
  * behaviour, no defaults, no conveniences. Everything here is transcribed from
@@ -27,6 +27,13 @@
  *   pitch repertoire, stadium or weather. This game needs all of those to draw
  *   anything at all, so it makes them up — visibly, deterministically, and
  *   marked as `derived_arcade_v1` so nothing ever writes them back as truth.
+ *
+ * A NOTE ON THE NAME. The arcade game is now called Mr. Baseball Dynasty too,
+ * which makes "MBD" ambiguous in exactly the place it can least afford to be.
+ * Throughout `bridge/`, **MBD** means the dynasty sim — the world authority on
+ * the other side of this seam — and **the arcade game** means this one. The
+ * wire format keeps its `mbd-arcade-*` names, which were agreed in the handoff
+ * and are not ours to rename.
  *
  * The canonical source map lives in the handoff. Re-check it rather than
  * trusting this file forever; these are someone else's facts.

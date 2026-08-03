@@ -273,16 +273,16 @@ Chromium at **1920x1080**, nine-inning All-Star game running live:
 
 | Measure | Value |
 |---|---|
-| Page load to interactive title screen | 734 ms |
-| Frame rate, minimum over 35 s | 73.7 |
-| Frame rate, 5th percentile | 75.0 |
-| Frame rate, mean | 81.1 |
-| Frame rate, maximum | 89.0 |
+| Page load to interactive title screen | 791 ms |
+| Frame rate, minimum over 25 s | 74.1 |
+| Frame rate, 5th percentile | 76.8 |
+| Frame rate, mean | 81.9 |
+| Frame rate, maximum | 89.6 |
 
 Those numbers are **after** three graphics passes — lathe-turned player models
-with faces and jersey numbers, real cast shadows, a four-times-denser crowd,
-tiered stands with decks, a scoreboard and a gradient sky. Before any of them
-the same harness reported min 76.0 / mean 81.9.
+with faces, caps and jersey numbers, real cast shadows, a four-times-denser
+crowd, tiered stands with decks, a scoreboard and a gradient sky. Before any of
+them the same harness reported min 76.0 / mean 81.9.
 
 The third pass replaced every box in a player with a turned form and **did not
 move the frame rate**, which is the point of it: a limb went from 12 triangles to
@@ -290,6 +290,13 @@ about 160 while the draw calls stayed where they were. Eighteen players on the
 field is 235 draw calls and under 40 000 triangles — the outfield wall is more
 geometry than the whole roster. Load is 190 ms slower because a first visit now
 also fetches MBD's 896 real players.
+
+The headgear rebuild that followed is mesh-for-mesh identical — a crown, a
+button and a bill where there was a crown, a button and a brim — and the face
+went from a three-box merge to a single curved band, so it is slightly *less*
+geometry than before. The harness confirms no movement: min 74.1 against 73.7,
+mean 81.9 against 81.1, heap flat across eight consecutive games, GPU geometries
+208 → 209.
 
 The second model pass took a player to ~34 meshes and briefly cost a third of the
 frame rate — **min 54.6** — because the shadow pass was running over every
@@ -404,15 +411,23 @@ Verified in the running product:
 | Standings, league leaders, full schedule | Populated and correct |
 | Postseason and champion | Reached, exactly one champion |
 | Championship bracket | 7 matches, no holes, one champion |
-| Moonshot Derby | Runs to a winner including the swing-off path |
+| Home Run Derby | Runs to a winner including the swing-off path |
 | Practice drills (all four) | Endless, three outs resets the situation |
 | Player creator: create, save, reload, appears on the club, delete restores | Works |
 | Audio unlock after a gesture, volume setters, 40 sounds in one frame | Works, nothing thrown |
 | Browser refresh on a menu | Clean restart, save intact |
 
-Evidence: 23 screenshots in `docs/screenshots/` and
+Evidence: the screenshots in `docs/screenshots/` and
 `docs/recordings/gameplay.webm`, all captured from the production build with
 **zero console errors in both the screenshot pass and the recording pass**.
+
+The five `model-*.png` shots come from a different harness — `npm run shots` —
+which parks the real camera two metres from a player and renders one frame per
+framing. It exists because the wide shots above cannot show a modelling defect:
+a head is nine pixels tall in them, and a cap whose crown sat entirely below the
+top of the skull survived a full review that way. `model-fielder-behind.png` is
+the only shot in the set that can prove a jersey number is on the *back* of a
+jersey, which for one release it was not.
 
 Three of the shots verify themselves rather than trusting the frame:
 `21-plate-view-pitch.png` fires the shutter early, then checks afterwards where

@@ -1,5 +1,5 @@
 /**
- * World constants for MOONSHOT NINE.
+ * World constants for Mr. Baseball Dynasty.
  *
  * COORDINATE SYSTEM (right-handed, metres):
  *   origin = the back tip of home plate

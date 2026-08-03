@@ -9,8 +9,8 @@ import { STADIUMS, STADIUM_BY_ID } from '../data/stadiums';
 import { TEAM_IDENTITIES, homeStadiumOf, nextTeamId, shiftTeam } from '../data/teams';
 import {
   MBD_INTERNAL_MAX,
-  MOONSHOT_ATTR_MAX,
-  MOONSHOT_ATTR_MIN,
+  ARCADE_ATTR_MAX,
+  ARCADE_ATTR_MIN,
   blendAttribute,
   makeRating,
   personalityToAttribute,
@@ -27,7 +27,7 @@ import type { MbdArcadeWorldBundleV1 } from '../bridge/contract';
 /**
  * THE MBD BRIDGE
  * ==============
- * MOONSHOT NINE is the arcade consumer in the MBD arcade-world contract: it
+ * The arcade game is the consumer side of the MBD arcade-world contract: it
  * receives a world, plays one game inside it, and hands back a receipt. The
  * contract's own safety rules are what this file tests, because every one of
  * them describes a way for two games to quietly disagree about the same
@@ -70,8 +70,8 @@ describe('ratings cross the bridge once', () => {
   });
 
   it('spans this game’s attribute range end to end', () => {
-    expect(toAttribute(makeRating(0))).toBe(MOONSHOT_ATTR_MIN);
-    expect(toAttribute(makeRating(MBD_INTERNAL_MAX))).toBe(MOONSHOT_ATTR_MAX);
+    expect(toAttribute(makeRating(0))).toBe(ARCADE_ATTR_MIN);
+    expect(toAttribute(makeRating(MBD_INTERNAL_MAX))).toBe(ARCADE_ATTR_MAX);
   });
 
   it('never makes a better player worse — every rating, every value', () => {
@@ -86,7 +86,7 @@ describe('ratings cross the bridge once', () => {
       expect(v).toBeGreaterThanOrEqual(last);
       last = v;
     }
-    expect(last).toBe(MOONSHOT_ATTR_MAX);
+    expect(last).toBe(ARCADE_ATTR_MAX);
   });
 
   it('stays monotone in every input when two ratings are blended', () => {
@@ -125,9 +125,9 @@ describe('ratings cross the bridge once', () => {
   });
 
   it('maps personality on its own 0..100 scale', () => {
-    expect(personalityToAttribute(0)).toBe(MOONSHOT_ATTR_MIN);
-    expect(personalityToAttribute(100)).toBe(MOONSHOT_ATTR_MAX);
-    expect(personalityToAttribute(-5)).toBe(MOONSHOT_ATTR_MIN);
+    expect(personalityToAttribute(0)).toBe(ARCADE_ATTR_MIN);
+    expect(personalityToAttribute(100)).toBe(ARCADE_ATTR_MAX);
+    expect(personalityToAttribute(-5)).toBe(ARCADE_ATTR_MIN);
   });
 });
 

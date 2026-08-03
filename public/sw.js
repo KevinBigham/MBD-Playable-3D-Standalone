@@ -1,5 +1,5 @@
 /**
- * MOONSHOT NINE — offline service worker.
+ * Mr. Baseball Dynasty — offline service worker.
  *
  * The game has no server. It has no account, no matchmaking and no telemetry;
  * once the files are on the device there is nothing left for the network to do.
@@ -23,7 +23,10 @@
  * with their cache generation.
  */
 
-const CACHE = 'moonshot9-v3';
+// Bumped for the rename. The icons and the shell HTML changed identity rather
+// than content, and a cache generation is the only thing that evicts an
+// already-installed copy still wearing the old name and the old tile.
+const CACHE = 'mbd-v4';
 
 /** The minimum needed to boot to a playable state with no network at all. */
 const SHELL = [

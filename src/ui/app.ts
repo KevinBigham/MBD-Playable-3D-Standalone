@@ -340,9 +340,14 @@ export class App implements AppApi {
     this.attract = null;
     if (this.mode === 'menu') {
       this.startAttract();
-      // Only if they have already walked past the title card — otherwise the
-      // menu they have not seen yet will be built from the new league anyway.
-      if (this.stack.length > 1) this.gotoMainMenu();
+      // The title card only needs redrawing, and must not be navigated away
+      // from: its tagline names the league that is on the field, and until this
+      // moment that was the Meridian Circuit. Anywhere else, the rows
+      // themselves are built from the league and are only rebuilt by rebuilding
+      // the menu — a ListScreen assembles its rows once, in its constructor.
+      const top = this.stack[this.stack.length - 1];
+      if (top instanceof TitleScreen) top.render();
+      else this.gotoMainMenu();
     }
   }
 
@@ -510,7 +515,7 @@ export class App implements AppApi {
     el.innerHTML = `
       <div class="rot-icon">⟳</div>
       <h2>TURN YOUR PHONE</h2>
-      <p>MOONSHOT NINE plays sideways. The field is wide and the strike zone is small.</p>
+      <p>Mr. Baseball Dynasty plays sideways. The field is wide and the strike zone is small.</p>
       <button class="rot-rotate" type="button">ROTATION LOCKED? TURN THE GAME INSTEAD</button>
       <button class="rot-dismiss" type="button">PLAY IN PORTRAIT ANYWAY</button>
     `;
@@ -572,7 +577,7 @@ export class App implements AppApi {
       }
     } catch (err) {
       // A render or logic fault must not lock the page in a black screen.
-      console.error('[MOONSHOT NINE] frame error', err);
+      console.error('[MBD] frame error', err);
       this.recoverFromError();
     } finally {
       this.input.endFrame();
@@ -1024,7 +1029,7 @@ export class App implements AppApi {
     const saved = this.loadResume();
 
     this.goto(
-      new ListScreen(this, 'MOONSHOT NINE', 'Main menu', () => [
+      new ListScreen(this, 'MR. BASEBALL DYNASTY', 'Main menu', () => [
         // Only offered when there is one, and it goes first, because a player
         // who lost a game to a locked phone is looking for exactly this row.
         ...(saved
@@ -1083,7 +1088,7 @@ export class App implements AppApi {
         },
         {
           id: 'derby',
-          label: 'Moonshot Derby',
+          label: 'Home Run Derby',
           hint: 'Home run contest. Ten outs each, anything that is not a homer is an out. Up to four hitters, two of them human.',
           onSelect: () => this.gotoDerbySetup(),
         },
@@ -1858,7 +1863,7 @@ export class App implements AppApi {
       return `${displayName(p)} (${team.abbr}) PWR ${p.bat.power}`;
     };
 
-    const screen = new ListScreen(this, 'MOONSHOT DERBY', 'Home run challenge', () => []);
+    const screen = new ListScreen(this, 'HOME RUN DERBY', 'Home run challenge', () => []);
     const rebuild = () => {
       const rows: MenuRow[] = [
         stadiumRow('Ballpark', () => cfg.stadiumId, (id) => { cfg.stadiumId = id; }, 'The Foundry is short everywhere; Grove Park will punish you.'),
@@ -2572,7 +2577,7 @@ export class App implements AppApi {
       },
     });
 
-    const screen = new ListScreen(this, 'PAUSED', this.mode === 'derby' ? 'Moonshot Derby' : 'Game in progress', () => []);
+    const screen = new ListScreen(this, 'PAUSED', this.mode === 'derby' ? 'Home Run Derby' : 'Game in progress', () => []);
     screen.setRows(rows);
     screen.root.className = 'screen overlay';
     this.pauseScreen = screen;

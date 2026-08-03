@@ -356,31 +356,36 @@ export class TitleScreen extends Screen {
     super(app);
     this.transparent = true;
     this.root.className = 'screen transparent title-screen';
-  }
-
-  override render(): void {
-    // The tagline names the league that is actually on the field. A title card
-    // reading "Meridian Circuit Baseball" over an attract game full of MBD
-    // clubs is a small lie, and small lies on a title screen are the ones a
-    // player notices first.
-    const mbd = this.app.teams.length > TEAM_IDENTITIES.length;
-    const tag = mbd ? 'Mr. Baseball Dynasty' : 'Meridian Circuit Baseball';
-    const foot = mbd
-      ? `An original game. ${this.app.teams.length} clubs, eight parks.`
-      : 'An original game. Ten clubs, eight parks, one cup.';
-    this.root.innerHTML = `
-      <div class="title-mark">MOONSHOT<em>NINE</em></div>
-      <div class="title-tag">${escapeHtml(tag)}</div>
-      <div class="title-press">Press Enter or Space<span class="only-touch">Tap to start</span></div>
-      <div class="title-foot">${escapeHtml(foot)}</div>
-    `;
+    // Attached once, here, rather than in render(). The league arrives from a
+    // fetch after this card is already on screen, so render() has to be able to
+    // run twice — and a listener added in there would be added twice with it,
+    // starting the game twice on one tap.
+    //
     // The whole title is the button. This is also the first user gesture of the
-    // session, which is the only moment a browser will let the audio start —
-    // so on a phone there is no other way in.
+    // session, which is the only moment a browser will let the audio start — so
+    // on a phone there is no other way in.
     this.root.addEventListener('click', () => {
       this.app.playSfx('menuSelect');
       this.onStart();
     });
+  }
+
+  override render(): void {
+    // The tagline names the league that is actually on the field. A title card
+    // promising opening-day rosters over an attract game full of invented
+    // Meridian clubs is a small lie, and small lies on a title screen are the
+    // ones a player notices first.
+    const mbd = this.app.teams.length > TEAM_IDENTITIES.length;
+    const tag = mbd ? 'Opening Day Rosters' : 'The Meridian Circuit';
+    const foot = mbd
+      ? `An original game. ${this.app.teams.length} clubs, eight parks.`
+      : 'An original game. Ten clubs, eight parks, one cup.';
+    this.root.innerHTML = `
+      <div class="title-mark">MR. BASEBALL<em>DYNASTY</em></div>
+      <div class="title-tag">${escapeHtml(tag)}</div>
+      <div class="title-press">Press Enter or Space<span class="only-touch">Tap to start</span></div>
+      <div class="title-foot">${escapeHtml(foot)}</div>
+    `;
   }
 
   override update(dt: number): void {

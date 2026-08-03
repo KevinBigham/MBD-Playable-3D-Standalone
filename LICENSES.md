@@ -2,7 +2,7 @@
 
 ## Originality statement
 
-MOONSHOT NINE is an original work. It was written from scratch for this
+Mr. Baseball Dynasty is an original work. It was written from scratch for this
 project.
 
 - No commercial game ROM was inspected, distributed, emulated, decompiled or
@@ -68,7 +68,7 @@ The specific implementation of those rules in this repository is original.
 
 ## License for this work
 
-Copyright (c) 2026 the authors of MOONSHOT NINE.
+Copyright (c) 2026 the authors of Mr. Baseball Dynasty.
 
 No license is granted by this document. The repository owner may apply whichever
 license they choose; the code is clean of third-party expressive content and

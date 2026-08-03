@@ -8,12 +8,12 @@ import { App } from './ui/app';
  */
 
 function fail(message: string, detail?: unknown): void {
-  console.error('[MOONSHOT NINE]', message, detail);
+  console.error('[MBD]', message, detail);
   const boot = document.getElementById('boot');
   if (boot) {
     boot.classList.remove('hidden');
     boot.innerHTML = `
-      <div class="boot-mark">MOONSHOT<span>NINE</span></div>
+      <div class="boot-mark">MR. BASEBALL<span>DYNASTY</span></div>
       <div class="boot-note" style="color:#ff5f6d;max-width:60ch;text-align:center;letter-spacing:.08em">
         ${message}
       </div>`;
@@ -33,14 +33,14 @@ function boot(): void {
     app = new App(canvas, ui);
   } catch (err) {
     fail(
-      'This browser could not start WebGL. MOONSHOT NINE needs a current version of Chrome, Edge or Safari with hardware acceleration enabled.',
+      'This browser could not start WebGL. Mr. Baseball Dynasty needs a current version of Chrome, Edge or Safari with hardware acceleration enabled.',
       err,
     );
     return;
   }
 
   app.start();
-  (window as unknown as { moonshot?: App }).moonshot = app;
+  (window as unknown as { mbd?: App }).mbd = app;
 
   // Only hide the loading card once a frame has genuinely rendered.
   requestAnimationFrame(() =>
@@ -63,7 +63,7 @@ function registerOffline(): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((err) => {
-      console.warn('[MOONSHOT NINE] offline support unavailable', err);
+      console.warn('[MBD] offline support unavailable', err);
     });
   });
 }
@@ -74,7 +74,7 @@ window.addEventListener('error', (e) => {
   }
 });
 window.addEventListener('unhandledrejection', (e) => {
-  console.error('[MOONSHOT NINE] unhandled promise rejection', e.reason);
+  console.error('[MBD] unhandled promise rejection', e.reason);
 });
 
 if (document.readyState === 'loading') {

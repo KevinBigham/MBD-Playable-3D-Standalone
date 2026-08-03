@@ -9,7 +9,7 @@ Factual record of what was built, what broke, and what was done about it.
 Complete and playable end to end.
 
 - Title → menu → setup → game → result → rematch or return, with no dead ends
-- Quick Play, Season, Championship, Moonshot Derby, Practice and the Player
+- Quick Play, Season, Championship, Home Run Derby, Practice and the Player
   Creator all functional
 - Human control of batting, pitching, fielding, baserunning and the defensive
   alignment
@@ -1044,8 +1044,8 @@ That is the right bias: nobody needs telling why the double was a double.
 ## Wiring in Mr. Baseball Dynasty
 
 MBD is the user's dynasty simulator: thirty-two franchises, real rosters, ratings
-that develop, a schedule that advances, a save that has to stay true. MOONSHOT
-NINE is the arcade game those people should be able to play *in*. The arcade
+that develop, a schedule that advances, a save that has to stay true. This is
+the arcade game those people should be able to play *in*. The arcade
 world bridge handoff defines the seam, and this round built the half that lives
 here — the **arcade consumer**, which is item 2 on the handoff's own
 implementation order.
@@ -1099,7 +1099,7 @@ with real fences at real distances and real heights and real air. Denver would
 get thin air *and* a 12% bonus, and nobody would ever see the double-count
 because both halves are invisible.
 
-MOONSHOT's eight parks carry from 0.98 to 1.11, which covers MBD's range almost
+This game's eight parks carry from 0.98 to 1.11, which covers MBD's range almost
 exactly. So the factor **chooses the park**. It is applied once, as geometry a
 hitter can see and hit over, and the choice is recorded per club in the bridge
 report. Denver's 1.12 lands at Summit Field, the thin-air park; San Francisco's
@@ -1389,6 +1389,117 @@ project by design.
 The merge helper is twenty lines of local code rather than three's
 `BufferGeometryUtils`, because pulling that in for one function adds it to the
 bundle a phone downloads.
+
+---
+
+## Hats, and a harness that would have caught them
+
+The report was "you can't tell the pitcher and fielders are wearing hats." They
+were not. The cap crown was a squashed dome whose top sat at `0.857 × headR`
+while the skull it was meant to cover reached `1.08 × headR` — so every fielder
+on the field wore a hat with a hole in it and a bare scalp coming through, and
+from the fielding camera, which looks *down*, there was no hat visible at all.
+
+This is the same failure as the barrel bug one round earlier, and from the same
+cause: the `0.92` squash was tuned against the old cube head, whose half-height
+was `headR`. The lathe skull that replaced it is taller than a cube half. A
+constant carried across a change of primitive, type-checking perfectly the whole
+way.
+
+Two more things fell out of the same close look:
+
+- **The brim was a whole disc pushed forward**, which put as much of itself
+  around the back of the skull as out over the eyes. From above it read as a
+  collar. `CylinderGeometry` takes a theta range, so the bill is now the forward
+  half only and the half that was never a bill is not built.
+- **The number was on the chest and mirrored, and the button placket was down
+  the spine.** The model's front is `+z` — that is where the face is, and every
+  caller aims a player with `atan2` so `+z` points at what he is looking at —
+  and both were built on the opposite assumption. The jersey numbers added last
+  round were therefore invisible in the plate camera they were added for, which
+  is the one shot that looks at a hitter's back all game.
+
+The bill is in the club's second colour. A cap the same colour as the jersey
+under it is a silhouette with nothing in it at the distance this is nearly
+always seen from, which was the whole complaint.
+
+The face went from three flat boxes — a brow and two eyes — to one band curved
+to the skull. A flat panel on a curved head has to poke through at its corners
+in order to be visible at its centre; that is geometry, not tuning, and it is
+what put a dark rectangle out through the side of every cap.
+
+### scripts/model-shot.ts
+
+None of this was found by looking at the game, because at 1600×900 a head is
+nine pixels tall. `npm run shots` parks the real camera two metres from a
+player, renders one frame from the real scene with the real lights, and writes a
+PNG. Five framings: the pitcher head-on and close, the shortstop from high and
+behind the way the fielding camera sees him, the shortstop from *beyond* him
+looking back — the only reliable look at the back of a uniform — and the hitter
+from behind the plate as a control, since the batting helmet already worked and
+a cap change could quietly damage it.
+
+The canvas is read inside the same `evaluate()` that renders it: WebGL clears
+its drawing buffer on the next composite unless `preserveDrawingBuffer` is on,
+and it is deliberately off. Doing both in one synchronous block is what makes
+the read legal, and it also stops the app's own animation frame putting the
+camera back.
+
+Every framing is computed from where the players actually are. The first version
+had the mound typed in from a constant and produced two immaculate photographs
+of an empty outfield.
+
+---
+
+## The name on the door
+
+The game is Mr. Baseball Dynasty. It had been shipping under a working title.
+
+Renamed everywhere a player can see it: the boot card, the title screen, the
+browser tab, the home-screen label, the manifest, the main menu, the rotate
+gate, the WebGL failure notice and the `noscript` line. Both marks stack two
+lines now — twenty characters where there were thirteen, and one line on a
+320px-tall landscape phone either overflows or shrinks to something nobody would
+call a logo. The second word is tracked out to measure about the same as the
+first, which is what makes them read as one mark instead of a heading with a
+word under it.
+
+The icon is a crowned baseball. A ball on its own is every baseball game there
+has ever been; *Dynasty* is the word that says which one this is, and the crown
+sits on the ball rather than beside it so the mark stays a single silhouette —
+all a 60px home-screen tile can hold. The service worker cache generation is
+bumped, because the icons and the shell changed identity rather than content and
+a generation flip is the only thing that evicts an installed copy still wearing
+the old tile.
+
+Three deliberate exceptions:
+
+- **`localStorage` keeps the `moonshot9:` namespace.** Every season, created
+  player and part-finished game a person already has is under it, and
+  localStorage has no rename. Changing it would not migrate those saves, it
+  would orphan them. A migration could be written; it has not been.
+- **`hashString('MOONSHOT NINE')` stays in the RNG tests.** It is a fixture
+  whose only job is that the number beside it never moves. Rewording it to match
+  the rename would throw away the one thing it is for.
+- **"ABSOLUTE MOONSHOT" stays** as the banner for a home run past 450 feet. It
+  is what announcers call one.
+
+`bridge/` needed a vocabulary decision rather than a search and replace, because
+the arcade game now carries the same name as the sim on the other side of the
+seam, which makes "MBD" ambiguous exactly where it can least afford to be.
+Throughout the bridge, **MBD** means the dynasty sim and **the arcade game**
+means this one; the wire format keeps its agreed `mbd-arcade-*` names, which are
+not ours to rename. The receipt's build id moved from `moonshot-nine/1.0` to
+`mbd-arcade/1.0` — a receipt records which build settled a game, and this is
+genuinely a different one.
+
+The title card also learned to correct itself. Its tagline names the league
+actually on the field, and the league arrives from a fetch *after* the card is
+already up — so on a first launch it said "The Meridian Circuit" over a game
+about to be played with MBD's thirty-two clubs. It now re-renders when the world
+lands. Its click handler moved to the constructor as part of that: a listener
+added inside `render()` would be added again on the redraw, and one tap would
+start the game twice.
 
 ---
 

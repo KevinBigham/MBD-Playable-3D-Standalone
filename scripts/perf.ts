@@ -33,12 +33,12 @@ async function main(): Promise<void> {
 
   const t0 = Date.now();
   await page.goto(BASE, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => !!(window as any).moonshot, undefined, { timeout: 30000 });
+  await page.waitForFunction(() => !!(window as any).mbd, undefined, { timeout: 30000 });
   const bootMs = Date.now() - t0;
   console.log(`page load to interactive: ${bootMs} ms  (viewport ${W}x${H})`);
 
   await page.evaluate(() => {
-    (window as any).moonshot.startGame({
+    (window as any).mbd.startGame({
       awayTeamId: 'prairierock',
       homeTeamId: 'bayoucity',
       stadiumId: 'bayou-bowl',
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const samples: number[] = [];
   for (let i = 0; i < SECONDS; i++) {
     await page.waitForTimeout(1000);
-    samples.push(await page.evaluate(() => (window as any).moonshot.fps()));
+    samples.push(await page.evaluate(() => (window as any).mbd.fps()));
   }
   samples.sort((a, b) => a - b);
   const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < stadiums.length; i++) {
     await page.evaluate(
       ([stadiumId, seed]) => {
-        (window as any).moonshot.startGame({
+        (window as any).mbd.startGame({
           awayTeamId: 'coralkey',
           homeTeamId: 'ironport',
           stadiumId,
@@ -107,10 +107,10 @@ async function main(): Promise<void> {
       const w = window as any;
       if (w.gc) w.gc();
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
-      const info = w.moonshot.world.renderer.info.memory;
+      const info = w.mbd.world.renderer.info.memory;
       return {
         heapMB: mem ? mem.usedJSHeapSize / 1048576 : -1,
-        sceneChildren: w.moonshot.world.scene.children.length,
+        sceneChildren: w.mbd.world.scene.children.length,
         geometries: info.geometries as number,
         hudNodes: document.querySelectorAll('#hud *').length,
       };

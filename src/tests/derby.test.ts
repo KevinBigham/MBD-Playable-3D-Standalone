@@ -13,7 +13,7 @@ import {
 import { emptyInputPair } from '../sim/input';
 
 /**
- * Moonshot Derby, driven by the same fixed-step loop the screen uses with every
+ * The home run derby, driven by the same fixed-step loop the screen uses with every
  * entrant on CPU control. The published rules are: ten outs each, every swing
  * that is not a home run is an out, most home runs wins.
  */

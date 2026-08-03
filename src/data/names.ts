@@ -1,5 +1,5 @@
 /**
- * Invented name banks for the MOONSHOT NINE player pool.
+ * Invented name banks for the fallback player pool.
  *
  * These are deliberately ordinary-sounding but not drawn from any real roster;
  * combinations are produced deterministically from the league seed.

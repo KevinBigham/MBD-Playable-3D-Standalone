@@ -1,6 +1,6 @@
 # CONTROLS
 
-Everything in MOONSHOT NINE hangs off one idea: **the four action buttons are
+Everything in Mr. Baseball Dynasty hangs off one idea: **the four action buttons are
 the bases.**
 
 ```

@@ -54,7 +54,7 @@ import { blendAttribute, personalityToAttribute, toAttribute } from './rating';
  * ballpark this game already simulates in full: real fences at real distances
  * with real heights and real air. Denver would get thin air *and* a 12% bonus.
  *
- * So the park factor picks the ballpark. MOONSHOT's eight parks carry from 0.98
+ * So the park factor picks the ballpark. The arcade game's eight parks carry from 0.98
  * to 1.11, which covers MBD's range almost exactly, and choosing the nearest
  * one applies the factor once — as geometry a player can see and hit over,
  * rather than as an invisible coefficient. `appliedModifierIds` records that
@@ -82,7 +82,7 @@ export interface AdaptedWorld {
   homeParks: Record<string, string>;
 }
 
-/** MOONSHOT's eight logo glyphs. A club gets one deterministically. */
+/** The arcade game's eight logo glyphs. A club gets one deterministically. */
 const GLYPHS = ['anchor', 'comet', 'ray', 'gator', 'beacon', 'scorpion', 'yeti', 'rivet'];
 
 /** Pitch families, ordered from "everyone has one" to "that is a real weapon". */
@@ -107,7 +107,7 @@ const DIVISION_LABEL: Record<string, string> = {
   NL_WEST: 'NL West',
 };
 
-/** MBD position codes that are not MOONSHOT fielding positions. */
+/** MBD position codes that are not arcade fielding positions. */
 const POSITION_MAP: Record<string, PositionCode> = {
   C: 'C',
   '1B': '1B',
@@ -155,7 +155,7 @@ function bodyFor(rng: Rng, power: number, speed: number): BodyType {
 /**
  * A pitcher's arsenal, from `stuff`.
  *
- * MOONSHOT has no `stuff` attribute, and adding one would mean retuning the
+ * The arcade game has no `stuff` attribute, and adding one would mean retuning the
  * whole pitching model — a balance change smuggled in as an import feature. But
  * "stuff" in MBD means deception and swing-and-miss quality, and this game
  * already expresses exactly that: through what a pitcher can throw. A power
@@ -326,7 +326,7 @@ function adaptTeam(
     city: src.city,
     name: src.name,
     abbr: src.abbreviation,
-    // Six MBD divisions into two. The league split is a MOONSHOT structure, not
+    // Six MBD divisions into two. The league split is an arcade structure, not
     // an MBD fact, so it is a presentation decision: the two circuits are the
     // two leagues, which is the division line a person already understands.
     division: src.division.startsWith('AL_') ? 'tide' : 'ridge',
