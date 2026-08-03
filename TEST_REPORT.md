@@ -11,13 +11,13 @@ shown. Nothing here is an estimate.
 npx vitest run
 ```
 
-**Result: 24 files, 288 tests, 288 passed, 0 failed. 68 s wall clock.**
+**Result: 24 files, 289 tests, 289 passed, 0 failed. 68 s wall clock.**
 
 | File | Tests | What it protects |
 |---|---|---|
 | `rng.test.ts` | 18 | Seed reproducibility for every helper, `fork` determinism, `normal` hard-bounded to ±3σ over 200 000 draws, `shuffle` is a permutation, exact `hashString` values, state round-trip |
 | `physics.test.ts` | 12 | Ball-flight calibration, monotonic carry versus exit velocity, park carry ordering, frame-rate independence, grounders come to rest, fair/foul on the lines, no NaN over 2000 steps, landing prediction accuracy |
-| `contact.test.ts` | 16 | Barrel and miss extremes, cursor-under produces more loft, pull and opposite-field spray for both handednesses, power-versus-contact trade measured behaviourally, contact rating widens the window, the difficulty assist is human-only, strike-zone agreement across all five body types |
+| `contact.test.ts` | 17 | Barrel and miss extremes, cursor-under produces more loft, pull and opposite-field spray for both handednesses, power-versus-contact trade measured behaviourally, contact rating widens the window, the difficulty assist is human-only *and* widens the sweet spot as well as the window on every swing kind while leaving exit velocity, latency and loft alone, strike-zone agreement across all five body types |
 | `rules.test.ts` | 16 | 24 full CPU-versus-CPU games stepped tick by tick: count and out ceilings, final phase and result, line-score sums, no ties, extra innings, walk-offs, the home team not batting when ahead, batting order never skipping, `validateState` null at every sampled tick |
 | `runners.test.ts` | 19 | `computeForces` across all base-occupancy combinations, order repair, no doubled bags across six collision scenarios, position/time helper consistency cross-checked against real motion |
 | `simulation.test.ts` | 17 | 100 CPU-versus-CPU games: all complete, zero anomalies, zero forced resolutions, no ties or negatives, statistics inside believable bands, byte-identical replay for the same seed |
@@ -191,6 +191,81 @@ rather than by putting the dice back. The tuning was done against this harness,
 not by feel: the foul threshold was swept at 0.60, 0.66 and 0.72 sweet-spot radii
 and 0.66 was the value that returned strikeout rate and foul rate to where they
 started.
+
+## 2b. How hard is it for a *person* to get a hit?
+
+```
+npm run hitting -- 10 9 rookie
+npm run hitting -- 10 9 pro
+```
+
+The batch above measures the CPU. It cannot measure a player, because the CPU
+hitter reads the pitch's true crossing point and true arrival time straight out
+of the state — so it says a great deal about the physics and nothing at all
+about aiming at a moving target with a thumb.
+
+`scripts/hitting.ts` drives full games through the same engine with a hitter that
+is **wrong on purpose**: it reads the truth and then corrupts both numbers with a
+fixed error model before acting. That corruption is the human. The rows are a
+sweep because the honest answer depends on how accurate the player is, and nobody
+here knows that figure for a real thumb on real glass.
+
+Hits per nine innings, human batting, 10 games per cell:
+
+| Player's error (place / time) | Rookie | Pro | Ace | Before, any setting |
+|---|---|---|---|---|
+| 0.05 m / 0.035 s | 36.5 | 29.8 | 17.9 | 24.8 |
+| 0.08 m / 0.050 s | 28.5 | 19.5 | 11.9 | 17.6 |
+| 0.11 m / 0.070 s | 19.2 | 16.0 | 5.5 | 11.4 |
+| 0.15 m / 0.090 s | 18.3 | 12.0 | 2.0 | 4.0 |
+| **0.20 m / 0.130 s** | **8.8** | **5.6** | 0.8 | **1.5** |
+
+The "before" column is the old Rookie, which was the most generous setting the
+game had. The bottom row is the one that matters: it is where a player reporting
+"about one hit a game" actually sits, and it was returning a .052 average with a
+84% strikeout rate. It now returns .260 on Rookie and .173 on Pro.
+
+Two isolating rows, run to find out *which* error to fix rather than turning
+whichever knob was nearest:
+
+| Isolated error | Hits/9 before | After (Pro) |
+|---|---|---|
+| Timing only, 0.130 s | 8.0 | 19.2 |
+| Placement only, 0.20 m | 5.3 | 11.8 |
+
+They did roughly equal damage, which is why widening the timing window alone —
+the only assist that existed — could not have fixed this.
+
+**What this is not:** a prediction of anyone's batting average. It models a
+person as unbiased Gaussian error around the truth, which is generous in one
+direction (a real player is sometimes fooled badly, and is systematically late
+rather than symmetrically wrong) and harsh in another (a real player learns a
+pitcher). It is a comparator, and it is used as one.
+
+It also cannot see the other half of this round's change. The read assist —
+when the crossing marker appears — moved from 62% of the flight to 38% on Pro
+and from 34% to 16% on Rookie, and the harness models the player's accuracy as a
+constant rather than as something that improves once they can see where the ball
+is going. More time to look should make the real numbers better than the table
+above, and that improvement is **unmeasured**.
+
+### The CPU is provably untouched
+
+The same batch as section 2, re-run after the change:
+
+| Statistic | Before | After |
+|---|---|---|
+| Runs per game | 10.06 | 10.06 |
+| Hits per game | 19.76 | 19.76 |
+| Batting average | .282 | .282 |
+| BABIP | .339 | .339 |
+| K% / BB% | 21.3% / 4.3% | 21.3% / 4.3% |
+
+Identical to the digit, which is the point: the assist is gated on a `human`
+flag, and `contact.test.ts` asserts that a human on Ace receives exactly the
+profile the CPU receives on every swing kind.
+
+---
 
 ## 3. Difficulty is measurably different
 

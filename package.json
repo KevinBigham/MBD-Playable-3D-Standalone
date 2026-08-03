@@ -16,6 +16,7 @@
     "test:world": "tsx scripts/world-check.ts",
     "test:watch": "vitest",
     "sim": "tsx scripts/simulate.ts",
+    "hitting": "tsx scripts/hitting.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

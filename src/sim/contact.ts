@@ -32,6 +32,39 @@ export interface SwingProfile {
   loft: number;
 }
 
+/**
+ * HOW WRONG A PERSON IS ALLOWED TO BE.
+ *
+ * A swing has two independent errors — *when* the bat arrived and *where* it
+ * was — and for a long time the assist forgave only the first. That is close to
+ * backwards for this game. On a phone the swing **is** a touch at a place: one
+ * act sets the cursor and starts the bat, so a player who is wrong about the
+ * crossing point is wrong about position and timing at once, and only half of it
+ * was ever forgiven.
+ *
+ * Measured with `scripts/hitting.ts`, which drives real games with a hitter that
+ * is wrong on purpose: at the accuracy that produced the player report of about
+ * one hit a game, the two errors did roughly equal damage. Widening the timing
+ * window alone could not have fixed it — isolating that error still left five
+ * hits a game on the table.
+ *
+ * `reach` scales the sweet spot, `window` the timing tolerance. Everything
+ * downstream is expressed in units of these two, so widening them widens the
+ * fair-ball band and the barrel with them, in proportion, for free.
+ *
+ * Neither is ever given to the CPU, and neither touches the ball's flight: the
+ * pitch arrives at the same place at the same time whoever is hitting. Ace is
+ * deliberately 1.0 on both — it is the setting that promises no assist, and it
+ * has to keep meaning that.
+ */
+const ASSIST: Record<Difficulty, { window: number; reach: number }> = {
+  rookie: { window: 2.1, reach: 2.0 },
+  pro: { window: 1.75, reach: 1.7 },
+  allstar: { window: 1.0, reach: 1.0 },
+};
+
+const NO_ASSIST = { window: 1, reach: 1 };
+
 export function swingProfile(
   batter: Player,
   kind: 'contact' | 'power' | 'bunt',
@@ -40,17 +73,14 @@ export function swingProfile(
 ): SwingProfile {
   const c = attr01(batter.bat.contact);
   const p = attr01(batter.bat.power);
-
-  // Documented, user-facing assist: Rookie widens the human timing window.
-  // The CPU never receives this bonus, and the ball physics are untouched.
-  const assist = human ? (difficulty === 'rookie' ? 1.3 : difficulty === 'pro' ? 1.1 : 1.0) : 1.0;
+  const a = human ? ASSIST[difficulty] : NO_ASSIST;
 
   if (kind === 'bunt') {
     return {
       latency: 0.055,
-      rx: 0.17 + c * 0.09,
-      ry: 0.2 + c * 0.1,
-      window: (0.085 + c * 0.04) * assist,
+      rx: (0.17 + c * 0.09) * a.reach,
+      ry: (0.2 + c * 0.1) * a.reach,
+      window: (0.085 + c * 0.04) * a.window,
       evMult: 0.24,
       loft: -4,
     };
@@ -59,9 +89,9 @@ export function swingProfile(
   if (kind === 'power') {
     return {
       latency: 0.165,
-      rx: (0.108 + c * 0.075) * 0.85,
-      ry: (0.132 + c * 0.098) * 0.85,
-      window: (0.056 + c * 0.044) * 0.86 * assist,
+      rx: (0.108 + c * 0.075) * 0.85 * a.reach,
+      ry: (0.132 + c * 0.098) * 0.85 * a.reach,
+      window: (0.056 + c * 0.044) * 0.86 * a.window,
       evMult: 1.085 + p * 0.05,
       loft: 9,
     };
@@ -69,9 +99,9 @@ export function swingProfile(
 
   return {
     latency: 0.125,
-    rx: 0.108 + c * 0.075,
-    ry: 0.132 + c * 0.098,
-    window: (0.056 + c * 0.044) * assist,
+    rx: (0.108 + c * 0.075) * a.reach,
+    ry: (0.132 + c * 0.098) * a.reach,
+    window: (0.056 + c * 0.044) * a.window,
     evMult: 0.945,
     loft: 0,
   };

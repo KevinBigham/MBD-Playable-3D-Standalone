@@ -155,8 +155,22 @@ off-the-end penalty above. Final numbers are in `TEST_REPORT.md`.
 Right-handed hitters pull toward −X (left field) and stand in the third-base
 box; left-handers mirror it. Switch hitters take the opposite side to the arm.
 
-Difficulty gives the **human** hitter a wider timing window — ×1.3 on Rookie,
-×1.1 on Pro, ×1.0 on Ace. The CPU never receives it and no ball physics change.
+Difficulty widens what the **human** hitter is allowed to be wrong by, on both
+axes: the sweet spot ×2.0 / ×1.7 / ×1.0 and the timing window ×2.1 / ×1.75 / ×1.0
+on Rookie, Pro and Ace. The CPU never receives either and no ball physics change.
+
+For a long time only the timing half of that existed, and it was close to
+backwards for this game. On a phone the swing **is** a touch at a place — one act
+sets the cursor and starts the bat — so a player who is wrong about the crossing
+point is wrong about position *and* timing at once, and only one of those was
+being forgiven. Measured with `scripts/hitting.ts`, the two errors did roughly
+equal damage; widening the timing alone could not have closed the gap.
+
+Because both axes scale by the same figure, which pitches are hard to reach never
+changes with the setting — only how wrong you may be about them. And because the
+plate view draws the cursor from these same numbers, the assist is visible: the
+cursor is a different size on each setting rather than a hidden thumb on the
+scale.
 
 ### The mound is 68 feet, and the pitch clock is stretched
 
@@ -289,7 +303,7 @@ together so information never leaks at three different moments:
 
 | | Rookie | Pro | Ace |
 |---|---|---|---|
-| Fraction of flight before the read is given | 34% | 62% | never |
+| Fraction of flight before the read is given | 16% | 38% | never |
 | Ball trail tinted with the pitch's colour | ✓ | ✓ | — |
 | Full flight arc drawn from the hand | ✓ | ✓ | — |
 | Marker at the plate-crossing point | ✓ | ✓ | — |
@@ -298,6 +312,12 @@ Before the read is earned the ball still carries a short comet tail — enough t
 track it, not enough to hand over the shape of the break. The CPU hitter receives
 none of this; it works from its own noisy estimate in `ai.ts`. Nothing about the
 ball changes on any setting.
+
+Pro used to hand the read over at 62% of the flight and it was the meanest number
+in the game. Seeing the crossing point is not the end of a hitter's job — it is
+the *start* of it, because a thumb still has to get there and touch — and a third
+of the flight is not enough to do that in. Everything a player does after the
+marker appears costs time the old figure never gave them.
 
 The whole overlay can be switched off in Settings → Plate view, for players who
 want a clean camera. The game plays identically either way.

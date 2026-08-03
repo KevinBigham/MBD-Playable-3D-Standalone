@@ -1503,6 +1503,121 @@ start the game twice.
 
 ---
 
+## One hit a game
+
+The report was "I'm lucky if I get 1 hit per game because it's so damn hard."
+That is about a tenth of what a real lineup gets, so the first job was to find
+out whether the game was hard or the player was unlucky, and the existing
+harness could not tell me. The CPU-vs-CPU batch reads the pitch's true crossing
+point and true arrival time straight out of the state and swings at them; it
+measures the physics and the rules and says nothing whatsoever about aiming at a
+moving target with a thumb.
+
+### scripts/hitting.ts
+
+So: full games through the real engine with a hitter that is **wrong on
+purpose**. It reads the truth and then corrupts both numbers with a fixed error
+model before doing anything with them. That corruption is the human; everything
+downstream is the engine a person plays.
+
+The error is sampled **once per pitch** and then committed to. A person forms a
+read and acts on it; they do not re-roll their opinion sixty times a second on
+the way to the plate, and re-rolling would average the error away and report a
+hitter far better than the model describes.
+
+It is a sweep rather than a number, because the honest answer depends on how
+accurate the player is and nobody here knows that figure for a real thumb on real
+glass. The sweep says "at this accuracy, this many hits", and the player's own
+report locates them on it — at about 0.20 m and 0.13 s, which returned **1.5 hits
+a game, a .052 average and an 84% strikeout rate**. The game was hard.
+
+The first run of it reported zero hits for every row, which was not a difficulty
+finding: a human-controlled side also has to pitch, and a side that never throws
+deadlocks the game. Nine innings that never happened.
+
+### Which error, measured before turning any knob
+
+Two isolating rows — nobody has 2 cm hands and 130 ms timing, but they answer
+"which of these is killing me" instead of "which knob is nearest":
+
+| Isolated error | Hits/9 |
+|---|---|
+| Timing only, 0.130 s | 8.0 |
+| Placement only, 0.20 m | 5.3 |
+| Both together | 1.5 |
+
+Roughly equal damage. And the assist that existed widened **only the timing
+window** — so half of the mistake a player actually makes was being forgiven and
+the other half was not. On a phone that is close to backwards: the swing *is* a
+touch at a place, one act sets the cursor and starts the bat, so being wrong
+about the crossing point is being wrong about position and timing at once.
+
+### What changed
+
+`ASSIST` now carries `reach` alongside `window`: ×2.0 / ×1.7 / ×1.0 on the sweet
+spot and ×2.1 / ×1.75 / ×1.0 on the timing, for Rookie, Pro and Ace. Both axes
+scale by the same figure, so which pitches are hard to reach never changes with
+the setting — only how wrong you may be about them. Everything downstream is
+expressed in units of these two, so the fair-ball band and the barrel widen in
+proportion for free.
+
+Ace is deliberately 1.0 on both. It is the setting that promises no assist and it
+has to keep meaning that; `contact.test.ts` now asserts a human on Ace receives
+the *identical* profile the CPU receives, on every swing kind.
+
+The second half is information rather than forgiveness. `PITCH_TELL_REVEAL` — the
+fraction of the flight before the hitter is shown where the pitch will cross —
+went from 0.62 to 0.38 on Pro and 0.34 to 0.16 on Rookie. Pro at 0.62 was the
+meanest number in the game: seeing the crossing point is not the end of a
+hitter's job, it is the *start* of it, because a thumb still has to travel there
+and touch, and a third of the flight is not enough time to do that in.
+
+Because the plate view draws the cursor from the same `rx`/`ry`, the assist is
+visible — the cursor is a different size on each setting rather than a hidden
+thumb on the scale.
+
+| Player's error | Rookie | Pro | Ace | Before |
+|---|---|---|---|---|
+| 0.15 m / 0.090 s | 18.3 | 12.0 | 2.0 | 4.0 |
+| 0.20 m / 0.130 s | 8.8 | 5.6 | 0.8 | 1.5 |
+
+The CPU batch is identical to the digit afterwards — 10.06 runs, 19.76 hits,
+.282, .339 BABIP — which is the proof that the assist is gated where it claims
+to be.
+
+### A test that was measuring the wrong thing
+
+`tap.test.ts` asserted the precision curve in **centimetres**: a hand's width off
+is in play but never hard, a forearm off is a foul. Those distances are exactly
+what the assist changes, so it was a test of one difficulty setting wearing the
+costume of a test of the control scheme, and it failed the moment the setting
+moved.
+
+It is written in units of the hitter's own sweet spot now, so it keeps testing
+the *shape* of the promise while the scale of it is tuned. Two of its assertions
+also had to start judging the **achieved** offset rather than the requested one:
+the cursor is clamped to where a bat can actually go, so a tap aimed 60 cm above
+a high pitch lands lower than it asked to, and demanding a miss from it is
+demanding a miss from a swing the game never allowed. On an outside pitch there
+is no outward offset large enough to miss with at all, which is why the sideways
+case now crosses *through* the ball to the far side.
+
+### What is not measured
+
+The harness models a person as unbiased Gaussian error around the truth. That is
+generous in one direction — a real player is sometimes fooled badly, and is
+systematically late rather than symmetrically wrong — and harsh in another, since
+a real player learns a pitcher. It is a comparator, not a prediction of anyone's
+average.
+
+It also cannot see the reveal change at all: it models the player's accuracy as a
+constant, when the whole point of showing the crossing point earlier is that the
+player becomes more accurate. More time to look should make the real numbers
+better than the table above. That improvement is unmeasured, and it is the reason
+the assist was tuned as if the reveal had not moved.
+
+---
+
 ## Tests performed
 
 - **Automated:** 288 Vitest tests across 24 files — RNG determinism, ball-flight

@@ -273,6 +273,35 @@ describe('contact rating', () => {
       expect(swingProfile(SLUGGER, 'contact', d, false).window).toBe(allstar);
     }
   });
+
+  it('widens the sweet spot as well as the window, on every swing kind', () => {
+    // The half of the assist that did not exist. On a phone the swing *is* a
+    // touch at a place, so forgiving only the timing forgave only half of one
+    // mistake — and the missing half was worth about four hits a game to a
+    // player with a real thumb (scripts/hitting.ts).
+    for (const kind of ['contact', 'power', 'bunt'] as const) {
+      const rookie = swingProfile(SLUGGER, kind, 'rookie', true);
+      const pro = swingProfile(SLUGGER, kind, 'pro', true);
+      const ace = swingProfile(SLUGGER, kind, 'allstar', true);
+      expect(rookie.rx).toBeGreaterThan(pro.rx);
+      expect(pro.rx).toBeGreaterThan(ace.rx);
+      expect(rookie.ry).toBeGreaterThan(pro.ry);
+      expect(pro.ry).toBeGreaterThan(ace.ry);
+      // Both axes scale together, so which pitches are hard to reach never
+      // changes with the setting — only how wrong you are allowed to be.
+      expect(rookie.rx / ace.rx).toBeCloseTo(rookie.ry / ace.ry, 9);
+      // Ace promises no assist, and that has to stay literally true: a human on
+      // Ace gets exactly the profile the CPU gets.
+      const cpu = swingProfile(SLUGGER, kind, 'allstar', false);
+      expect(ace.rx).toBe(cpu.rx);
+      expect(ace.ry).toBe(cpu.ry);
+      expect(ace.window).toBe(cpu.window);
+      // And the assist never touches how hard the ball comes off the bat.
+      expect(rookie.evMult).toBe(cpu.evMult);
+      expect(rookie.latency).toBe(cpu.latency);
+      expect(rookie.loft).toBe(cpu.loft);
+    }
+  });
 });
 
 describe('inStrikeZone and zoneBounds', () => {

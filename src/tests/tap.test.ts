@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GameSetup } from '../core/types';
 import { buildLeague, teamById } from '../data/teams';
-import { createGameState, type GameState } from '../sim/state';
+import { createGameState, currentBatter, type GameState } from '../sim/state';
+import { swingProfile } from '../sim/contact';
 import { stepGame } from '../sim/game';
 import { clearEdges, emptyInputPair } from '../sim/input';
 import { screenToZone } from '../ui/zonepick';
@@ -24,11 +25,16 @@ import { controlLabels } from '../ui/controls';
  *      gesture that looks right and plays wrong.
  *
  * The second is the one worth having, and it is written as the whole precision
- * curve rather than a pass mark: on the spot is hard contact every time, a
- * hand's width off is in play but never hard, a forearm off is a foul, and
- * forty centimetres off is a swing through it. Stating it that way means the
- * test fails if the scheme ever stops rewarding accuracy — which would make it
- * a button with extra steps — as readily as if it stopped working at all.
+ * curve rather than a pass mark: on the spot is hard contact every time, part of
+ * a sweet spot off is in play but never hard, past the foul plane is a foul, and
+ * well outside it is a swing through the ball. Stating it that way means the
+ * test fails if the scheme ever stops rewarding accuracy — which would make it a
+ * button with extra steps — as readily as if it stopped working at all.
+ *
+ * The curve is measured in units of the hitter's own sweet spot rather than in
+ * centimetres, so it keeps testing the *shape* of the promise when the scale of
+ * it is tuned. Written in centimetres it was a test of one difficulty setting
+ * wearing the costume of a test of the control scheme.
  */
 
 const league = buildLeague();
@@ -67,13 +73,33 @@ function toLivePitch(state: GameState): boolean {
 }
 
 /**
- * Swings by touching (`offX`, `offY`) metres away from where the pitch will
- * actually cross, at the moment it crosses. Returns how well it was struck.
+ * Swings by touching (`offX`, `offY`) away from where the pitch will actually
+ * cross, at the moment it crosses. Returns how well it was struck.
+ *
+ * The offsets are in units of *this hitter's own sweet spot*, not centimetres.
+ * A given number of centimetres means different things to different hitters and
+ * at different difficulties — that is what the contact rating and the assist
+ * are — so a test written in centimetres is quietly a test of one hitter on one
+ * setting, and it breaks the moment either is tuned. Which it did.
  */
-function tapAt(seed: number, offX: number, offY: number): { grade: string } {
+function tapAt(
+  seed: number,
+  offX: number,
+  offY: number,
+): { grade: string; vertNorm: number; horizNorm: number } {
   const state = situation(seed);
   if (!toLivePitch(state)) throw new Error('never saw a pitch');
   const info = state.currentPitch!;
+  const profile = swingProfile(currentBatter(state), 'contact', state.difficulty, true);
+  // Sideways offsets are applied toward the *far* side of the plate. The cursor
+  // cannot be pushed outward past the bat's reach — that clamp is what stops a
+  // player aiming somewhere a bat cannot go — so on an outside pitch there is
+  // no outward offset large enough to miss with, however big a number is asked
+  // for. Crossing through the ball to the other side is a real way to be wrong
+  // and is the one the clamp does not swallow.
+  const away = info.plateX > 0 ? -1 : 1;
+  const offMetresX = offX * profile.rx * away;
+  const offMetresY = offY * profile.ry;
   const inputs = emptyInputPair();
 
   for (let i = 0; i < 120 * 4; i++) {
@@ -83,13 +109,21 @@ function tapAt(seed: number, offX: number, offY: number): { grade: string } {
     // the instant together, which is the whole idea.
     if (state.phase === 'pitch' && state.batter.swingT < 0 && state.ball.t >= info.T - 0.16) {
       inputs.p1.aimAbsolute = true;
-      inputs.p1.aimX = info.plateX + offX;
-      inputs.p1.aimY = info.plateY + offY;
+      inputs.p1.aimX = info.plateX + offMetresX;
+      inputs.p1.aimY = info.plateY + offMetresY;
       inputs.p1.swing = true;
     }
     stepGame(state, inputs);
     if (state.lastSwing) {
-      return { grade: state.lastSwing.grade };
+      // The achieved offset, not the requested one. The cursor is clamped to
+      // where a bat can go, so a tap aimed 60 cm above a high pitch lands lower
+      // than it asked to — and a test that assumes otherwise is asserting a
+      // swing the game never allowed.
+      return {
+        grade: state.lastSwing.grade,
+        vertNorm: state.lastSwing.vertNorm,
+        horizNorm: state.lastSwing.horizNorm,
+      };
     }
   }
   throw new Error('the swing never resolved');
@@ -141,20 +175,38 @@ describe('touching the zone', () => {
     // only honest if the second answer is yes.
     const seeds = [101, 202, 303, 404, 505, 606, 707, 808];
     const grades = (ox: number, oy: number) => seeds.map((s) => tapAt(s, ox, oy).grade);
+    const hardResult = (r: { grade: string }) => r.grade === 'solid' || r.grade === 'barreled';
     const hard = (g: string) => g === 'solid' || g === 'barreled';
 
     // On the spot: struck hard, every single time.
     expect(grades(0, 0).every(hard)).toBe(true);
-    // A hand's width high: still in play, never hard.
-    const nearMiss = grades(0, 0.12);
+    // Two thirds of a sweet spot high: still in play, never hard.
+    const nearMiss = grades(0, 0.62);
     expect(nearMiss.every((g) => g !== 'miss')).toBe(true);
     expect(nearMiss.some(hard)).toBe(false);
-    // A forearm's width: fouled off, every time.
-    expect(grades(0, 0.24).every((g) => g === 'foul' || g === 'foultip')).toBe(true);
-    // Forty centimetres: swung straight through it.
-    expect(grades(0, 0.4).every((g) => g === 'miss')).toBe(true);
-    // The zone is narrower than it is tall, so sideways is less forgiving.
-    expect(grades(0.3, 0).filter((g) => g === 'miss').length).toBeGreaterThanOrEqual(5);
+    // Past the foul plane: fouled off, every time.
+    expect(grades(0, 1.05).every((g) => g === 'foul' || g === 'foultip')).toBe(true);
+    // Well outside it: swung straight through. Judged on where the cursor
+    // actually ended up, because the clamp stops a tap this far above a high
+    // pitch from getting there at all.
+    const far = seeds.map((s) => tapAt(s, 0, 1.9));
+    const reached = far.filter((r) => Math.abs(r.vertNorm) > 1.38);
+    expect(reached.length).toBeGreaterThanOrEqual(4);
+    expect(reached.every((r) => r.grade === 'miss')).toBe(true);
+    // And nothing that far off was struck well, clamped or not.
+    expect(far.some(hardResult)).toBe(false);
+    // The sweet spot is narrower than it is tall, so the same miss in
+    // centimetres costs more sideways — and stays that way however the assist is
+    // tuned, because both axes are scaled by the same figure.
+    const profile = swingProfile(currentBatter(situation(101)), 'contact', 'pro', true);
+    expect(profile.rx).toBeLessThan(profile.ry);
+    // Sideways behaves the same as vertically: what the cursor actually reached
+    // past the edge of the bat was swung through.
+    const wide = seeds.map((s) => tapAt(s, 1.6, 0));
+    const wideReached = wide.filter((r) => Math.abs(r.horizNorm) > 1.3);
+    expect(wideReached.length).toBeGreaterThanOrEqual(6);
+    expect(wideReached.every((r) => r.grade === 'miss')).toBe(true);
+    expect(wide.some(hardResult)).toBe(false);
   });
 
   it('places a pitch where the mound touched, not where the last one went', () => {

@@ -268,8 +268,9 @@ need to win the duel is drawn on the strike zone itself:
   second.
 
 How much of the read you are given is the difficulty setting — Rookie shows it
-early, Pro shows it late, Ace never shows it. The CPU hitter receives none of it,
-and no ball physics change on any setting. The entire overlay can be switched off
+almost out of the hand, Pro shows it in time to move, Ace never shows it. The
+same setting decides how big your sweet spot and timing window are. The CPU
+hitter receives none of it, and no ball physics change on any setting. The entire overlay can be switched off
 under **Settings → Plate view** — except on a phone with touch-to-swing on,
 where the zone is the thing you are aiming at and so cannot be hidden.
 
@@ -334,6 +335,7 @@ Extra harnesses:
 
 ```bash
 npx tsx scripts/simulate.ts 100 9 pro    # games, innings, difficulty
+npm run hitting -- 12 9 pro              # the same, but with a *human* at the plate
 npx tsx scripts/tune-physics.ts          # ball-flight calibration table
 npx tsx scripts/verify-fixes.ts          # box-score bookkeeping
 npx tsx scripts/verify-season.ts         # full season and postseason integrity

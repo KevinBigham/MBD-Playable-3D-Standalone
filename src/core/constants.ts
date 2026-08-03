@@ -102,16 +102,24 @@ export const OUTFIELD_GRASS_RADIUS = 140;
  * ball renderer so the two never disagree.
  *
  * The value is the fraction of the pitch's flight that must elapse before the
- * hitter is shown what the pitch is and where it is going to cross. Rookie
- * shows it early enough to react to; Pro shows it late enough that you have
- * already had to commit; on Ace it is never shown at all.
+ * hitter is shown what the pitch is and where it is going to cross. Rookie shows
+ * it early enough to move to; Pro shows it in time to act on but late enough
+ * that a guess was already worth making; on Ace it is never shown at all, which
+ * is what "no assist" means.
+ *
+ * Pro used to be 0.62 and it was the single meanest number in the game. On a
+ * phone, seeing the crossing point is not the end of the job — it is the *start*
+ * of it, because the hitter still has to get a thumb there and touch. Handing
+ * that over with a third of the flight left is not a read, it is a reflex test,
+ * and the reflex test is the part a phone is worst at. Everything a player does
+ * after the marker appears takes time the old number did not give them.
  *
  * This changes nothing about the ball. The CPU hitter reads pitches through its
  * own noisy estimate in ai.ts and receives none of this.
  */
 export const PITCH_TELL_REVEAL: Record<'rookie' | 'pro' | 'allstar', number> = {
-  rookie: 0.34,
-  pro: 0.62,
+  rookie: 0.16,
+  pro: 0.38,
   allstar: 2,
 };
 
