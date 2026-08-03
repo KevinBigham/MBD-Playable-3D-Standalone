@@ -23,7 +23,7 @@
  * with their cache generation.
  */
 
-const CACHE = 'moonshot9-v2';
+const CACHE = 'moonshot9-v3';
 
 /** The minimum needed to boot to a playable state with no network at all. */
 const SHELL = [
@@ -40,6 +40,11 @@ const SHELL = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
+  // MBD's opening-day rosters. This is the league the game opens in, so an
+  // installed copy without it is an installed copy that quietly falls back to a
+  // different one — which is exactly the kind of silent substitution the bridge
+  // exists to avoid. About 78 kB over the wire.
+  './mbd-world.json',
 ];
 
 self.addEventListener('install', (event) => {

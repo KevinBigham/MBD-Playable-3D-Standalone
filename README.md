@@ -7,9 +7,10 @@ every swing, every throw and every runner. There is no simulation to sit and
 watch: if something happens on the field, somebody pressed a button to make it
 happen.
 
-It opens on the **thirty-two franchises of Mr. Baseball Dynasty** — it is the
-arcade half of the MBD arcade-world bridge, and can be handed a real dynasty's
-rosters and ratings. Its own league, the ten-club **Meridian Circuit**, is one
+It opens on the **thirty-two franchises of Mr. Baseball Dynasty**, with MBD's
+own opening-day rosters — real players, real ratings, produced by MBD's
+generator rather than imitated. It is the arcade half of the MBD arcade-world
+bridge and can be handed a dynasty save's rosters the same way. Its own league, the ten-club **Meridian Circuit**, is one
 row away under *World* and is what seasons and the cup are played on. Eight
 ballparks serve both.
 
@@ -96,7 +97,7 @@ them, and hand back a factual receipt. **Main menu -> World.**
 | Row | What it loads |
 |---|---|
 | The Meridian Circuit | This game's own ten clubs. Seasons and the cup live here. |
-| MBD Sample World | All thirty-two MBD franchises, built in — **this is what a fresh install opens in.** The clubs are real; the players are generated, because MBD has no exporter yet. |
+| MBD Opening Day | All thirty-two franchises with **MBD's real opening-day rosters** — 896 players, exported by running MBD's own generator. This is what a fresh install opens in. |
 | Import an MBD World… | A `.json` bundle exported from a save. |
 
 The chosen world governs **Quick Play, Practice, the Derby and Clubs & Rosters**
@@ -136,6 +137,31 @@ like the dynasty and is not.
 division rather than a limitation invented here — an exhibition package is
 defined for "team selection, local exhibition games, practice, home-run derby
 and other non-dynasty modes" and "produces no importable dynasty receipt".
+
+### Where the rosters come from
+
+`public/mbd-world.json` is MBD's opening day: 32 clubs, 896 players who can take
+the field, about 78 kB gzipped. It is produced by
+
+```bash
+npx tsx scripts/export-mbd-world.ts --mbd ../MBD --out public/mbd-world.json
+```
+
+which **imports MBD's own `generateLeaguePlayers`, `buildRosterState` and
+franchise table out of a checkout** and mirrors `buildNewGameState`'s opening
+sequence. It does not re-implement them: a port of a 36 kB generator would be a
+second copy of MBD's canon that drifts the moment either side is touched, and
+the drift would be invisible — the players would just quietly stop being MBD's.
+
+Three things it deliberately leaves behind: **hidden scouting truth** (ceiling,
+floor, potential, development), which the contract forbids exporting into a
+match package; **money**, which no played game reads; and **the minors**, which
+an exhibition package does not need. `bridge.test.ts` asserts the shipped file
+carries none of them.
+
+The exporter is in the wrong repository on purpose. The handoff is clear that it
+is MBD's first slice and has to run through MBD's save coordinator over a real
+save; when that exists, this script is deleted.
 
 ### What is not built
 

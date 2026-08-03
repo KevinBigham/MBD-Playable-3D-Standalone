@@ -43,6 +43,20 @@ const ok = (n: string, c: boolean, d = '') => { console.log(`  ${c ? 'PASS' : 'F
   ok('a first run opens in the MBD world', league.n === 32, `${league.n} clubs: ${league.ids.join(', ')}`);
   ok('clubs do not all share one ballpark', league.parks > 1, `${league.parks} distinct parks`);
 
+  // Thirty-two clubs is not proof the *players* are MBD's — the fixture makes
+  // thirty-two clubs too. Marcus Fontaine is the ace of MBD's deliberately
+  // stacked Kansas City franchise, and he only exists if MBD's own generator
+  // produced this roster.
+  const kc = await page.evaluate(() => {
+    const t = (window as any).moonshot.teams.find((x: any) => x.id === 'kc');
+    if (!t) return null;
+    const best = [...t.players].sort((a: any, b: any) =>
+      (b.pitch ? b.pitch.velocity + b.pitch.movement : 0) - (a.pitch ? a.pitch.velocity + a.pitch.movement : 0),
+    )[0];
+    return { n: t.players.length, names: t.players.slice(0, 40).map((p: any) => `${p.firstName} ${p.lastName}`), ace: `${best.firstName} ${best.lastName}` };
+  });
+  ok('the rosters are MBD\u2019s, not a fixture\u2019s', !!kc && kc.names.includes('Marcus Fontaine'), kc ? `KC has ${kc.n}, ace ${kc.ace}` : 'no KC');
+
   await page.keyboard.press('Enter');
   await page.waitForTimeout(700);
   const worldRow = await page.locator('.menu-item', { hasText: /^World/ }).first().innerText();

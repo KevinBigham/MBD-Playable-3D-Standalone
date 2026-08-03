@@ -39,7 +39,7 @@ import { Install } from './install';
 import {
   defaultWorld,
   forgetWorld,
-  loadSampleWorld,
+  loadShippedWorld,
   loadWorldFrom,
   meridianWorld,
   pickBundleFile,
@@ -223,13 +223,11 @@ export class App implements AppApi {
     this.customs = loadCustomPlayers();
     this.teams = buildLeague();
     applyCustomPlayers(this.teams, this.customs);
-    // The league is settled before anything reads it, so no menu ever has to
-    // know which world it is looking at. A stored choice wins; a first run opens
-    // in MBD, which is what these clubs are here for.
-    const stored = restoreWorld();
-    const opening = stored === null ? defaultWorld() : stored === 'meridian' ? null : stored;
-    this.league = opening ?? meridianWorld(this.teams);
-    if (this.league.id !== 'meridian') this.teams = this.league.teams;
+    // Boot in this game's own league, always, because the constructor cannot
+    // wait: MBD's rosters are a fetch and a fetch is not something to hold the
+    // first frame on. `resolveLeague()` swaps them in a moment later, while the
+    // title card is still up. See start().
+    this.league = meridianWorld(this.teams);
     const saved = loadSlot<GameSettings>(SLOT.settings);
     this.settings = { ...DEFAULT_SETTINGS, ...this.deviceDefaults(), ...(saved ?? {}) };
     this.world = new GameWorld(canvas);
@@ -320,7 +318,36 @@ export class App implements AppApi {
 
   // -------------------------------------------------------------------- boot
 
+  /**
+   * Settles which league is on the field, off the boot path.
+   *
+   * MBD's opening day is 896 real players fetched as JSON. Parsing that inside
+   * the constructor would put it between the player and the first frame for no
+   * reason — nothing on the title card is a club, and the menu that is made of
+   * clubs is a keypress away. So the game boots in the Meridian Circuit and
+   * this quietly replaces it, rebuilding the menu only if somebody is already
+   * looking at one.
+   */
+  private async resolveLeague(): Promise<void> {
+    const stored = await restoreWorld();
+    const opening = stored === null ? await defaultWorld() : stored === 'meridian' ? null : stored;
+    if (!opening || opening.id === 'meridian') return;
+    this.league = opening;
+    this.teams = opening.teams;
+    // The attract game behind the title is mid-inning with the old clubs in it.
+    // Restarting is the honest thing: a title screen advertising a league the
+    // game is no longer in is worse than a cut.
+    this.attract = null;
+    if (this.mode === 'menu') {
+      this.startAttract();
+      // Only if they have already walked past the title card — otherwise the
+      // menu they have not seen yet will be built from the new league anyway.
+      if (this.stack.length > 1) this.gotoMainMenu();
+    }
+  }
+
   start(): void {
+    void this.resolveLeague();
     this.startAttract();
     this.goto(
       new TitleScreen(this, () => {
@@ -1153,7 +1180,10 @@ export class App implements AppApi {
           onSelect: () => {
             // Chosen, so remembered — unlike the same world arriving as the
             // boot default, which deliberately leaves storage alone.
-            this.setWorld(loadSampleWorld(true));
+            void loadShippedWorld(true).then(
+              (w) => this.setWorld(w),
+              () => this.toast('COULD NOT LOAD THE MBD WORLD'),
+            );
           },
         },
         {

@@ -249,6 +249,61 @@ function adaptPlayer(src: ArcadePlayer): Player {
   };
 }
 
+/** The eight defensive slots a designated-hitter lineup has to cover. */
+const FIELD_SLOTS: PositionCode[] = ['C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'];
+
+/**
+ * PUTTING THE NINE HITTERS SOMEWHERE, RATHER THAN FINDING NINE FIELDERS.
+ *
+ * MBD picks who plays: without a saved plan its policy is the nine best hitters
+ * by overall rating, full stop. That is MBD's decision and this game does not
+ * get to overrule it — but it means a real MBD lineup is frequently *not* one
+ * of each position. Kansas City's opening day is a shortstop, a centre fielder,
+ * two catchers, two left fielders, a right fielder and two first basemen. No
+ * second baseman anywhere in it.
+ *
+ * The obvious implementation — for each defensive slot, find the lineup player
+ * who plays there, else pull somebody off the bench — produces a team where two
+ * men field and never bat, which is not baseball. It also passed every test,
+ * because the fixture's lineups were built from a position template and never
+ * had a gap.
+ *
+ * So the assignment runs the other way round: the nine who bat are the nine who
+ * play, and this works out where they stand. Primary positions are honoured
+ * first, then whoever is left fills whatever is left, and the last man out is
+ * the designated hitter. A first baseman ends up at second sometimes. That is a
+ * manager's problem, it is visible on the roster screen, and it is enormously
+ * better than a phantom.
+ */
+function fieldFromLineup(lineup: string[], byId: Map<string, Player>): string[] {
+  const pool = lineup.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+  const taken = new Set<string>();
+  const out: string[] = [];
+
+  for (const slot of FIELD_SLOTS) {
+    const natural = pool.find((p) => !taken.has(p.id) && p.primary === slot);
+    if (natural) {
+      taken.add(natural.id);
+      out.push(natural.id);
+    } else {
+      out.push('');
+    }
+  }
+  // Second pass for the slots nobody plays naturally, in lineup order so the
+  // choice is deterministic rather than dependent on iteration luck.
+  const spare = pool.filter((p) => !taken.has(p.id));
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]) continue;
+    const next = spare.shift();
+    // A lineup shorter than eight cannot cover the field; repeating the first
+    // hitter is wrong but survivable, and validation has already refused any
+    // bundle that could get here.
+    out[i] = next ? next.id : (pool[0]?.id ?? '');
+    if (next) taken.add(next.id);
+  }
+  return out;
+}
+
 /**
  * A club, its people, and a legal way to line them up.
  *
@@ -306,16 +361,8 @@ function adaptTeam(
     ...(bull?.closerId ? [bull.closerId] : []),
   ].filter((id) => byId.get(id)?.pitch);
 
-  const defense = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'].map((slot) => {
-    if (slot === 'P') {
-      const onMound = byId.get(rotation[0] ?? '') ?? pitchers[0] ?? roster[0];
-      return onMound.id;
-    }
-    const inLineup = lineup.map((id) => byId.get(id)!).find((p) => p && p.primary === slot);
-    if (inLineup) return inLineup.id;
-    const anyone = roster.find((p) => p.primary === slot);
-    return (anyone ?? byId.get(lineup[0]) ?? roster[0]).id;
-  });
+  const onMound = byId.get(rotation[0] ?? '') ?? pitchers[0] ?? roster[0];
+  const defense = [onMound.id, ...fieldFromLineup(lineup, byId)];
 
   report.applied.push(
     `park:${src.id}=${park} (factor ${src.parkFactor.toFixed(2)} -> nearest carry)`,
