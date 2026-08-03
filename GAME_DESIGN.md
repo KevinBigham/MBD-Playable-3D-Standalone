@@ -782,18 +782,42 @@ Nobody needs telling why the double was a double.
 
 ## Presentation
 
-Chunky, flat-shaded and low-poly — but **jointed**. Each player is built as
+Low-poly and **jointed**, and — since the models pass — **turned**. Each player
+is built as
 
 ```
 root → hips → knees → feet
 root → torso → chest, head, arms → elbows → hands → bat / glove
 ```
 
-with a shoulder yoke that widens the silhouette where a ballplayer is actually
-wide. The first version had one box per limb and no shoulder, elbow or knee, and
-every pose read as a mannequin being rotated rather than an athlete moving. The
-joints are what buy a swing its extension, a throw its whip, a dive its reach
-and a catcher his crouch.
+The joints came first, and they are what buy a swing its extension, a throw its
+whip, a dive its reach and a catcher his crouch. The first version had one box
+per limb and no shoulder, elbow or knee, and every pose read as a mannequin
+being rotated rather than an athlete moving.
+
+The shapes came second, and they had the opposite problem. A box is the same
+width all the way along, and a limb is not: an arm is thick at the shoulder,
+thin at the wrist and round at the elbow. The models moved like athletes and
+were built like furniture, and no amount of joint work fixes a silhouette.
+
+So every organic form is now lathe-turned — a 2-D profile spun around its own
+axis, which buys a taper, rounded ends and smooth normals in **one mesh**. The
+torso is a single profile from belt to shoulders where there used to be four
+boxes stacked into a staircase; a chest is squashed front-to-back by scaling the
+mesh, because a torso is an oval from above and modelling that would have cost
+something. The head has a cranium and a jaw instead of a cube with a dark stripe
+painted across the front to say which way it faced.
+
+A limb went from 12 triangles to about 160 and **the draw calls did not move**,
+which is the only number a phone cares about. Eighteen players on the field is
+under 40 000 triangles.
+
+Two details are merged into single meshes rather than modelled separately,
+because seventeen extra draw calls per player is the entire phone budget spent
+on decoration: a **face** (brow and two eye sockets in one dark tone, which is
+what a face is at any distance this camera reaches) and a **jersey number** on
+the back, drawn as seven-segment digits. The plate camera spends most of a game
+looking at exactly that rectangle of jersey.
 
 Arms and head hang off the **torso**, not off the root, so a hip turn carries the
 whole upper body the way a real swing does. Previously they were siblings, which

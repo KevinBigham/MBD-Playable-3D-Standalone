@@ -1330,6 +1330,68 @@ the mound. Those are MBD's people.
 
 ---
 
+## Models, third pass: turned instead of stacked
+
+The joints were right and the shapes never were. Two earlier passes had built a
+proper skeleton — hips, knees, shoulders, elbows, a torso that carries the arms
+so a hip turn moves the whole upper body — and every one of them hung boxes on
+it. A box has one fatal problem as anatomy: **it is the same width all the way
+along.** An arm is thick at the shoulder, thin at the wrist and round at the
+elbow, and no amount of joint work makes a rectangular prism read as one. The
+players moved like athletes and were built like furniture.
+
+A lathe fixes it for almost nothing. `LatheGeometry` spins a 2-D profile around
+its own axis, so one profile buys a taper *and* rounded ends *and* smooth normals
+in a single mesh — no joint spheres to fill the gaps, no extra draw calls. Every
+limb is now the same function at different numbers, which is a fact about limbs
+rather than a shortcut.
+
+The torso is the clearest win. It used to be four boxes — waist, chest, shoulder
+yoke, and a belly for the heavy builds — stacked into a visible staircase,
+because a box cannot narrow. It is one profile now, and the heavy builds differ
+by a wider waist radius rather than by an extra mesh. A chest is squashed
+front-to-back by scaling the mesh, because a torso is an oval from above and
+modelling that would have cost something.
+
+Cost: a limb went from 12 triangles to about 160, and **the draw calls did not
+move** — 230 before, 235 after, and the five are the jersey numbers. Eighteen
+players on the field is under 40 000 triangles, which is less geometry than the
+outfield wall. The perf harness reported no change: min 73.7, mean 81.1, heap
+flat across eight consecutive games. Draw calls are the budget on a phone and
+triangles are not, which is exactly why this was affordable.
+
+### The bug that made everything a barrel
+
+The first render came out looking like bowling pins, and the cause is worth
+writing down because it is the sort of mistake that type-checks perfectly.
+
+The old model's numbers were **box dimensions** — full widths and depths. A lathe
+profile takes a **radius**, which is a half-dimension. Every z-scale derived from
+one of the old depths was therefore exactly twice what it should have been, and
+the torso came out *deeper than it was broad*. Reusing the old constants felt
+like the careful thing to do — the plate camera's clearances were derived from
+them — and it was, right up until the units changed underneath.
+
+### Two details, zero draw calls
+
+At the plate camera the batter's back is most of the frame, and the head is a
+blank shape. Both wanted detail; neither was worth a draw call, because
+seventeen more per player is three hundred across a fielding side.
+
+So both are merged. A **face** is a brow and two eye sockets baked into one
+buffer in one dark tone — which at any distance this camera reaches is what a
+face looks like, and which replaced a dark stripe painted across a cube to say
+which way it was pointing. A **jersey number** is seven-segment digits, drawn the
+way a scoreboard draws them, merged into one mesh on the back. Text geometry
+would have meant a font, a loader and a binary asset, none of which exist in this
+project by design.
+
+The merge helper is twenty lines of local code rather than three's
+`BufferGeometryUtils`, because pulling that in for one function adds it to the
+bundle a phone downloads.
+
+---
+
 ## Tests performed
 
 - **Automated:** 288 Vitest tests across 24 files — RNG determinism, ball-flight

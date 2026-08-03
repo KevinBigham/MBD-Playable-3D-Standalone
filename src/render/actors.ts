@@ -3,9 +3,16 @@ import type { BodyType, Player } from '../core/types';
 import { flatMat, shade, skinColor } from './palette';
 
 /**
- * Chunky low-poly athletes: boxes and cylinders on a jointed skeleton, animated
+ * Low-poly athletes: turned, tapered forms on a jointed skeleton, animated
  * purely procedurally — no skinning, no clips, no imported assets — which keeps
  * the whole roster cheap and lets poses react instantly to the simulation.
+ *
+ * They used to be boxes, and a box has one fatal problem as anatomy: it is the
+ * same width all the way along. The joints were always right and the shapes
+ * never were, so the models moved like athletes and were built like furniture.
+ * Everything is lathe-turned now — see "BODIES ARE TURNED, NOT STACKED" below —
+ * which buys taper, rounded joints and smooth normals per mesh rather than per
+ * draw call.
  */
 
 export type Pose =
@@ -85,11 +92,263 @@ function circle(key: string, r: number, seg: number): THREE.CircleGeometry {
   return g;
 }
 
+/**
+ * BODIES ARE TURNED, NOT STACKED.
+ * ===============================
+ *
+ * Everything below this line exists because the models were made of boxes, and
+ * a box has one enormous problem as a piece of anatomy: it has the same width
+ * all the way along. A real arm is thick at the shoulder, thin at the wrist and
+ * round at the elbow, and no amount of joint work makes a rectangular prism read
+ * as one — the old models moved like athletes and were shaped like furniture.
+ *
+ * A lathe fixes it for almost nothing. `LatheGeometry` spins a 2-D profile
+ * around the Y axis, so one profile buys a taper *and* rounded ends *and* smooth
+ * normals in a single mesh — no joint spheres to fill the gaps, no extra draw
+ * calls. A limb goes from 12 triangles to about 160, which sounds like a lot
+ * until you notice that eighteen players on the field is still under 25 000
+ * triangles: less than the outfield wall. **Draw calls are the budget on a
+ * phone, and the draw calls did not move.**
+ *
+ * Human cross-sections are not circles, and that is handled by scaling the mesh
+ * rather than by modelling it: a torso is a turned form squashed front-to-back,
+ * which is both what a chest actually looks like from above and free.
+ */
+
+/** One profile point: distance from the axis, and height. */
+type Profile = Array<[number, number]>;
+
+function lathe(key: string, points: Profile, seg: number): THREE.LatheGeometry {
+  let g = GEO_CACHE.get(key) as THREE.LatheGeometry | undefined;
+  if (!g) {
+    g = new THREE.LatheGeometry(
+      points.map(([r, y]) => new THREE.Vector2(Math.max(1e-4, r), y)),
+      seg,
+    );
+    GEO_CACHE.set(key, g);
+  }
+  return g;
+}
+
+/**
+ * A tapered capsule, centred on the origin: thick at the top, thinner at the
+ * bottom, domed at both ends. This is an upper arm, a forearm, a thigh, a shin
+ * and a neck — every one of them is the same shape at different numbers, which
+ * is a fact about limbs rather than a shortcut.
+ */
+function limbGeo(key: string, len: number, rTop: number, rBot: number, seg = 10): THREE.LatheGeometry {
+  const half = len / 2;
+  // Domes eat into the length rather than extending past it, so a limb still
+  // measures exactly `len` from joint to joint and every pose anchor holds.
+  const capT = Math.min(rTop * 0.85, len * 0.22);
+  const capB = Math.min(rBot * 0.85, len * 0.22);
+  return lathe(
+    key,
+    [
+      [0, half],
+      [rTop * 0.55, half - capT * 0.25],
+      [rTop * 0.92, half - capT * 0.72],
+      [rTop, half - capT],
+      [rTop * 0.98, half - capT - (len - capT - capB) * 0.35],
+      [rBot * 1.04, -half + capB + (len - capT - capB) * 0.18],
+      [rBot, -half + capB],
+      [rBot * 0.9, -half + capB * 0.7],
+      [rBot * 0.52, -half + capB * 0.24],
+      [0, -half],
+    ],
+    seg,
+  );
+}
+
+/**
+ * A torso, from the belt to the top of the shoulders.
+ *
+ * One mesh where there used to be four — waist, chest, yoke and belly. They were
+ * separate because a box cannot narrow, so the shape had to be built out of
+ * differently-sized boxes and the seams showed as steps. A profile just narrows.
+ */
+function torsoGeo(key: string, h: number, waistR: number, chestR: number, shoulderR: number): THREE.LatheGeometry {
+  return lathe(
+    key,
+    [
+      [0, 0],
+      [waistR * 0.96, 0],
+      [waistR, h * 0.1],
+      [waistR * 1.06, h * 0.28],
+      [chestR * 0.93, h * 0.46],
+      [chestR, h * 0.62],
+      [shoulderR * 0.98, h * 0.8],
+      [shoulderR, h * 0.9],
+      [shoulderR * 0.86, h * 0.98],
+      [shoulderR * 0.42, h],
+      [0, h],
+    ],
+    14,
+  );
+}
+
+/**
+ * A head: cranium, brow, and a jaw that tapers to a chin.
+ *
+ * The old one was a cube with a dark stripe painted across the front to say
+ * which way it faced. At the distance these are seen the stripe worked, and
+ * every frame closer than that it was a cube with a stripe on it.
+ */
+function headGeo(key: string, r: number): THREE.LatheGeometry {
+  return lathe(
+    key,
+    [
+      [0, -r * 1.05],
+      [r * 0.42, -r * 0.98],
+      [r * 0.68, -r * 0.78],
+      [r * 0.85, -r * 0.42],
+      [r * 0.96, -r * 0.05],
+      [r, r * 0.3],
+      [r * 0.92, r * 0.62],
+      [r * 0.66, r * 0.9],
+      [r * 0.3, r * 1.04],
+      [0, r * 1.08],
+    ],
+    12,
+  );
+}
+
+/**
+ * SEVERAL BOXES AS ONE MESH.
+ *
+ * A face needs a brow and two eyes; a jersey needs a number, and a number is
+ * up to two digits of seven segments each. Modelled as separate meshes that is
+ * seventeen more draw calls per player and three hundred across a fielding
+ * side, which on a phone is the entire budget spent on detail nobody asked for.
+ *
+ * Merged, it is one. The parts are baked into a single buffer at build time,
+ * cached globally by key like everything else here, and drawn once. The cost of
+ * a face is now the cost of a face *shape* — which is nothing, because it is
+ * eight triangles.
+ *
+ * Written out rather than imported from three's example utils: pulling
+ * `BufferGeometryUtils` in for one function adds it to the bundle a phone
+ * downloads, and this is twenty lines.
+ */
+type BoxPart = { w: number; h: number; d: number; x: number; y: number; z: number };
+
+function mergedBoxes(key: string, parts: BoxPart[]): THREE.BufferGeometry {
+  let g = GEO_CACHE.get(key);
+  if (g) return g;
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const idx: number[] = [];
+  for (const p of parts) {
+    const b = new THREE.BoxGeometry(p.w, p.h, p.d);
+    b.translate(p.x, p.y, p.z);
+    const bp = b.getAttribute('position');
+    const bn = b.getAttribute('normal');
+    const bi = b.getIndex()!;
+    const base = pos.length / 3;
+    for (let i = 0; i < bp.count; i++) {
+      pos.push(bp.getX(i), bp.getY(i), bp.getZ(i));
+      nor.push(bn.getX(i), bn.getY(i), bn.getZ(i));
+    }
+    for (let i = 0; i < bi.count; i++) idx.push(base + bi.getX(i));
+    b.dispose();
+  }
+  g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  GEO_CACHE.set(key, g);
+  return g;
+}
+
+/**
+ * Seven-segment digits, as blocks.
+ *
+ * A jersey number is the single most human thing that can be put on a back, and
+ * at the plate camera the back is most of the frame. Text geometry would mean a
+ * font, a loader and a binary asset — none of which exist in this project by
+ * design — so the digits are drawn the way a scoreboard draws them.
+ */
+const SEGMENTS: Record<string, number[]> = {
+  //        top, tl, tr, mid, bl, br, bottom
+  '0': [1, 1, 1, 0, 1, 1, 1],
+  '1': [0, 0, 1, 0, 0, 1, 0],
+  '2': [1, 0, 1, 1, 1, 0, 1],
+  '3': [1, 0, 1, 1, 0, 1, 1],
+  '4': [0, 1, 1, 1, 0, 1, 0],
+  '5': [1, 1, 0, 1, 0, 1, 1],
+  '6': [1, 1, 0, 1, 1, 1, 1],
+  '7': [1, 0, 1, 0, 0, 1, 0],
+  '8': [1, 1, 1, 1, 1, 1, 1],
+  '9': [1, 1, 1, 1, 0, 1, 1],
+};
+
+function digitParts(ch: string, h: number, x0: number, t: number): BoxPart[] {
+  const seg = SEGMENTS[ch];
+  if (!seg) return [];
+  const w = h * 0.58;
+  const q = h / 2;
+  const out: BoxPart[] = [];
+  const bar = (on: number, bw: number, bh: number, bx: number, by: number) => {
+    if (on) out.push({ w: bw, h: bh, d: t, x: x0 + bx, y: by, z: 0 });
+  };
+  bar(seg[0], w, t, 0, q);
+  bar(seg[1], t, q, -w / 2, q / 2);
+  bar(seg[2], t, q, w / 2, q / 2);
+  bar(seg[3], w, t, 0, 0);
+  bar(seg[4], t, q, -w / 2, -q / 2);
+  bar(seg[5], t, q, w / 2, -q / 2);
+  bar(seg[6], w, t, 0, -q);
+  return out;
+}
+
+function numberGeo(n: number, h: number): THREE.BufferGeometry {
+  const text = String(Math.max(0, Math.min(99, Math.round(n))));
+  const t = h * 0.15;
+  const w = h * 0.58;
+  const gap = w * 1.35;
+  const parts: BoxPart[] = [];
+  const startX = text.length === 2 ? -gap / 2 : 0;
+  for (let i = 0; i < text.length; i++) {
+    parts.push(...digitParts(text[i], h, startX + i * gap, t));
+  }
+  return mergedBoxes(`num:${text}:${h.toFixed(3)}`, parts);
+}
+
+/** A dome, for a cap crown or a helmet shell. */
+function domeGeo(key: string, r: number, squash = 1): THREE.LatheGeometry {
+  const pts: Profile = [];
+  const steps = 7;
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * (Math.PI / 2);
+    pts.push([Math.cos(a) * r, Math.sin(a) * r * squash]);
+  }
+  pts.push([0, r * squash]);
+  return lathe(key, pts, 14);
+}
+
 function mat(color: number): THREE.MeshLambertMaterial {
   let m = MAT_CACHE.get(color);
   if (!m) {
     m = flatMat(color);
     MAT_CACHE.set(color, m);
+  }
+  return m;
+}
+
+/**
+ * Smooth-shaded, for the turned forms.
+ *
+ * Flat shading is what gives the parks and the trim their faceted, deliberate
+ * look and it stays there. On a body it is the enemy: it turns a perfectly good
+ * tapered limb back into a stack of visible facets, which is the exact read the
+ * lathe was introduced to remove. Cached separately so a colour can be both.
+ */
+const SMOOTH_CACHE = new Map<number, THREE.MeshLambertMaterial>();
+function smoothMat(color: number): THREE.MeshLambertMaterial {
+  let m = SMOOTH_CACHE.get(color);
+  if (!m) {
+    m = flatMat(color, { flat: false });
+    SMOOTH_CACHE.set(color, m);
   }
   return m;
 }
@@ -157,8 +416,8 @@ export class PlayerActor {
   private facing = 0;
   private lean = 0;
 
-  constructor(colors: ActorColors, body: BodyType, gear: Headgear = 'cap') {
-    this.build(colors, body, gear);
+  constructor(colors: ActorColors, body: BodyType, gear: Headgear = 'cap', jerseyNumber = 0) {
+    this.build(colors, body, gear, jerseyNumber);
     this.group.add(this.root);
   }
 
@@ -180,11 +439,10 @@ export class PlayerActor {
    * siblings, which is why the old batter's shoulders stayed square while his
    * chest rotated out from under them.
    */
-  private build(colors: ActorColors, body: BodyType, gear: Headgear): void {
+  private build(colors: ActorColors, body: BodyType, gear: Headgear, jerseyNumber: number): void {
     const b = BODY[body] ?? BODY.average;
     const k = body;
 
-    const jersey = mat(colors.jersey);
     // Real uniform trousers are near-white or grey, faintly tinted toward the
     // club's accent. Deriving them straight from the trim colour, as the first
     // version did, produced pink and lilac legs on half the league.
@@ -192,10 +450,6 @@ export class PlayerActor {
     const trim = mat(colors.trim);
     const skin = mat(colors.skin);
     const shoe = mat(shade(colors.accent, -0.55));
-    // Undershirt sleeves. Two bare forearms are two big blocks of skin tone in
-    // the middle of the frame, and they were the loudest thing on the model;
-    // sleeving them also gives the uniform a third colour band.
-    const sleeve = mat(colors.trim);
     const helmetShell = mat(shade(colors.jersey, -0.08));
 
     // Overall stature is unchanged — the plate camera's clearances were derived
@@ -206,37 +460,59 @@ export class PlayerActor {
     const thighH = legH * 0.5;
     const shinH = legH * 0.5;
     const torsoH = 0.6 * b.height;
-    const waistH = torsoH * 0.4;
     const chestH = torsoH * 0.6;
     const torsoW = 0.52 * b.width;
     const torsoD = 0.3 * b.depth;
     const shoulderW = torsoW * 1.24;
 
     // --- Legs: hip → knee → foot -------------------------------------------
+    // Turned forms on exactly the joint anchors the box version used, so every
+    // pose in `update()` still lands where it was tuned to land.
     const mkLeg = (side: number) => {
       const hip = new THREE.Group();
-      const thigh = new THREE.Mesh(box(`${k}:thigh`, 0.21 * b.width, thighH, 0.23 * b.depth), pants);
+      const thigh = new THREE.Mesh(
+        limbGeo(`${k}:thigh`, thighH, 0.104 * b.width, 0.079 * b.width),
+        smoothMat(shade(colors.accent, 0.72)),
+      );
+      // Trousers are baggy: rounder than the leg inside them, and not tapered
+      // all the way to the knee.
+      thigh.scale.z = 1.08;
       thigh.position.y = -thighH / 2;
       hip.add(thigh);
 
       const knee = new THREE.Group();
       knee.position.y = -thighH;
-      const shin = new THREE.Mesh(box(`${k}:shin`, 0.185 * b.width, shinH, 0.2 * b.depth), pants);
+      const shin = new THREE.Mesh(
+        limbGeo(`${k}:shin`, shinH, 0.09 * b.width, 0.056 * b.width),
+        smoothMat(shade(colors.accent, 0.72)),
+      );
+      shin.scale.z = 1.06;
       shin.position.y = -shinH / 2;
       knee.add(shin);
-      // Stirrup sock over the lower shin: the one place the club's trim colour
-      // shows below the belt, and a strong horizontal band that reads at speed.
+      // Stirrup sock over the calf: the one place the club's trim colour shows
+      // below the belt, and a strong horizontal band that reads at speed. Turned
+      // slightly fatter than the shin so it sits *over* it rather than through.
       const sock = new THREE.Mesh(
-        box(`${k}:sock`, 0.195 * b.width, shinH * 0.5, 0.21 * b.depth),
-        trim,
+        limbGeo(`${k}:sock`, shinH * 0.56, 0.096 * b.width, 0.066 * b.width),
+        smoothMat(colors.trim),
       );
-      sock.position.y = -shinH * 0.72;
+      sock.scale.z = 1.06;
+      sock.position.y = -shinH * 0.7;
       knee.add(sock);
-      const foot = new THREE.Mesh(box(`${k}:foot`, 0.21 * b.width, 0.09, 0.33 * b.depth), shoe);
-      foot.position.set(0, -shinH - 0.035, 0.06);
+      // A cleat: low, long, and wider at the toe than the heel.
+      const foot = new THREE.Mesh(box(`${k}:foot`, 0.115 * b.width, 0.075, 0.3 * b.depth), shoe);
+      foot.position.set(0, -shinH - 0.03, 0.055);
       knee.add(foot);
-      const sole = new THREE.Mesh(box(`${k}:sole`, 0.22 * b.width, 0.035, 0.34 * b.depth), pants);
-      sole.position.set(0, -shinH - 0.085, 0.06);
+      const toe = new THREE.Mesh(
+        limbGeo(`${k}:toe`, 0.16 * b.depth, 0.058, 0.035, 8),
+        smoothMat(shade(colors.accent, -0.55)),
+      );
+      toe.rotation.x = Math.PI / 2;
+      toe.scale.set(1, 1, 0.62);
+      toe.position.set(0, -shinH - 0.03, 0.16 * b.depth);
+      knee.add(toe);
+      const sole = new THREE.Mesh(box(`${k}:sole`, 0.125 * b.width, 0.028, 0.32 * b.depth), pants);
+      sole.position.set(0, -shinH - 0.072, 0.06);
       knee.add(sole);
       hip.add(knee);
 
@@ -255,112 +531,155 @@ export class PlayerActor {
     // and it must not twist away from them when the shoulders turn. Without it
     // the thighs visibly float below the jersey.
     const pelvis = new THREE.Mesh(
-      box(`${k}:pelvis`, torsoW * 0.9, 0.15, torsoD * 0.94),
-      pants,
+      limbGeo(`${k}:pelvis`, 0.19, torsoW * 0.44, torsoW * 0.4, 12),
+      smoothMat(shade(colors.accent, 0.72)),
     );
-    pelvis.position.y = legH - 0.045;
+    pelvis.scale.z = (torsoD * 0.5) / (torsoW * 0.44);
+    pelvis.position.y = legH - 0.03;
     this.root.add(pelvis);
 
-    // --- Torso: waist → chest → shoulder yoke -------------------------------
+    // --- Torso: one turned form from belt to shoulders ----------------------
     this.torso = new THREE.Group();
     this.torso.position.y = legH;
     this.root.add(this.torso);
 
-    const waist = new THREE.Mesh(box(`${k}:waist`, torsoW * 0.88, waistH, torsoD * 0.9), jersey);
-    waist.position.y = waistH / 2;
-    this.torso.add(waist);
-
-    const chest = new THREE.Mesh(box(`${k}:chest`, torsoW, chestH, torsoD), jersey);
-    chest.position.y = waistH + chestH / 2;
+    // What used to be four boxes — waist, chest, yoke, belly — is one profile.
+    // They were separate only because a box cannot narrow, so the taper had to
+    // be built out of differently-sized boxes and every seam read as a step.
+    const heavy = body === 'huge' || body === 'stocky';
+    const chest = new THREE.Mesh(
+      torsoGeo(
+        `${k}:torso`,
+        torsoH,
+        torsoW * (heavy ? 0.52 : 0.395),
+        torsoW * 0.47,
+        shoulderW * 0.5,
+      ),
+      smoothMat(colors.jersey),
+    );
+    // A chest is an oval from above, never a circle — and much shallower than
+    // it is wide. `torsoD` is a full box depth from the old model, so the half
+    // depth is what compares against a lathe radius; using the whole thing made
+    // the torso deeper than it was broad, which is a barrel, not an athlete.
+    chest.scale.z = (torsoD * 0.5) / (torsoW * 0.5);
     this.torso.add(chest);
 
-    const belt = new THREE.Mesh(box(`${k}:belt`, torsoW * 0.92, 0.075, torsoD * 0.94), trim);
-    belt.position.y = 0.03;
+    const belt = new THREE.Mesh(
+      limbGeo(`${k}:belt`, 0.07, torsoW * 0.43, torsoW * 0.42, 12),
+      smoothMat(colors.trim),
+    );
+    belt.scale.z = (torsoD * 0.52) / (torsoW * 0.43);
+    belt.position.y = 0.035;
     this.torso.add(belt);
 
-    // The yoke is the whole reason the model reads as an athlete: it widens the
-    // silhouette exactly where a ballplayer is wide.
-    const yoke = new THREE.Mesh(
-      box(`${k}:yoke`, shoulderW, chestH * 0.34, torsoD * 1.05),
-      jersey,
-    );
-    yoke.position.y = torsoH - chestH * 0.2;
-    this.torso.add(yoke);
-
-    // Button placket down the front. One thin vertical stripe is the cheapest
-    // thing that turns a coloured box into a jersey.
+    // Button placket down the front. One thin vertical stripe is still the
+    // cheapest thing that turns a coloured shape into a jersey.
     const placket = new THREE.Mesh(
-      box(`${k}:placket`, torsoW * 0.11, torsoH * 0.86, 0.02),
+      box(`${k}:placket`, torsoW * 0.09, torsoH * 0.72, 0.02),
       trim,
     );
-    placket.position.set(0, torsoH * 0.45, -torsoD / 2 - 0.008);
+    placket.position.set(0, torsoH * 0.45, -torsoD * 0.5 - 0.012);
     this.torso.add(placket);
 
-    // The two heaviest builds carry it in front, which is the only thing that
-    // makes 'stocky' and 'huge' read as different men rather than the same man
-    // at two scales.
-    if (body === 'huge' || body === 'stocky') {
-      const belly = new THREE.Mesh(
-        box(`${k}:belly`, torsoW * 0.86, waistH * 1.15, torsoD * 0.5),
-        jersey,
+    // The number, on the back. The plate camera spends most of a game looking at
+    // exactly this rectangle of jersey, and nothing else available at this
+    // budget says "a person is wearing a uniform" half as loudly.
+    if (jerseyNumber > 0) {
+      const digits = new THREE.Mesh(
+        numberGeo(jerseyNumber, torsoH * 0.3),
+        mat(colors.trim),
       );
-      belly.position.set(0, waistH * 0.62, -torsoD * 0.52);
-      this.torso.add(belly);
+      digits.position.set(0, torsoH * 0.62, torsoD * 0.5 + 0.008);
+      digits.rotation.y = Math.PI;
+      this.torso.add(digits);
     }
 
-    const neck = new THREE.Mesh(box(`${k}:neck`, 0.13 * b.width, 0.09, 0.13 * b.depth), skin);
-    neck.position.y = torsoH + 0.03;
+    const neck = new THREE.Mesh(
+      limbGeo(`${k}:neck`, 0.13, 0.062 * b.width, 0.075 * b.width, 8),
+      smoothMat(colors.skin),
+    );
+    neck.position.y = torsoH + 0.01;
     this.torso.add(neck);
 
     // --- Head ---------------------------------------------------------------
     this.head = new THREE.Group();
     const hs = b.headScale;
-    // The skull is deliberately small and mostly covered: headgear should be the
-    // top two thirds of the head, with skin only showing as a face. A large bare
-    // cube with a hat balanced on it reads as a mannequin.
-    const skull = new THREE.Mesh(box(`${k}:skull`, 0.28 * hs, 0.24 * hs, 0.27 * hs), skin);
+    const headR = 0.135 * hs;
+    // A skull with a brow and a jaw that tapers to a chin, rather than a cube
+    // with a dark stripe painted across the front to say which way it faced. At
+    // the distance these are usually seen the stripe worked; every frame closer
+    // than that, it was a cube with a stripe on it.
+    const skull = new THREE.Mesh(headGeo(`${k}:skull`, headR), smoothMat(colors.skin));
+    skull.scale.z = 1.08;
     this.head.add(skull);
-    // A shadowed brow across the front of the face. At the distance these models
-    // are actually seen it is the only thing that says "this box has a front".
-    const brow = new THREE.Mesh(
-      box(`${k}:brow`, 0.3 * hs, 0.06 * hs, 0.02),
-      mat(shade(colors.skin, -0.45)),
+    // A brow and two eyes, in one mesh and one colour. Separate meshes would be
+    // three draw calls per player and fifty-four across a fielding side, for
+    // eight triangles of detail; merged it is free. One dark tone for all three
+    // reads as a shadowed eye region, which at any distance this camera reaches
+    // is exactly what a face looks like.
+    const face = new THREE.Mesh(
+      mergedBoxes(`${k}:face`, [
+        { w: headR * 1.45, h: headR * 0.16, d: 0.02, x: 0, y: headR * 0.34, z: 0 },
+        { w: headR * 0.3, h: headR * 0.22, d: 0.02, x: -headR * 0.4, y: headR * 0.1, z: 0 },
+        { w: headR * 0.3, h: headR * 0.22, d: 0.02, x: headR * 0.4, y: headR * 0.1, z: 0 },
+      ]),
+      mat(shade(colors.skin, -0.5)),
     );
-    brow.position.set(0, 0.035 * hs, 0.14 * hs);
-    this.head.add(brow);
+    face.position.set(0, 0, headR * 1.01);
+    this.head.add(face);
 
     let headgearShell: THREE.Mesh | null = null;
     if (gear === 'helmet') {
       // A batting helmet is a deeper shell with one ear flap, and that
       // difference is the fastest way to tell at a glance who is hitting.
-      const shell = new THREE.Mesh(box(`${k}:helmet`, 0.35 * hs, 0.28 * hs, 0.35 * hs), helmetShell);
-      shell.position.set(0, 0.09 * hs, 0.01 * hs);
+      const shell = new THREE.Mesh(domeGeo(`${k}:helmet`, headR * 1.2, 1.12), helmetShell);
+      shell.scale.z = 1.08;
+      shell.position.set(0, -headR * 0.18, 0);
       this.head.add(shell);
       headgearShell = shell;
-      const flap = new THREE.Mesh(box(`${k}:earflap`, 0.07 * hs, 0.17 * hs, 0.18 * hs), helmetShell);
-      flap.position.set(-0.19 * hs, -0.02 * hs, 0.03 * hs);
+      const flap = new THREE.Mesh(
+        limbGeo(`${k}:earflap`, headR * 1.05, headR * 0.42, headR * 0.34, 8),
+        helmetShell,
+      );
+      flap.scale.set(0.34, 1, 1.15);
+      flap.position.set(-headR * 1.25, -headR * 0.18, headR * 0.16);
       this.earFlap = flap;
       this.head.add(flap);
-      const stripe = new THREE.Mesh(box(`${k}:helmstripe`, 0.36 * hs, 0.05 * hs, 0.12 * hs), trim);
-      stripe.position.set(0, 0.24 * hs, 0.02 * hs);
+      const stripe = new THREE.Mesh(
+        box(`${k}:helmstripe`, headR * 0.3, headR * 1.5, headR * 0.9),
+        trim,
+      );
+      stripe.position.set(0, headR * 0.55, -headR * 0.2);
       this.head.add(stripe);
-      const peak = new THREE.Mesh(box(`${k}:helmpeak`, 0.32 * hs, 0.055 * hs, 0.17 * hs), helmetShell);
-      peak.position.set(0, 0.01 * hs, 0.24 * hs);
+      const peak = new THREE.Mesh(
+        cyl(`${k}:helmpeak`, headR * 1.02, headR * 1.02, 0.028, 14),
+        helmetShell,
+      );
+      peak.scale.set(1, 1, 1.35);
+      peak.position.set(0, -headR * 0.12, headR * 0.82);
       this.head.add(peak);
     } else {
-      const crown = new THREE.Mesh(box(`${k}:crown`, 0.32 * hs, 0.17 * hs, 0.31 * hs), jersey);
-      crown.position.y = 0.12 * hs;
+      const crown = new THREE.Mesh(domeGeo(`${k}:crown`, headR * 1.04, 0.92), smoothMat(colors.jersey));
+      crown.scale.z = 1.06;
+      crown.position.y = -headR * 0.1;
       this.head.add(crown);
       headgearShell = crown;
-      const button = new THREE.Mesh(box(`${k}:capbutton`, 0.055 * hs, 0.04 * hs, 0.055 * hs), trim);
-      button.position.y = 0.24 * hs;
+      const button = new THREE.Mesh(
+        limbGeo(`${k}:capbutton`, headR * 0.2, headR * 0.13, headR * 0.11, 6),
+        smoothMat(colors.trim),
+      );
+      button.position.y = headR * 0.88;
       this.head.add(button);
-      const brim = new THREE.Mesh(box(`${k}:brim`, 0.3 * hs, 0.04, 0.2 * hs), trim);
-      brim.position.set(0, 0.055 * hs, 0.24 * hs);
+      // A curved brim, not a plank: a flattened disc pushed out over the eyes.
+      const brim = new THREE.Mesh(cyl(`${k}:brim`, headR * 0.96, headR * 0.96, 0.026, 14), trim);
+      brim.scale.set(1, 1, 1.5);
+      brim.position.set(0, -headR * 0.06, headR * 0.78);
       this.head.add(brim);
     }
     this.headScale = hs;
-    this.head.position.y = torsoH + 0.1 + 0.17 * hs;
+    // Just clear of the neck's top dome: the old figure left a gap the cap hid
+    // from most angles and nothing hid from the plate camera.
+    this.head.position.y = torsoH + 0.07 + 0.115 * hs;
     this.torso.add(this.head);
 
     // --- Arms: shoulder → elbow → hand --------------------------------------
@@ -368,37 +687,41 @@ export class PlayerActor {
     const foreLen = 0.3 * b.height;
     const mkArm = (side: number) => {
       const shoulder = new THREE.Group();
+      // The sleeve is the upper arm: a deltoid at the top tapering to the
+      // elbow, which is one form rather than an arm box with a shoulder box
+      // stuck on it. The old pair left a visible corner at the armpit.
       const upper = new THREE.Mesh(
-        box(`${k}:upperarm`, 0.155 * b.width, upperLen, 0.165 * b.depth),
-        jersey,
+        limbGeo(`${k}:upperarm`, upperLen, 0.084 * b.width, 0.056 * b.width),
+        smoothMat(colors.jersey),
       );
+      upper.scale.z = 1.04;
       upper.position.y = -upperLen / 2;
       shoulder.add(upper);
-      // Deltoid: fills the gap between the yoke and the arm, which otherwise
-      // reads as a limb floating an inch off the body.
-      const cap = new THREE.Mesh(
-        box(`${k}:deltoid`, 0.185 * b.width, 0.16 * b.height, 0.19 * b.depth),
-        jersey,
-      );
-      cap.position.y = -0.03;
-      shoulder.add(cap);
 
       const elbow = new THREE.Group();
       elbow.position.y = -upperLen;
+      // Undershirt to mid-forearm, then skin: two forms that meet rather than a
+      // sleeve box and a wrist box separated by a gap.
       const fore = new THREE.Mesh(
-        box(`${k}:forearm`, 0.135 * b.width, foreLen * 0.72, 0.145 * b.depth),
-        sleeve,
+        limbGeo(`${k}:forearm`, foreLen * 0.62, 0.058 * b.width, 0.045 * b.width),
+        smoothMat(colors.trim),
       );
-      fore.position.y = -foreLen * 0.36;
+      fore.scale.z = 1.03;
+      fore.position.y = -foreLen * 0.3;
       elbow.add(fore);
       const wrist = new THREE.Mesh(
-        box(`${k}:wrist`, 0.125 * b.width, foreLen * 0.3, 0.135 * b.depth),
-        skin,
+        limbGeo(`${k}:wrist`, foreLen * 0.46, 0.047 * b.width, 0.038 * b.width),
+        smoothMat(colors.skin),
       );
-      wrist.position.y = -foreLen * 0.85;
+      wrist.scale.z = 1.03;
+      wrist.position.y = -foreLen * 0.76;
       elbow.add(wrist);
-      const hand = new THREE.Mesh(box(`${k}:hand`, 0.145 * b.width, 0.14, 0.15 * b.depth), skin);
-      hand.position.y = -foreLen - 0.04;
+      const hand = new THREE.Mesh(
+        limbGeo(`${k}:hand`, 0.115, 0.045 * b.width, 0.032 * b.width, 8),
+        smoothMat(colors.skin),
+      );
+      hand.scale.z = 0.78;
+      hand.position.y = -foreLen - 0.025;
       elbow.add(hand);
       shoulder.add(elbow);
       shoulder.position.set(side * (shoulderW / 2 - 0.03), torsoH - chestH * 0.24, 0);
@@ -434,7 +757,12 @@ export class PlayerActor {
     this.foreR.add(this.bat);
     this.bat.position.y = -foreLen - 0.03;
 
-    this.glove = new THREE.Mesh(box('glove', 0.26, 0.28, 0.14), mat(shade(0x8b5a2b, -0.1)));
+    // A mitt: round, deep, and thicker than a hand. A slab read as a clipboard.
+    this.glove = new THREE.Mesh(
+      limbGeo('glove', 0.26, 0.115, 0.085, 10),
+      smoothMat(shade(0x8b5a2b, -0.1)),
+    );
+    this.glove.scale.z = 0.72;
     this.glove.position.y = -foreLen - 0.11;
     this.glove.visible = false;
     this.foreL.add(this.glove);
@@ -451,9 +779,7 @@ export class PlayerActor {
       legR.thigh,
       legR.shin,
       legR.foot,
-      waist,
       chest,
-      yoke,
       skull,
       armL.upper,
       armL.fore,

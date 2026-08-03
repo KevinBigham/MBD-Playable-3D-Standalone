@@ -273,16 +273,23 @@ Chromium at **1920x1080**, nine-inning All-Star game running live:
 
 | Measure | Value |
 |---|---|
-| Page load to interactive title screen | 545 ms |
-| Frame rate, minimum over 60 s | 73.1 |
-| Frame rate, 5th percentile | 74.8 |
-| Frame rate, mean | 79.3 |
-| Frame rate, maximum | 89.8 |
+| Page load to interactive title screen | 734 ms |
+| Frame rate, minimum over 35 s | 73.7 |
+| Frame rate, 5th percentile | 75.0 |
+| Frame rate, mean | 81.1 |
+| Frame rate, maximum | 89.0 |
 
-Those numbers are **after** two graphics passes — jointed player models with
-uniform detail, real cast shadows, a four-times-denser crowd, tiered stands with
-decks, a scoreboard and a gradient sky. Before either pass the same harness
-reported min 76.0 / mean 81.9.
+Those numbers are **after** three graphics passes — lathe-turned player models
+with faces and jersey numbers, real cast shadows, a four-times-denser crowd,
+tiered stands with decks, a scoreboard and a gradient sky. Before any of them
+the same harness reported min 76.0 / mean 81.9.
+
+The third pass replaced every box in a player with a turned form and **did not
+move the frame rate**, which is the point of it: a limb went from 12 triangles to
+about 160 while the draw calls stayed where they were. Eighteen players on the
+field is 235 draw calls and under 40 000 triangles — the outfield wall is more
+geometry than the whole roster. Load is 190 ms slower because a first visit now
+also fetches MBD's 896 real players.
 
 The second model pass took a player to ~34 meshes and briefly cost a third of the
 frame rate — **min 54.6** — because the shadow pass was running over every

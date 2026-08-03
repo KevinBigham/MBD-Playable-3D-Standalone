@@ -344,7 +344,7 @@ export class GameWorld {
       this.teams!.away.players.find((p) => p.id === playerId) ??
       this.teams!.home.players.find((p) => p.id === playerId) ??
       team.players[0];
-    const actor = new PlayerActor(actorColorsFor(player, team), player.body, gear);
+    const actor = new PlayerActor(actorColorsFor(player, team), player.body, gear, player.number);
     actor.setShadows(this.quality.shadows);
     this.scene.add(actor.group);
     return { actor, playerId, pose: 'idle', poseT: 0, lastX: 0, lastZ: 0 };
@@ -803,7 +803,7 @@ export class GameWorld {
 
     if (!this.batter || this.batter.playerId !== player.id) {
       this.batter?.actor.dispose();
-      const actor = new PlayerActor(actorColorsFor(player, team), player.body, 'helmet');
+      const actor = new PlayerActor(actorColorsFor(player, team), player.body, 'helmet', player.number);
       actor.setShadows(this.quality.shadows);
       this.scene.add(actor.group);
       this.batter = { actor, playerId: player.id, pose: 'batStance', poseT: 0, lastX: 0, lastZ: 0 };
