@@ -214,11 +214,18 @@ Hits per nine innings, human batting, 10 games per cell:
 
 | Player's error (place / time) | Rookie | Pro | Ace | Before, any setting |
 |---|---|---|---|---|
-| 0.05 m / 0.035 s | 36.5 | 29.8 | 17.9 | 24.8 |
-| 0.08 m / 0.050 s | 28.5 | 19.5 | 11.9 | 17.6 |
-| 0.11 m / 0.070 s | 19.2 | 16.0 | 5.5 | 11.4 |
-| 0.15 m / 0.090 s | 18.3 | 12.0 | 2.0 | 4.0 |
-| **0.20 m / 0.130 s** | **8.8** | **5.6** | 0.8 | **1.5** |
+| 0.05 m / 0.035 s | 51.3 | 27.8 | 17.9 | 24.8 |
+| 0.08 m / 0.050 s | 32.8 | 22.4 | 11.9 | 17.6 |
+| 0.11 m / 0.070 s | 26.3 | 15.3 | 5.5 | 11.4 |
+| 0.15 m / 0.090 s | 20.4 | 11.8 | 2.0 | 4.0 |
+| **0.20 m / 0.130 s** | **15.3** | **8.5** | 0.8 | **1.5** |
+
+Measured at the default tempo, which is now about a **two-second** flight from
+the hand to the plate. The rows above hold the player's accuracy constant across
+that change, which is the harness being conservative rather than accurate: four
+times as long to look at a pitch and reach for it is exactly the sort of thing
+that makes a person more accurate, and none of that improvement is in this
+table.
 
 The "before" column is the old Rookie, which was the most generous setting the
 game had. The bottom row is the one that matters: it is where a player reporting
@@ -230,8 +237,8 @@ whichever knob was nearest:
 
 | Isolated error | Hits/9 before | After (Pro) |
 |---|---|---|
-| Timing only, 0.130 s | 8.0 | 19.2 |
-| Placement only, 0.20 m | 5.3 | 11.8 |
+| Timing only, 0.130 s | 8.0 | 34.6 |
+| Placement only, 0.20 m | 5.3 | 14.3 |
 
 They did roughly equal damage, which is why widening the timing window alone —
 the only assist that existed — could not have fixed this.

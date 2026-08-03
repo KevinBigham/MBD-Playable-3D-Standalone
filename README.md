@@ -371,8 +371,14 @@ npx tsx scripts/perf.ts        # frame rate, heap and GPU resource growth
 npm run test:phone             # the phone audit, in WebKit, with real touches
 npm run test:world             # a first visit lands in the right league, everywhere
 npm run shots                  # close-ups of the player models, five framings
+npm run swing                  # a frame strip across the instant of contact
 npm run icons                  # re-rasterise the PNG icons from the SVGs
 ```
+
+`npm run swing` runs the **batting drill** rather than a game, deliberately: a
+human-controlled side has to pitch as well as hit, and a side that never throws
+deadlocks the game — the first version of the script waited forever for a half
+inning that was never coming.
 
 `npm run shots` is for model work specifically. It parks the real camera two
 metres from a player and writes a PNG per framing, because at 1600×900 a head is

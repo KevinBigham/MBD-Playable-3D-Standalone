@@ -206,9 +206,12 @@ describe('the pitch gives the hitter a workable window', () => {
     expect(flights.length).toBeGreaterThan(10);
     const fastest = Math.min(...flights);
     const slowest = Math.max(...flights);
-    // Even the hardest thrower in the league has to give the hitter more than
-    // four tenths of a second, and the slowest stuff floats up near seven.
-    expect(fastest).toBeGreaterThan(0.42);
-    expect(slowest).toBeLessThan(0.75);
+    // Even the hardest thrower in the league has to give the hitter a decision
+    // rather than a reflex test, and the slowest stuff must not float so long
+    // that an at-bat stops being baseball. The band moved with the default
+    // tempo; the property it protects — every pitch lands inside a window a
+    // person can act in — did not.
+    expect(fastest).toBeGreaterThan(1.5);
+    expect(slowest).toBeLessThan(3.4);
   });
 });

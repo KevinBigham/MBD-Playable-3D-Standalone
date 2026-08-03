@@ -444,6 +444,22 @@ export function actorResourceCounts(): { geometries: number; materials: number }
   return { geometries: GEO_CACHE.size, materials: MAT_CACHE.size + BASIC_CACHE.size };
 }
 
+/**
+ * Where in `poseBatSwing` the barrel is over the plate.
+ *
+ * The swing animation runs load → whip → follow-through, and the whip spans
+ * `t` 0.25 to 0.60; the barrel crosses the plate in the middle of it. Callers
+ * scale the pose clock so that *this* fraction lands on the instant the engine
+ * says the ball was struck, which is the only way the bat and the ball can be in
+ * the same place at the same time.
+ *
+ * Before this existed the pose ran on a fixed 0.42 s clock while contact happened
+ * at the swing's `latency` — 0.125 s — so at the moment the ball left, the bat
+ * was 6% of the way through its arc. The ball departed and then the batter swung
+ * at where it had been.
+ */
+export const SWING_CONTACT_FRAME = 0.425;
+
 /** Batters and runners wear a helmet; everybody else wears a cap. */
 export type Headgear = 'cap' | 'helmet';
 

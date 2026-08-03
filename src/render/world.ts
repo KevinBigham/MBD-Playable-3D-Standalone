@@ -2,15 +2,22 @@ import * as THREE from 'three';
 import type { Stadium, Team } from '../core/types';
 import { CONTACT_Z, MOUND_Z, PITCH_TELL_REVEAL, clamp01 } from '../core/constants';
 import { PITCHES } from '../data/pitches';
-import { batterBoxX } from '../sim/contact';
-import { humanIsPitching } from '../sim/game';
+import { batterBoxX, swingProfile } from '../sim/contact';
+import { humanIsBatting, humanIsPitching } from '../sim/game';
 import { horizontalDist } from '../sim/physics';
 import { runnerPos } from '../sim/runners';
 import type { GameEvent, GameState } from '../sim/state';
 import { fieldingSide, lookupPlayer } from '../sim/state';
-import { BallActor, type Headgear, PlayerActor, type Pose, actorColorsFor } from './actors';
+import {
+  BallActor,
+  type Headgear,
+  PlayerActor,
+  type Pose,
+  SWING_CONTACT_FRAME,
+  actorColorsFor,
+} from './actors';
 import type { Ball } from '../sim/physics';
-import { CameraDirector } from './camera';
+import { CameraDirector, followThrough } from './camera';
 import { ImpactRings, ParticleField } from './fx';
 import { buildStadium, type StadiumBuild } from './stadium';
 import { flatMat, shade } from './palette';
@@ -28,7 +35,12 @@ const CATCHER_SLOT_RENDER = 1;
 
 /** True while the camera is the tight behind-the-plate duel shot. */
 function nearPlateShot(state: GameState): boolean {
-  return state.phase === 'preplay' || state.phase === 'windup' || state.phase === 'pitch';
+  return (
+    state.phase === 'preplay' ||
+    state.phase === 'windup' ||
+    state.phase === 'pitch' ||
+    followThrough(state) >= 0
+  );
 }
 
 interface ActorSlot {
@@ -573,9 +585,14 @@ export class GameWorld {
     const boxX = batterBoxX(batter.bats, pitcher.throws);
     const handed = boxX < 0 ? -1 : 1;
 
-    // Once the batter becomes a runner the runner actor takes over.
+    // Once the batter becomes a runner the runner actor takes over — but not
+    // instantly. The engine creates the batter-runner on the same tick it
+    // launches the ball, so handing over immediately deleted the follow-through
+    // and the player never saw a swing finish. For one beat after contact the
+    // batter stays and the runner is held back; they occupy the same spot at
+    // home anyway, so nothing else moves.
     const isRunning = state.runners.some((r) => r.isBatter && !r.out && !r.scored);
-    this.batter.actor.setVisible(!isRunning);
+    this.batter.actor.setVisible(!isRunning || followThrough(state) >= 0);
 
     let pose: Pose = 'batStance';
     let poseT = 0;
@@ -585,7 +602,14 @@ export class GameWorld {
       pose = 'bunt';
     } else if (state.batter.swingT >= 0) {
       pose = 'batSwing';
-      poseT = clamp01(state.batter.swingT / 0.42);
+      // The pose clock is scaled so the barrel reaches the plate exactly when
+      // the engine says the ball was struck. `swingT` freezes at contact, since
+      // the pitch stops being stepped, so the follow-through is driven by the
+      // play clock instead — the two are consecutive halves of one swing.
+      const kind = state.batter.swingKind === 'none' ? 'contact' : state.batter.swingKind;
+      const prof = swingProfile(batter, kind, state.difficulty, humanIsBatting(state));
+      const duration = Math.max(0.05, prof.latency / SWING_CONTACT_FRAME);
+      poseT = clamp01((state.batter.swingT + Math.max(0, followThrough(state))) / duration);
     }
 
     this.batter.actor.update(dt, {
@@ -633,7 +657,10 @@ export class GameWorld {
         this.runners[i] = this.makeActor(r.playerId, side, 'helmet');
       }
       const s = this.runners[i];
-      s.actor.setVisible(true);
+      // The batter-runner exists from the instant of contact, but for one beat
+      // the batter actor is still finishing his swing in the same spot. Drawing
+      // both puts two men at home plate inside each other.
+      s.actor.setVisible(!(r.isBatter && followThrough(state) >= 0));
       const pos = runnerPos(r);
       const dx = pos.x - s.lastX;
       const dz = pos.z - s.lastZ;

@@ -151,18 +151,32 @@ export const PITCH_TELL_REVEAL: Record<'rookie' | 'pro' | 'allstar', number> = {
  * The CPU hitter is unaffected, for the same reason a deeper mound does not
  * help it: it commits a fixed number of seconds before arrival.
  */
-export type PitchTempo = 'brisk' | 'standard' | 'relaxed';
+export type PitchTempo = 'brisk' | 'standard' | 'relaxed' | 'sandlot';
 
 export const PITCH_TEMPO: Record<PitchTempo, number> = {
-  /** The old behaviour: ~0.48 s on a fastball. */
+  /** The old behaviour: ~0.50 s on a fastball. */
   brisk: 1,
-  /** Default. ~0.62 s — enough to read a pitch and still be rushed by a heater. */
+  /** ~0.65 s — enough to read a pitch and still be rushed by a heater. */
   standard: 1.3,
-  /** ~0.77 s. Built for thumbs, and the default when the game opens on a phone. */
+  /** ~0.80 s. */
   relaxed: 1.6,
+  /**
+   * ~2.0 s, and the default everywhere.
+   *
+   * Half a second longer than Standard turned out to be the wrong order of
+   * magnitude. Reading the pitch is only the first of three things a hitter here
+   * has to do — read it, get a thumb to where it will cross, and commit — and on
+   * a phone the middle one is a hand travelling across glass. Two seconds is
+   * what makes that a decision instead of a reflex test, which is the game this
+   * is supposed to be.
+   *
+   * The name is the promise: sandlot baseball, where somebody lobs it in and the
+   * point is hitting it.
+   */
+  sandlot: 4,
 };
 
-export const DEFAULT_PITCH_TEMPO: PitchTempo = 'standard';
+export const DEFAULT_PITCH_TEMPO: PitchTempo = 'sandlot';
 
 /** Player movement caps, m/s, before attribute scaling. */
 export const RUNNER_BASE_SPEED = 6.4;

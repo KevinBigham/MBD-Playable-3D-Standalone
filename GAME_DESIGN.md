@@ -156,7 +156,7 @@ Right-handed hitters pull toward −X (left field) and stand in the third-base
 box; left-handers mirror it. Switch hitters take the opposite side to the arm.
 
 Difficulty widens what the **human** hitter is allowed to be wrong by, on both
-axes: the sweet spot ×2.0 / ×1.7 / ×1.0 and the timing window ×2.1 / ×1.75 / ×1.0
+axes: the sweet spot ×2.4 / ×2.0 / ×1.0 and the timing window ×2.5 / ×2.1 / ×1.0
 on Rookie, Pro and Ace. The CPU never receives either and no ball physics change.
 
 For a long time only the timing half of that existed, and it was close to
@@ -304,6 +304,7 @@ together so information never leaks at three different moments:
 | | Rookie | Pro | Ace |
 |---|---|---|---|
 | Fraction of flight before the read is given | 16% | 38% | never |
+| Roughly, at the default two-second flight | 0.3 s in | 0.8 s in | — |
 | Ball trail tinted with the pitch's colour | ✓ | ✓ | — |
 | Full flight arc drawn from the hand | ✓ | ✓ | — |
 | Marker at the plate-crossing point | ✓ | ✓ | — |

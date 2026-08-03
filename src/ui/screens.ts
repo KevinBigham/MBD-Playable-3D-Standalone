@@ -899,12 +899,13 @@ const HINTS: Record<ActionId, string> = {
 // Settings
 // ---------------------------------------------------------------------------
 
-const PITCH_TEMPO_ORDER: PitchTempo[] = ['brisk', 'standard', 'relaxed'];
+const PITCH_TEMPO_ORDER: PitchTempo[] = ['brisk', 'standard', 'relaxed', 'sandlot'];
 
 const PITCH_TEMPO_LABEL: Record<PitchTempo, string> = {
   brisk: 'BRISK — REAL TIME',
   standard: 'STANDARD',
-  relaxed: 'RELAXED — MOST TIME',
+  relaxed: 'RELAXED',
+  sandlot: 'SANDLOT — MOST TIME',
 };
 
 function cycleTempo(cur: PitchTempo, dir: number): PitchTempo {
@@ -1012,7 +1013,7 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
       id: 'tempo',
       label: 'Pitch tempo',
       value: () => PITCH_TEMPO_LABEL[s.pitchTempo],
-      hint: 'How long the ball hangs between release and the mitt. Relaxed gives you about half a second longer to read a pitch and pick a swing; Brisk is real time. The radar always shows the pitcher’s true velocity, and the last-pitch readout prints the actual flight time.',
+      hint: 'How long the ball hangs between release and the mitt. Sandlot is about two seconds and is the default — long enough to read a pitch, move a thumb onto it and commit. Brisk is real time, and about half a second. The radar always shows the pitcher’s true velocity, and the last-pitch readout prints the actual flight time.',
       onLeft: () => {
         s.pitchTempo = cycleTempo(s.pitchTempo, -1);
         app.saveSettings();

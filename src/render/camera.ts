@@ -52,6 +52,29 @@ function keepInsideYard(eye: THREE.Vector3, state: GameState): void {
   eye.z *= k;
 }
 
+/**
+ * Seconds since the ball was struck while the swing is still finishing, or -1
+ * once it is done.
+ *
+ * The engine launches the ball, creates the batter-runner and leaves the pitch
+ * phase all on the same tick — so without this, the entire back half of a swing
+ * happens in the one frame the camera is already cutting away from. The player
+ * reported never seeing the bat meet the ball, and this was one of the three
+ * reasons why.
+ *
+ * `play.clock` counts from contact and lives in the simulation, so the renderer
+ * stays a pure function of state and a replay of the same seed shows the same
+ * follow-through. It lives here rather than in world.ts because both the camera
+ * and the actors need it, and world.ts already imports this module.
+ */
+export const FOLLOW_THROUGH = 0.26;
+
+export function followThrough(state: GameState): number {
+  if (state.phase !== 'inplay' && state.phase !== 'deadball') return -1;
+  if (!state.play.live || state.play.homeRunCelebration) return -1;
+  return state.play.clock < FOLLOW_THROUGH ? state.play.clock : -1;
+}
+
 export class CameraDirector {
   readonly camera: THREE.PerspectiveCamera;
   private eye = new THREE.Vector3(0, 4, -14);
@@ -139,6 +162,14 @@ export class CameraDirector {
         return 'result';
       case 'inplay': {
         if (state.play.homeRunCelebration) return 'homerun';
+        // Stay at the plate for the beat it takes to finish the swing. The cut
+        // to the field used to land on the exact frame of contact, which is the
+        // one frame worth watching.
+        // `>= 0`, not `> 0`: the clock is exactly zero on the frame of contact,
+        // which is the one frame this whole thing exists for. An earlier version
+        // used `> 0` and cut wide for a single frame at the moment of impact,
+        // then cut back — a flicker on the only frame that mattered.
+        if (followThrough(state) >= 0) return 'batting';
         const d = horizontalDist(state.ball.x, state.ball.z);
         const airborne = state.ball.mode === 'batted' && !state.ball.rolling && state.ball.y > 2;
         if (d > 46 || (airborne && state.ball.apex > 12)) return 'outfield';

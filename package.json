@@ -11,6 +11,7 @@
     "phone": "npm run build && vite preview --host --port 4173",
     "icons": "tsx scripts/icons.ts",
     "shots": "tsx scripts/model-shot.ts",
+    "swing": "tsx scripts/swing-shot.ts",
     "test": "vitest run",
     "test:phone": "tsx scripts/phone-check.ts",
     "test:world": "tsx scripts/world-check.ts",

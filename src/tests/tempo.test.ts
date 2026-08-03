@@ -97,12 +97,15 @@ describe('the pitch clock stretches without bending the pitch', () => {
 
   it('defaults to a window a person can actually think inside', () => {
     // A four-seamer from an average arm. Real baseball is ~0.42 s; the deeper
-    // mound alone got to 0.45 s, which still is not a decision.
+    // mound alone got to 0.45 s and the old default to 0.65 s, and a player
+    // still reported not having time to swing — because reading the pitch is
+    // only the first of three things this game asks for inside that window, and
+    // the middle one is a thumb crossing a screen.
     const p = PITCHES.fastball;
     const speed = p.speed + p.speedSpan * 0.5;
     const T = fire(PITCH_TEMPO[DEFAULT_PITCH_TEMPO], speed).pitch!.T;
-    expect(T).toBeGreaterThan(0.55);
-    expect(T).toBeLessThan(0.72);
+    expect(T).toBeGreaterThan(1.5);
+    expect(T).toBeLessThan(2.6);
   });
 });
 

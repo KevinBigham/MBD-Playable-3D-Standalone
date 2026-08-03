@@ -286,8 +286,9 @@ export class App implements AppApi {
     if (!this.device.touchPrimary) return {};
     return {
       // A thumb is slower than a key, and there is no second chance to read a
-      // pitch on a 5-inch screen.
-      pitchTempo: 'relaxed',
+      // pitch on a 5-inch screen. This is the default everywhere now, so the
+      // phone override is only here to say so out loud.
+      pitchTempo: 'sandlot',
       // Phone GPUs are not laptop GPUs, they are not all the same GPU, and the
       // one in any given phone gets slower as the case warms up. A fixed guess
       // is wrong for somebody; a servo is wrong for nobody for long.

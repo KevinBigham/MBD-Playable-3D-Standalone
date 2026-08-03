@@ -1618,6 +1618,97 @@ the assist was tuned as if the reveal had not moved.
 
 ---
 
+## Two seconds, and a bat that arrives on time
+
+Three follow-ups to the round above, all from the same report: still too hard,
+and *"I do NOT get to see the batter make a full swing."*
+
+### The swing was real and nobody could see it
+
+The second complaint turned out to be three separate bugs stacked on the same
+tick, any one of which alone would have hidden contact.
+
+**The animation was on the wrong clock.** `poseBatSwing` ran on a fixed 0.42 s
+while the engine struck the ball at the swing's `latency` — 0.125 s. Working
+through the pose: at t = 0.30 the barrel is 6% into its arc. So at the instant
+the ball left the bat, the bat was still cocked behind the hitter's head. The
+ball departed, and *then* the player swung at where it had been.
+
+The pose clock is scaled now, so `SWING_CONTACT_FRAME` — the point in the
+animation where the barrel is over the plate — lands exactly on the engine's
+contact instant. The two numbers are related by construction rather than by
+coincidence, so retuning `latency` cannot silently break it again.
+
+**The batter was deleted on the frame of contact.** The engine creates the
+batter-runner in the same statement that launches the ball, and the renderer
+swapped actors the moment one existed — so the follow-through was never drawn at
+all. For one beat the batter now stays and the batter-runner is held back; they
+are both standing on home plate during that beat, so nothing else moves.
+
+**And the camera cut away on that frame too.** `pickShotName` returns an infield
+or outfield shot the instant the phase becomes `inplay`, and `chooseShot` does a
+hard cut. The one frame worth watching was the one frame the camera left.
+
+All three are driven off `play.clock`, which counts from contact and lives in the
+simulation — so the renderer stays a pure function of state and a replay of the
+same seed shows the same follow-through.
+
+The first version of the hold used `> 0` and produced a single-frame flicker to
+the wide shot *at the exact moment of impact*, then cut back. `play.clock` is
+zero on that frame. It is `>= 0` now, and the comment says why.
+
+### scripts/swing-shot.ts
+
+None of the above is visible in a still, so: a harness that drives a real touch
+swing and writes a strip of frames straddling contact, labelled from the
+simulation's own clock rather than from a guess about when the interesting part
+was. Four things had to be got right before it reported anything true:
+
+- **Synthesised `MouseEvent`s do not reach the touch path.** The first version
+  dispatched them and captured six identical frames of a pitch nobody swung at.
+  It uses a touch-capable context and `page.touchscreen.tap` now.
+- **Reading `toDataURL` between frames returns a blank canvas.** WebGL clears its
+  drawing buffer on composite unless `preserveDrawingBuffer` is on, and it is
+  deliberately off. The frames are collected inside the page, immediately after a
+  render, and shipped out in one transfer — which also raises the sample rate
+  from about 10 Hz to the frame rate.
+- **A named recursive callback inside `evaluate()` dies** with `__name is not
+  defined`, because esbuild's keepNames shim does not exist in the page. It is a
+  plain loop awaiting one animation frame at a time.
+- **`waitForTimeout` assumes wall time and game time run together**, and under a
+  software renderer they do not: a slow frame is clamped by `MAX_FRAME_DT`, game
+  time falls behind, and every tap lands early. It polls the ball's own flight
+  time instead. That one change took the harness from missing eight pitches in a
+  row to connecting on the first.
+
+### Two seconds
+
+The pitch still arrived in 0.65 s at the default tempo, and the report was that
+there was not enough time to swing. Half a second longer than Brisk had been the
+wrong order of magnitude: reading the pitch is only the first of three things
+this game asks for inside the flight, and the middle one is a thumb travelling
+across glass.
+
+`sandlot` is a fourth tempo tier at ×4, about **2.0 s** from hand to plate, and
+it is the default everywhere. The three existing tiers keep their values, so
+nobody's saved setting changed meaning. Two tests had to move with it — both were
+pinning the old default window, and both still assert the property they were
+written for: every pitch lands inside a window a person can act in.
+
+### One more level of assist
+
+`reach` went to ×2.4 / ×2.0 / ×1.0 and `window` to ×2.5 / ×2.1 / ×1.0. At the
+error that produced the original report, Pro went 5.6 → 8.5 hits a game and
+Rookie 8.8 → 15.3. Ace is untouched, again, and still has the test asserting a
+human there gets the identical profile the CPU gets.
+
+The harness holds the player's accuracy constant across the tempo change, which
+means the tempo is pure unmeasured upside on top of those numbers. That is the
+conservative direction, and it is the reason the assist was tuned as if the pitch
+were still arriving in two thirds of a second.
+
+---
+
 ## Tests performed
 
 - **Automated:** 288 Vitest tests across 24 files — RNG determinism, ball-flight

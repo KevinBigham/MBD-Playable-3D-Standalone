@@ -74,6 +74,8 @@ const HANDS: Hands[] = [
 ];
 
 interface Tally {
+  flightSum: number;
+  flightN: number;
   pa: number;
   ab: number;
   hits: number;
@@ -88,6 +90,8 @@ interface Tally {
 
 function emptyTally(): Tally {
   return {
+    flightSum: 0,
+    flightN: 0,
     pa: 0,
     ab: 0,
     hits: 0,
@@ -166,6 +170,8 @@ function playGame(
         const swinging =
           Math.abs(estX) <= chaseX && estY >= ZONE_BOTTOM - 0.11 && estY <= ZONE_TOP + 0.11;
         read = { estX, estY, estT, swinging, fired: false };
+        tally.flightSum += info.T;
+        tally.flightN++;
       }
 
       if (read && read.swinging && !read.fired && state.batter.swingT < 0) {
@@ -224,10 +230,10 @@ function main(): void {
       `The human bats for ${away.name}.\n`,
   );
   console.log(
-    'hands      place    time   |  H/game     AVG    K%     |  swings   miss    foul    fair',
+    'hands      place    time   |  H/game     AVG    K%     |  swings   miss    foul    fair  | flight',
   );
   console.log(
-    '---------------------------+---------------------------+------------------------------',
+    '---------------------------+---------------------------+------------------------------+-------',
   );
 
   for (const hands of HANDS) {
@@ -253,7 +259,8 @@ function main(): void {
       `${hands.name.padEnd(10)} ${hands.place.toFixed(2)}m  ${hands.time.toFixed(3)}s | ` +
         `${hpg.toFixed(1).padStart(7)}   ${avg.padStart(5)}  ${pct(tally.strikeouts, tally.pa).padStart(6)}    | ` +
         `${String(tally.swings).padStart(6)}  ${pct(tally.misses, tally.swings).padStart(6)}  ` +
-        `${pct(tally.fouls, tally.swings).padStart(6)}  ${pct(tally.fair, tally.swings).padStart(6)}`,
+        `${pct(tally.fouls, tally.swings).padStart(6)}  ${pct(tally.fair, tally.swings).padStart(6)}  | ` +
+        `${(tally.flightSum / Math.max(1, tally.flightN)).toFixed(2)}s`,
     );
   }
   console.log('');

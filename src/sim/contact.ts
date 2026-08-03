@@ -58,8 +58,8 @@ export interface SwingProfile {
  * has to keep meaning that.
  */
 const ASSIST: Record<Difficulty, { window: number; reach: number }> = {
-  rookie: { window: 2.1, reach: 2.0 },
-  pro: { window: 1.75, reach: 1.7 },
+  rookie: { window: 2.5, reach: 2.4 },
+  pro: { window: 2.1, reach: 2.0 },
   allstar: { window: 1.0, reach: 1.0 },
 };
 
