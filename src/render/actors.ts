@@ -261,6 +261,226 @@ function mergedBoxes(key: string, parts: BoxPart[]): THREE.BufferGeometry {
 }
 
 /**
+ * Merge arbitrary temporary geometries into one cached draw group. Equipment
+ * has more curved parts than uniform trim, but it follows the same rule as the
+ * jersey numbers above: visual complexity may add triangles, never a forest of
+ * draw calls or per-actor geometry allocations.
+ */
+function mergedGeometry(
+  key: string,
+  build: () => THREE.BufferGeometry[],
+): THREE.BufferGeometry {
+  const cached = GEO_CACHE.get(key);
+  if (cached) return cached;
+  const sources = build().map((geometry) => {
+    const source = geometry.index ? geometry.toNonIndexed() : geometry.clone();
+    source.computeVertexNormals();
+    geometry.dispose();
+    return source;
+  });
+  const vertexCount = sources.reduce((sum, source) => sum + source.attributes.position.count, 0);
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  let offset = 0;
+  for (const source of sources) {
+    positions.set(source.attributes.position.array as Float32Array, offset * 3);
+    normals.set(source.attributes.normal.array as Float32Array, offset * 3);
+    offset += source.attributes.position.count;
+    source.dispose();
+  }
+  const result = new THREE.BufferGeometry();
+  result.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  result.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  result.computeBoundingBox();
+  result.computeBoundingSphere();
+  GEO_CACHE.set(key, result);
+  return result;
+}
+
+function bakedGeometry(
+  geometry: THREE.BufferGeometry,
+  position: [number, number, number],
+  rotation: [number, number, number] = [0, 0, 0],
+  scale: [number, number, number] = [1, 1, 1],
+): THREE.BufferGeometry {
+  geometry.applyMatrix4(
+    new THREE.Matrix4().compose(
+      new THREE.Vector3(...position),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
+      new THREE.Vector3(...scale),
+    ),
+  );
+  return geometry;
+}
+
+function tubeGeometry(
+  points: Array<[number, number, number]>,
+  radius: number,
+  segments: number,
+  closed = false,
+): THREE.TubeGeometry {
+  return new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3(
+      points.map((point) => new THREE.Vector3(...point)),
+      closed,
+      'centripetal',
+    ),
+    segments,
+    radius,
+    5,
+    closed,
+  );
+}
+
+function catcherCageGeo(key: string, hs: number): THREE.BufferGeometry {
+  return mergedGeometry(key, () => {
+    const s = 0.52 * hs;
+    const p = (points: Array<[number, number, number]>) =>
+      points.map(([x, y, z]) => [x * s * 1.1, y * s * 0.9, z * s] as [number, number, number]);
+    const rail = 0.018 * s;
+    const pieces: THREE.BufferGeometry[] = [
+      tubeGeometry(p([
+        [0, .34, 0], [.17, .30, .015], [.27, .19, .025], [.285, .02, .035],
+        [.245, -.18, .045], [.15, -.31, .05], [0, -.35, .052], [-.15, -.31, .05],
+        [-.245, -.18, .045], [-.285, .02, .035], [-.27, .19, .025], [-.17, .30, .015],
+      ]), rail, 32, true),
+    ];
+    for (const [y, z, bow] of [[.15, .09, .018], [.055, .12, .025], [-.055, .125, .02]] as const) {
+      pieces.push(tubeGeometry(p([
+        [-.27, y, z - .04], [-.15, y + bow, z], [0, y + bow * 1.25, z + .02],
+        [.15, y + bow, z], [.27, y, z - .04],
+      ]), rail, 12));
+    }
+    pieces.push(
+      tubeGeometry(p([[-.205, .29, .012], [-.19, .22, .065], [-.18, .13, .105], [-.17, .04, .125]]), rail, 10),
+      tubeGeometry(p([[.205, .29, .012], [.19, .22, .065], [.18, .13, .105], [.17, .04, .125]]), rail, 10),
+      tubeGeometry(p([[-.24, .17, .065], [-.22, .04, .12], [-.21, -.105, .10], [-.17, -.22, .072]]), rail, 12),
+      tubeGeometry(p([[.24, .17, .065], [.22, .04, .12], [.21, -.105, .10], [.17, -.22, .072]]), rail, 12),
+      tubeGeometry(p([[-.17, .29, -.005], [-.13, .38, -.055], [-.07, .43, -.115]]), rail, 9),
+      tubeGeometry(p([[.17, .29, -.005], [.13, .38, -.055], [.07, .43, -.115]]), rail, 9),
+      tubeGeometry(p([[-.07, .43, -.115], [.07, .43, -.115]]), rail, 5),
+      tubeGeometry(p([[-.18, -.205, .055], [-.20, -.29, .09], [-.13, -.38, .10], [0, -.42, .105], [.13, -.38, .10], [.20, -.29, .09], [.18, -.205, .055]]), rail, 18),
+      tubeGeometry(p([[-.13, -.235, .08], [-.14, -.30, .12], [-.09, -.35, .135], [0, -.37, .14], [.09, -.35, .135], [.14, -.30, .12], [.13, -.235, .08]]), rail * .88, 16),
+      tubeGeometry(p([[-.20, .285, .028], [0, .31, .035], [.20, .285, .028]]), rail * .5, 10),
+    );
+    return pieces;
+  });
+}
+
+function catcherPaddingGeo(key: string, hs: number): THREE.BufferGeometry {
+  return mergedGeometry(key, () => {
+    const s = 0.52 * hs;
+    return [
+      bakedGeometry(new THREE.CapsuleGeometry(.047 * s, .30 * s, 3, 8), [0, .245 * s * .9, -.012 * s], [0, 0, Math.PI / 2], [1.1, 1, .72]),
+      bakedGeometry(new THREE.CapsuleGeometry(.052 * s, .19 * s, 3, 8), [-.185 * s * 1.1, -.02 * s * .9, -.005 * s], [0, 0, -.17], [1, 1, .70]),
+      bakedGeometry(new THREE.CapsuleGeometry(.052 * s, .19 * s, 3, 8), [.185 * s * 1.1, -.02 * s * .9, -.005 * s], [0, 0, .17], [1, 1, .70]),
+      bakedGeometry(new THREE.CapsuleGeometry(.048 * s, .18 * s, 3, 8), [0, -.245 * s * .9, .015 * s], [0, 0, Math.PI / 2], [1.1, 1, .72]),
+    ];
+  });
+}
+
+function catcherHarnessGeo(key: string, hs: number): THREE.BufferGeometry {
+  return mergedGeometry(key, () => {
+    const s = 0.52 * hs;
+    const p = (points: Array<[number, number, number]>) =>
+      points.map(([x, y, z]) => [x * s * 1.1, y * s * .9, z * s] as [number, number, number]);
+    return [
+      tubeGeometry(p([[-.23, .19, -.07], [-.30, .12, -.14], [-.28, -.02, -.18], [-.22, -.12, -.16]]), .021 * s, 12),
+      tubeGeometry(p([[.23, .19, -.07], [.30, .12, -.14], [.28, -.02, -.18], [.22, -.12, -.16]]), .021 * s, 12),
+      tubeGeometry(p([[-.15, .31, -.08], [0, .41, -.19], [.15, .31, -.08]]), .018 * s, 12),
+    ];
+  });
+}
+
+type GloveKind = 'field' | 'catcher' | 'firstBase';
+function gloveGeo(kind: GloveKind): THREE.BufferGeometry {
+  const key = `glove:${kind}`;
+  const cached = GEO_CACHE.get(key);
+  if (cached) return cached;
+  const shape = new THREE.Shape();
+  const points: Array<[number, number]> =
+    kind === 'catcher'
+      ? [[-.13, -.13], [-.17, -.04], [-.16, .08], [-.10, .15], [0, .18], [.11, .15], [.17, .07], [.17, -.05], [.12, -.14], [0, -.18]]
+      : kind === 'firstBase'
+        ? [[-.10, -.16], [-.15, -.05], [-.14, .12], [-.09, .19], [-.02, .21], [.03, .18], [.07, .23], [.12, .20], [.15, .08], [.13, -.08], [.08, -.17], [0, -.20]]
+        : [[-.10, -.14], [-.14, -.04], [-.13, .10], [-.08, .18], [-.02, .16], [.02, .21], [.07, .18], [.11, .14], [.14, .04], [.12, -.10], [.07, -.16], [0, -.19]];
+  shape.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+  shape.closePath();
+  if (kind !== 'catcher') {
+    const web = new THREE.Path();
+    web.absellipse(kind === 'firstBase' ? .045 : .035, .105, .032, .045, 0, Math.PI * 2, false, 0);
+    shape.holes.push(web);
+  }
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: kind === 'catcher' ? .105 : .075,
+    steps: 1,
+    bevelEnabled: true,
+    bevelSegments: 1,
+    bevelSize: .012,
+    bevelThickness: .012,
+    curveSegments: 5,
+  });
+  geometry.translate(0, 0, kind === 'catcher' ? -.0525 : -.0375);
+  geometry.computeVertexNormals();
+  GEO_CACHE.set(key, geometry);
+  return geometry;
+}
+
+function catcherChestGeo(key: string, width: number, height: number, depth: number): THREE.BufferGeometry {
+  return mergedBoxes(key, [
+    { w: width * .78, h: height * .22, d: .045, x: 0, y: height * .73, z: 0 },
+    { w: width * .72, h: height * .24, d: .052, x: 0, y: height * .48, z: .004 },
+    { w: width * .62, h: height * .24, d: .048, x: 0, y: height * .23, z: 0 },
+    { w: width * .18, h: height * .16, d: .04, x: -width * .38, y: height * .72, z: -.005 },
+    { w: width * .18, h: height * .16, d: .04, x: width * .38, y: height * .72, z: -.005 },
+    { w: width * .035, h: height * .68, d: .012, x: 0, y: height * .49, z: depth * .04 },
+  ]);
+}
+
+function catcherShinGeo(key: string, width: number, height: number): THREE.BufferGeometry {
+  return mergedBoxes(key, [
+    { w: width, h: height * .66, d: .035, x: 0, y: -height * .53, z: 0 },
+    { w: width * 1.18, h: height * .18, d: .05, x: 0, y: -height * .12, z: .005 },
+    { w: width * .16, h: height * .62, d: .018, x: -width * .39, y: -height * .53, z: .025 },
+    { w: width * .16, h: height * .62, d: .018, x: width * .39, y: -height * .53, z: .025 },
+  ]);
+}
+
+function cleatSoleGeo(key: string, width: number, depth: number): THREE.BufferGeometry {
+  const studs: BoxPart[] = [];
+  for (const x of [-width * .33, width * .33]) {
+    for (const z of [-depth * .3, 0, depth * .3]) {
+      studs.push({ w: width * .18, h: .026, d: depth * .12, x, y: -.022, z });
+    }
+  }
+  return mergedBoxes(key, [
+    { w: width, h: .028, d: depth, x: 0, y: 0, z: 0 },
+    ...studs,
+  ]);
+}
+
+function batBodyGeo(): THREE.BufferGeometry {
+  return lathe('bat:body:v2', [
+    [.021, -.085], [.021, .06], [.025, .14], [.032, .24], [.044, .36],
+    [.049, .48], [.051, .72], [.048, .82], [.035, .85], [0, .855],
+  ], 10);
+}
+
+function batGripGeo(): THREE.BufferGeometry {
+  return mergedGeometry('bat:grip:v2', () => {
+    const pieces: THREE.BufferGeometry[] = [
+      bakedGeometry(new THREE.CylinderGeometry(.025, .022, .21, 8), [0, .02, 0]),
+      bakedGeometry(new THREE.CylinderGeometry(.038, .038, .045, 8), [0, -.108, 0]),
+    ];
+    for (const y of [-.045, .005, .055, .105]) {
+      pieces.push(bakedGeometry(new THREE.TorusGeometry(.0255, .0032, 4, 8), [0, y, 0], [Math.PI / 2, 0, 0]));
+    }
+    return pieces;
+  });
+}
+
+/**
  * Seven-segment digits, as blocks.
  *
  * A jersey number is the single most human thing that can be put on a back, and
@@ -441,7 +661,10 @@ function shadowMat(): THREE.MeshBasicMaterial {
 
 /** Diagnostics: how many distinct cached resources exist. */
 export function actorResourceCounts(): { geometries: number; materials: number } {
-  return { geometries: GEO_CACHE.size, materials: MAT_CACHE.size + BASIC_CACHE.size };
+  return {
+    geometries: GEO_CACHE.size,
+    materials: MAT_CACHE.size + SMOOTH_CACHE.size + BASIC_CACHE.size,
+  };
 }
 
 /**
@@ -460,8 +683,49 @@ export function actorResourceCounts(): { geometries: number; materials: number }
  */
 export const SWING_CONTACT_FRAME = 0.425;
 
-/** Batters and runners wear a helmet; everybody else wears a cap. */
-export type Headgear = 'cap' | 'helmet';
+/** Batters/runners wear a helmet; the catcher gets a fitted cage; others a cap. */
+export type Headgear = 'cap' | 'helmet' | 'catcher';
+
+/** Role-specific equipment changes geometry only; simulation outcomes never consult it. */
+export type PlayerEquipment = 'standard' | 'catcher' | 'firstBase';
+
+/** Short native transitions remove pose pops without smearing authoritative moments. */
+export function poseTransitionDuration(from: Pose, to: Pose): number {
+  if (from === to) return 0;
+  if (to === 'batSwing') return 0.055;
+  if (to === 'dive' || to === 'slide' || to === 'jump') return 0.045;
+  if (to === 'run' || to === 'fieldReady' || to === 'crouch') return 0.1;
+  return 0.08;
+}
+
+/** Local transform payload used by the presentation replay. These are the
+ * transforms that were actually rendered, not a pose name to be recomputed. */
+const REPLAY_OBJECT_FLOATS = 11;
+const PLAYER_REPLAY_OBJECTS = 14;
+export const PLAYER_REPLAY_FLOATS = REPLAY_OBJECT_FLOATS * PLAYER_REPLAY_OBJECTS;
+
+function writeReplayObject(object: THREE.Object3D, target: Float32Array, offset: number): number {
+  target[offset++] = object.position.x;
+  target[offset++] = object.position.y;
+  target[offset++] = object.position.z;
+  target[offset++] = object.quaternion.x;
+  target[offset++] = object.quaternion.y;
+  target[offset++] = object.quaternion.z;
+  target[offset++] = object.quaternion.w;
+  target[offset++] = object.scale.x;
+  target[offset++] = object.scale.y;
+  target[offset++] = object.scale.z;
+  target[offset++] = object.visible ? 1 : 0;
+  return offset;
+}
+
+function applyReplayObject(object: THREE.Object3D, source: Float32Array, offset: number): number {
+  object.position.set(source[offset++], source[offset++], source[offset++]);
+  object.quaternion.set(source[offset++], source[offset++], source[offset++], source[offset++]).normalize();
+  object.scale.set(source[offset++], source[offset++], source[offset++]);
+  object.visible = source[offset++] >= 0.5;
+  return offset;
+}
 
 export class PlayerActor {
   readonly group = new THREE.Group();
@@ -496,6 +760,15 @@ export class PlayerActor {
    * shadow by no visible pixel, so only the big masses are casters.
    */
   private casters: THREE.Mesh[] = [];
+  /** Stable, allocation-free traversal order for replay capture/application. */
+  private replayObjects: THREE.Object3D[] = [];
+  /** Joints blended between semantic poses; buffers are allocated once per actor. */
+  private transitionObjects: THREE.Object3D[] = [];
+  private transitionFrom = new Float32Array(0);
+  private transitionPose: Pose | null = null;
+  private transitionElapsed = 0;
+  private transitionDuration = 0;
+  private readonly transitionTarget = new THREE.Quaternion();
   private headScale = 1;
 
   private phase = 0;
@@ -504,9 +777,46 @@ export class PlayerActor {
   private facing = 0;
   private lean = 0;
 
-  constructor(colors: ActorColors, body: BodyType, gear: Headgear = 'cap', jerseyNumber = 0) {
-    this.build(colors, body, gear, jerseyNumber);
+  constructor(
+    colors: ActorColors,
+    body: BodyType,
+    gear: Headgear = 'cap',
+    jerseyNumber = 0,
+    equipment: PlayerEquipment = 'standard',
+  ) {
+    this.build(colors, body, gear, jerseyNumber, equipment);
     this.group.add(this.root);
+    this.replayObjects = [
+      this.group,
+      this.root,
+      this.torso,
+      this.head,
+      this.armL,
+      this.armR,
+      this.foreL,
+      this.foreR,
+      this.legL,
+      this.legR,
+      this.shinL,
+      this.shinR,
+      this.bat,
+      this.glove,
+    ];
+    this.transitionObjects = [
+      this.torso,
+      this.head,
+      this.armL,
+      this.armR,
+      this.foreL,
+      this.foreR,
+      this.legL,
+      this.legR,
+      this.shinL,
+      this.shinR,
+      this.bat,
+    ];
+    this.transitionFrom = new Float32Array(this.transitionObjects.length * 7 + 3);
+    this.group.userData.equipment = equipment;
   }
 
   /**
@@ -527,18 +837,24 @@ export class PlayerActor {
    * siblings, which is why the old batter's shoulders stayed square while his
    * chest rotated out from under them.
    */
-  private build(colors: ActorColors, body: BodyType, gear: Headgear, jerseyNumber: number): void {
+  private build(
+    colors: ActorColors,
+    body: BodyType,
+    gear: Headgear,
+    jerseyNumber: number,
+    equipment: PlayerEquipment,
+  ): void {
     const b = BODY[body] ?? BODY.average;
     const k = body;
 
     // Real uniform trousers are near-white or grey, faintly tinted toward the
     // club's accent. Deriving them straight from the trim colour, as the first
     // version did, produced pink and lilac legs on half the league.
-    const pants = mat(shade(colors.accent, 0.72));
     const trim = mat(colors.trim);
     const skin = mat(colors.skin);
     const shoe = mat(shade(colors.accent, -0.55));
     const helmetShell = mat(shade(colors.jersey, -0.08));
+    const equipmentCasters: THREE.Mesh[] = [];
 
     // Overall stature is unchanged — the plate camera's clearances were derived
     // from these numbers — but the mass is redistributed toward the shoulders
@@ -599,9 +915,23 @@ export class PlayerActor {
       toe.scale.set(1, 1, 0.62);
       toe.position.set(0, -shinH - 0.03, 0.16 * b.depth);
       knee.add(toe);
-      const sole = new THREE.Mesh(box(`${k}:sole`, 0.125 * b.width, 0.028, 0.32 * b.depth), pants);
+      const sole = new THREE.Mesh(
+        cleatSoleGeo(`${k}:cleat-sole:v2`, 0.125 * b.width, 0.32 * b.depth),
+        shoe,
+      );
+      sole.name = 'cleat-sole-and-studs';
       sole.position.set(0, -shinH - 0.072, 0.06);
       knee.add(sole);
+      if (equipment === 'catcher') {
+        const guard = new THREE.Mesh(
+          catcherShinGeo(`${k}:catcher-shin:v1`, 0.17 * b.width, shinH * .92),
+          smoothMat(0x38475c),
+        );
+        guard.name = side < 0 ? 'catcher-shin-guard-left' : 'catcher-shin-guard-right';
+        guard.position.z = 0.074 * b.depth;
+        knee.add(guard);
+        equipmentCasters.push(guard);
+      }
       hip.add(knee);
 
       hip.position.set(side * 0.15 * b.width, legH, 0);
@@ -651,6 +981,17 @@ export class PlayerActor {
     // the torso deeper than it was broad, which is a barrel, not an athlete.
     chest.scale.z = (torsoD * 0.5) / (torsoW * 0.5);
     this.torso.add(chest);
+
+    if (equipment === 'catcher') {
+      const protector = new THREE.Mesh(
+        catcherChestGeo(`${k}:catcher-chest:v1`, torsoW, torsoH, torsoD),
+        smoothMat(0x38475c),
+      );
+      protector.name = 'catcher-chest-protector';
+      protector.position.z = torsoD * .5 + .035;
+      this.torso.add(protector);
+      equipmentCasters.push(protector);
+    }
 
     const belt = new THREE.Mesh(
       limbGeo(`${k}:belt`, 0.07, torsoW * 0.43, torsoW * 0.42, 12),
@@ -750,6 +1091,38 @@ export class PlayerActor {
       peak.scale.set(1, 1, 1.35);
       peak.position.set(0, -headR * 0.12, headR * 0.82);
       this.head.add(peak);
+    } else if (gear === 'catcher') {
+      const skullCap = new THREE.Mesh(
+        domeGeo(`${k}:catcher-skull-cap`, headR * 1.08, .92),
+        helmetShell,
+      );
+      skullCap.scale.z = 1.08;
+      skullCap.position.y = headR * .03;
+      skullCap.name = 'catcher-skull-cap';
+      this.head.add(skullCap);
+      headgearShell = skullCap;
+
+      const maskRoot = new THREE.Group();
+      maskRoot.name = 'catcher-mask';
+      maskRoot.position.set(0, -headR * .08, headR * .85);
+      const cage = new THREE.Mesh(
+        catcherCageGeo(`${k}:catcher-mask-cage:v1`, hs),
+        smoothMat(0x343c43),
+      );
+      cage.name = 'catcher-mask-cage';
+      const padding = new THREE.Mesh(
+        catcherPaddingGeo(`${k}:catcher-mask-padding:v1`, hs),
+        smoothMat(0x29384b),
+      );
+      padding.name = 'catcher-mask-padding';
+      const harness = new THREE.Mesh(
+        catcherHarnessGeo(`${k}:catcher-mask-harness:v1`, hs),
+        smoothMat(0x111820),
+      );
+      harness.name = 'catcher-mask-harness';
+      maskRoot.add(padding, harness, cage);
+      this.head.add(maskRoot);
+      equipmentCasters.push(cage);
     } else {
       // The band sits at the forehead, above the eyes and below the crown of
       // the skull. The old one sat far lower and was still shorter than the
@@ -848,28 +1221,30 @@ export class PlayerActor {
 
     // Bat hangs off the right hand; hidden unless a batting pose is active.
     this.bat = new THREE.Group();
-    const barrel = new THREE.Mesh(cyl('bat:barrel', 0.048, 0.026, 0.84, 8), mat(0xc98f4e));
-    barrel.position.y = 0.42;
-    this.bat.add(barrel);
-    const taper = new THREE.Mesh(cyl('bat:taper', 0.026, 0.021, 0.16, 8), mat(0xb87f42));
-    taper.position.y = -0.02;
-    this.bat.add(taper);
-    const knob = new THREE.Mesh(cyl('bat:knob', 0.037, 0.037, 0.05, 8), mat(0x2c2c2c));
-    knob.position.y = -0.1;
-    this.bat.add(knob);
-    const gripTape = new THREE.Mesh(cyl('bat:grip', 0.028, 0.024, 0.19, 8), mat(0x1f1f22));
-    gripTape.position.y = 0.02;
-    this.bat.add(gripTape);
+    this.bat.name = 'baseball-bat';
+    const barrel = new THREE.Mesh(batBodyGeo(), smoothMat(0xc98f4e));
+    barrel.name = 'bat-barrel-and-taper';
+    const gripTape = new THREE.Mesh(batGripGeo(), smoothMat(0x1f1f22));
+    gripTape.name = 'bat-grip-wrap-and-knob';
+    this.bat.add(barrel, gripTape);
     this.bat.visible = false;
     this.foreR.add(this.bat);
     this.bat.position.y = -foreLen - 0.03;
 
-    // A mitt: round, deep, and thicker than a hand. A slab read as a clipboard.
+    const gloveKind: GloveKind =
+      equipment === 'catcher' ? 'catcher' : equipment === 'firstBase' ? 'firstBase' : 'field';
+    // Role-specific glove silhouettes: a deep catcher pocket, long first-base
+    // scoop, or open fielding web. All remain a single cached draw.
     this.glove = new THREE.Mesh(
-      limbGeo('glove', 0.26, 0.115, 0.085, 10),
+      gloveGeo(gloveKind),
       smoothMat(shade(0x8b5a2b, -0.1)),
     );
-    this.glove.scale.z = 0.72;
+    this.glove.name = `${gloveKind}-glove`;
+    this.glove.scale.setScalar(gloveKind === 'field' ? .68 : .64);
+    // Field-ready elbows fold almost ninety degrees. Counter-rotate the palm
+    // so the pocket, web and role-specific outline face the play instead of
+    // presenting only the thin extruded edge to the broadcast camera.
+    this.glove.rotation.x = 1.2;
     this.glove.position.y = -foreLen - 0.11;
     this.glove.visible = false;
     this.foreL.add(this.glove);
@@ -892,6 +1267,7 @@ export class PlayerActor {
       armL.fore,
       armR.upper,
       armR.fore,
+      ...equipmentCasters,
     ];
     if (headgearShell) this.casters.push(headgearShell);
     this.setShadows(true);
@@ -908,6 +1284,17 @@ export class PlayerActor {
 
   setVisible(v: boolean): void {
     this.group.visible = v;
+  }
+
+  writeReplay(target: Float32Array, offset: number): void {
+    for (const object of this.replayObjects) offset = writeReplayObject(object, target, offset);
+  }
+
+  applyReplay(source: Float32Array, offset: number): void {
+    for (const object of this.replayObjects) offset = applyReplayObject(object, source, offset);
+    const material = this.bat.visible ? this.battingGloveMat : this.skinMat;
+    this.handL.material = material;
+    this.handR.material = material;
   }
 
   /**
@@ -955,6 +1342,12 @@ export class PlayerActor {
     const running = opts.speed > 0.6;
     this.phase += dt * (running ? 3.2 + opts.speed * 1.5 : 2.2);
     this.bob = running ? Math.sin(this.phase * 2) * 0.045 : Math.sin(this.phase) * 0.012;
+
+    if (this.transitionPose !== null && this.transitionPose !== opts.pose) {
+      this.captureTransitionStart();
+      this.transitionElapsed = 0;
+      this.transitionDuration = poseTransitionDuration(this.transitionPose, opts.pose);
+    }
 
     this.bat.visible = false;
     this.glove.visible = false;
@@ -1011,12 +1404,70 @@ export class PlayerActor {
         break;
     }
 
+    this.applyPoseTransition(dt, opts.pose, opts.poseT);
+    this.transitionPose = opts.pose;
+
     // Batting gloves whenever there is a bat in those hands. Bare skin on the
     // handle was the single palest thing on the model and it sat right where
     // the eye goes.
     const gloved = this.bat.visible ? this.battingGloveMat : this.skinMat;
     this.handL.material = gloved;
     this.handR.material = gloved;
+  }
+
+  private captureTransitionStart(): void {
+    let offset = 0;
+    for (const object of this.transitionObjects) {
+      this.transitionFrom[offset++] = object.position.x;
+      this.transitionFrom[offset++] = object.position.y;
+      this.transitionFrom[offset++] = object.position.z;
+      this.transitionFrom[offset++] = object.quaternion.x;
+      this.transitionFrom[offset++] = object.quaternion.y;
+      this.transitionFrom[offset++] = object.quaternion.z;
+      this.transitionFrom[offset++] = object.quaternion.w;
+    }
+    this.transitionFrom[offset++] = this.root.position.y;
+    this.transitionFrom[offset++] = this.root.rotation.x;
+    this.transitionFrom[offset] = this.root.rotation.z;
+  }
+
+  private applyPoseTransition(dt: number, pose: Pose, poseT: number): void {
+    if (this.transitionDuration <= 0 || this.transitionPose === null) return;
+    this.transitionElapsed = Math.min(this.transitionDuration, this.transitionElapsed + Math.max(0, dt));
+    let alpha = this.transitionElapsed / this.transitionDuration;
+    // The bat/barrel transform at contact is presentation-authoritative. A
+    // smoothing window may affect the load, never the exact contact frame.
+    if (pose === 'batSwing' && poseT >= SWING_CONTACT_FRAME) alpha = 1;
+    alpha = alpha * alpha * (3 - 2 * alpha);
+
+    let offset = 0;
+    for (const object of this.transitionObjects) {
+      const tx = object.position.x;
+      const ty = object.position.y;
+      const tz = object.position.z;
+      this.transitionTarget.copy(object.quaternion);
+      object.position.set(
+        THREE.MathUtils.lerp(this.transitionFrom[offset++], tx, alpha),
+        THREE.MathUtils.lerp(this.transitionFrom[offset++], ty, alpha),
+        THREE.MathUtils.lerp(this.transitionFrom[offset++], tz, alpha),
+      );
+      object.quaternion
+        .set(
+          this.transitionFrom[offset++],
+          this.transitionFrom[offset++],
+          this.transitionFrom[offset++],
+          this.transitionFrom[offset++],
+        )
+        .normalize()
+        .slerp(this.transitionTarget, alpha);
+    }
+    const targetRootY = this.root.position.y;
+    const targetRootX = this.root.rotation.x;
+    const targetRootZ = this.root.rotation.z;
+    this.root.position.y = THREE.MathUtils.lerp(this.transitionFrom[offset++], targetRootY, alpha);
+    this.root.rotation.x = THREE.MathUtils.lerp(this.transitionFrom[offset++], targetRootX, alpha);
+    this.root.rotation.z = THREE.MathUtils.lerp(this.transitionFrom[offset], targetRootZ, alpha);
+    if (alpha >= 1) this.transitionDuration = 0;
   }
 
   private reset(): void {
@@ -1333,6 +1784,7 @@ export class BallActor {
   private trailPositions: Float32Array;
   private trailCount = 0;
   private readonly maxTrail = 44;
+  private readonly replayObjects: THREE.Object3D[];
   private spin = 0;
 
   constructor() {
@@ -1357,6 +1809,7 @@ export class BallActor {
       new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }),
     );
     this.trail.frustumCulled = false;
+    this.replayObjects = [this.group, this.mesh, this.shadow, this.trail];
   }
 
   addTo(scene: THREE.Scene): void {
@@ -1397,6 +1850,28 @@ export class BallActor {
     this.trail.geometry.setDrawRange(0, 0);
   }
 
+  writeReplay(target: Float32Array, offset: number): void {
+    for (const object of this.replayObjects) offset = writeReplayObject(object, target, offset);
+    const material = this.trail.material as THREE.LineBasicMaterial;
+    target[offset++] = this.trailCount;
+    target[offset++] = material.color.r;
+    target[offset++] = material.color.g;
+    target[offset++] = material.color.b;
+    target[offset++] = material.opacity;
+    for (let i = 0; i < this.trailPositions.length; i++) target[offset + i] = this.trailPositions[i];
+  }
+
+  applyReplay(source: Float32Array, offset: number): void {
+    for (const object of this.replayObjects) offset = applyReplayObject(object, source, offset);
+    this.trailCount = Math.max(0, Math.min(this.maxTrail, Math.round(source[offset++])));
+    const material = this.trail.material as THREE.LineBasicMaterial;
+    material.color.setRGB(source[offset++], source[offset++], source[offset++]);
+    material.opacity = source[offset++];
+    for (let i = 0; i < this.trailPositions.length; i++) this.trailPositions[i] = source[offset + i];
+    this.trail.geometry.attributes.position.needsUpdate = true;
+    this.trail.geometry.setDrawRange(0, this.trailCount);
+  }
+
   update(dt: number, x: number, y: number, z: number, speed: number, visible: boolean): void {
     this.group.visible = visible;
     this.shadow.visible = visible && y < 40;
@@ -1426,3 +1901,5 @@ export class BallActor {
     this.trail.geometry.setDrawRange(0, this.trailCount);
   }
 }
+
+export const BALL_REPLAY_FLOATS = REPLAY_OBJECT_FLOATS * 4 + 5 + 44 * 3;

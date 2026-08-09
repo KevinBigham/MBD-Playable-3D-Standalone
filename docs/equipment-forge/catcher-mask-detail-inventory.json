@@ -1,0 +1,104 @@
+{
+  "sourceImage": "docs/references/equipment/catcher-mask.png",
+  "zonesDir": "docs/equipment-forge/catcher-mask-zones",
+  "detailInventory": {
+    "scanMethod": "component-zones",
+    "targetMinDetails": 6,
+    "details": [
+      {
+        "id": "crown",
+        "kind": "ridge",
+        "description": "Paired crown tubes curve from the brow toward the rear perimeter.",
+        "region": {
+          "x": 0.08,
+          "y": 0.02,
+          "width": 0.84,
+          "height": 0.32,
+          "units": "normalized"
+        },
+        "scale": "meso",
+        "affects": "silhouette and satin metal highlight",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "mask-cage.crown-rails"
+        },
+        "evidenceRef": "docs/equipment-forge/catcher-mask-zones/crown.png",
+        "confidence": 0.95
+      },
+      {
+        "id": "eye-cage",
+        "kind": "ridge",
+        "description": "Three horizontal bands and vertical dividers preserve the broad eye window.",
+        "region": {
+          "x": 0.06,
+          "y": 0.24,
+          "width": 0.88,
+          "height": 0.35,
+          "units": "normalized"
+        },
+        "scale": "macro",
+        "affects": "identity and negative space",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "mask-cage.eye-window-rails"
+        },
+        "evidenceRef": "docs/equipment-forge/catcher-mask-zones/eye-cage.png",
+        "confidence": 0.98
+      },
+      {
+        "id": "jaw-and-harness",
+        "kind": "ridge",
+        "description": "Twin nested metal loops extend below the padded jaw cup.",
+        "region": {
+          "x": 0.06,
+          "y": 0.53,
+          "width": 0.88,
+          "height": 0.43,
+          "units": "normalized"
+        },
+        "scale": "macro",
+        "affects": "lower silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "mask-cage.twin-chin-loops"
+        },
+        "evidenceRef": "docs/equipment-forge/catcher-mask-zones/jaw-and-harness.png",
+        "confidence": 0.97
+      },
+      {
+        "id": "brow-pad-piping",
+        "kind": "seam",
+        "description": "Raised piping outlines the padded brow behind the cage.",
+        "region": {"x": 0.12, "y": 0.08, "width": 0.76, "height": 0.28, "units": "normalized"},
+        "scale": "meso",
+        "affects": "padding boundary and cavity response",
+        "mapsTo": {"type": "component.localFeatures", "ref": "padding-assembly.brow-piping"},
+        "evidenceRef": "docs/equipment-forge/catcher-mask-zones/crown.png",
+        "confidence": 0.92
+      },
+      {
+        "id": "cheek-pad-seams",
+        "kind": "seam",
+        "description": "Separate cheek pads sit behind the lateral rails with stitched borders.",
+        "region": {"x": 0.08, "y": 0.34, "width": 0.84, "height": 0.34, "units": "normalized"},
+        "scale": "meso",
+        "affects": "pad separation",
+        "mapsTo": {"type": "component.localFeatures", "ref": "padding-assembly.cheek-seams"},
+        "evidenceRef": "docs/equipment-forge/catcher-mask-zones/eye-cage.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "strap-weave",
+        "kind": "linework",
+        "description": "Side and crown straps carry fine directional woven grain.",
+        "region": {"x": 0.06, "y": 0.06, "width": 0.88, "height": 0.62, "units": "normalized"},
+        "scale": "micro",
+        "affects": "roughness and fabric normal",
+        "mapsTo": {"type": "material.localOverrides", "ref": "harness-fabric.woven-grain"},
+        "evidenceRef": "docs/equipment-forge/catcher-mask-zones/crown.png",
+        "confidence": 0.78
+      }
+    ]
+  },
+  "authoringInstruction": "Open each zone crop under zonesDir and replace every detail stub's kind, description, scale, affects, mapsTo, and confidence with what is actually observed. Add more detail entries per zone if a single zone contains multiple distinct marks; do not leave stubs unfilled or unlinked (mapsTo must reference a real component.localFeatures or material.localOverrides entry)."
+}

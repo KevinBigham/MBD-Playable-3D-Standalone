@@ -13,6 +13,11 @@ export default defineConfig({
       output: {
         manualChunks: {
           three: ['three'],
+          // Camera controls has no Three import and stays in the lazy replay
+          // chunk. three-mesh-bvh is built as a self-contained local module by
+          // replay:camera:vendor so BVH-only Three exports never inflate this
+          // eager vendor chunk.
+          'replay-camera-vendor': ['camera-controls'],
         },
       },
     },

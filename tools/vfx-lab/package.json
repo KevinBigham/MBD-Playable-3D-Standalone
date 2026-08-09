@@ -1,0 +1,20 @@
+{
+  "name": "mbd-vfx-lab",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "three": "0.182.0",
+    "three.quarks": "0.17.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.182.0",
+    "typescript": "5.6.3",
+    "vite": "5.4.21"
+  }
+}

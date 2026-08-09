@@ -1,0 +1,2973 @@
+{
+  "targetName": "MBD Catcher Mask",
+  "targetId": "mbd-catcher-mask",
+  "schemaVersion": "2.1",
+  "terminologyProfile": {
+    "domain": "real-time procedural Three.js asset",
+    "geometryTerms": [
+      "silhouette",
+      "topology",
+      "primitive",
+      "bevel",
+      "chamfer",
+      "taper",
+      "bend",
+      "boolean cut",
+      "edge loop",
+      "surface normal",
+      "displacement"
+    ],
+    "materialTerms": [
+      "albedo",
+      "baseColor",
+      "roughness",
+      "metalness",
+      "normal map",
+      "bump map",
+      "ambient occlusion",
+      "cavity dirt",
+      "edge wear",
+      "clearcoat"
+    ],
+    "lightingTerms": [
+      "key light",
+      "fill light",
+      "rim light",
+      "HDRI/environment reflection",
+      "contact shadow"
+    ],
+    "descriptionRule": "Use measurable 3D graphics terms. Avoid vague words unless they are paired with concrete geometry/material/shader parameters."
+  },
+  "sourceImage": "docs/references/equipment/catcher-mask.png",
+  "referenceCamera": {
+    "solved": false,
+    "fovDegrees": 35,
+    "aspect": 1,
+    "orientation": {
+      "yaw": -22,
+      "pitch": 4,
+      "roll": 0
+    },
+    "positionHint": [
+      0.8,
+      0.15,
+      3
+    ],
+    "note": "Single three-quarter generated reference; proportions are normalized to the existing PlayerActor head and verified in browser renders."
+  },
+  "suitability": "conditional",
+  "scores": {
+    "object_isolation": 3,
+    "silhouette_readability": 3,
+    "depth_inference": 2,
+    "primitive_decomposition": 3,
+    "material_procedurality": 3,
+    "occlusion_risk": 1,
+    "interaction_fit": 3
+  },
+  "preSpecAssessment": {
+    "objectClass": {
+      "primaryType": "baseball catcher protective mask",
+      "primaryDomain": "object",
+      "formLanguage": [
+        "hard-surface",
+        "tubular",
+        "padded",
+        "bilaterally symmetric"
+      ],
+      "structureKind": [
+        "compound object",
+        "tube network",
+        "layered shell",
+        "strap assembly"
+      ],
+      "motionPotential": [
+        "static wearable",
+        "head-socket attachment",
+        "detachable equipment"
+      ],
+      "materialFamilies": [
+        "satin metal",
+        "fabric",
+        "foam",
+        "woven strap"
+      ],
+      "notes": "Three-quarter view clearly shows the open cage and front padding. Rear harness routing and hidden welds remain inferred."
+    },
+    "complexity": {
+      "tier": "moderate",
+      "scores": {
+        "silhouetteComplexity": 2,
+        "componentCount": 2,
+        "hierarchyDepth": 2,
+        "repetitionDensity": 2,
+        "materialLayerCount": 2,
+        "localDetailDensity": 2,
+        "occlusionRisk": 1,
+        "actionReadinessNeed": 2
+      },
+      "estimatedCounts": {
+        "macroComponents": 3,
+        "mesoComponents": 9,
+        "microFeatureGroups": 6,
+        "materialLayers": 3,
+        "repetitionSystems": 2
+      },
+      "reasoning": [
+        "The open tube network, layered contact padding, and partially occluded harness require a shallow action-ready hierarchy.",
+        "Moderate is appropriate for a phone-budget stylized factory: the identity is meso geometry, not dense manufacturing microdetail."
+      ]
+    },
+    "specDepthDecision": {
+      "requiredDepth": "moderate",
+      "minimumComponentLevels": [
+        "macro",
+        "meso"
+      ],
+      "needsRepetitionSystems": true,
+      "needsMaterialLocalOverrides": true,
+      "needsMultipleReviewViews": true,
+      "needsActionReadyHierarchy": true,
+      "rationale": "Cage rails and pad seams repeat, while pivots/sockets must survive attachment to the existing articulated head."
+    },
+    "unknownsToResolveBeforeImplementation": [],
+    "detailInventory": {
+      "scanMethod": "component-zones",
+      "targetMinDetails": 6,
+      "note": "Enumerate every identity-defining small detail before authoring the spec. Each detail must map to a component.localFeatures entry or material.localOverrides entry, never prose only. Use forge/stage1_intake/build_detail_inventory.py to scan zones.",
+      "details": [
+        {
+          "id": "crown-rails",
+          "kind": "ridge",
+          "description": "Paired crown tubes curve from brow to rear perimeter",
+          "region": {
+            "x": 0.08,
+            "y": 0.02,
+            "width": 0.84,
+            "height": 0.32,
+            "units": "normalized"
+          },
+          "scale": "meso",
+          "affects": "silhouette and metal highlight",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "crown-rails"
+          },
+          "evidenceRef": "catcher-mask-zones/crown.png",
+          "confidence": 0.95,
+          "realization": "cached native silhouette geometry"
+        },
+        {
+          "id": "brow-pad-piping",
+          "kind": "seam",
+          "description": "Raised dark piping outlines the padded brow",
+          "region": {
+            "x": 0.12,
+            "y": 0.08,
+            "width": 0.76,
+            "height": 0.28,
+            "units": "normalized"
+          },
+          "scale": "meso",
+          "affects": "padding boundary and cavity response",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "brow-piping"
+          },
+          "evidenceRef": "catcher-mask-zones/crown.png",
+          "confidence": 0.92,
+          "realization": "cached native silhouette geometry"
+        },
+        {
+          "id": "eye-window-rails",
+          "kind": "ridge",
+          "description": "Three horizontal cage bands and vertical dividers preserve a broad eye opening",
+          "region": {
+            "x": 0.06,
+            "y": 0.24,
+            "width": 0.88,
+            "height": 0.35,
+            "units": "normalized"
+          },
+          "scale": "macro",
+          "affects": "identity and negative space",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "eye-window-rails"
+          },
+          "evidenceRef": "catcher-mask-zones/eye-cage.png",
+          "confidence": 0.98,
+          "realization": "cached native silhouette geometry"
+        },
+        {
+          "id": "cheek-pad-seams",
+          "kind": "seam",
+          "description": "Separate cheek pads sit behind the lateral rails with stitched borders",
+          "region": {
+            "x": 0.08,
+            "y": 0.34,
+            "width": 0.84,
+            "height": 0.34,
+            "units": "normalized"
+          },
+          "scale": "meso",
+          "affects": "pad separation",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "cheek-seams"
+          },
+          "evidenceRef": "catcher-mask-zones/eye-cage.png",
+          "confidence": 0.9,
+          "realization": "cached native silhouette geometry"
+        },
+        {
+          "id": "twin-chin-loops",
+          "kind": "ridge",
+          "description": "Two nested metal loops extend below the jaw cup",
+          "region": {
+            "x": 0.28,
+            "y": 0.57,
+            "width": 0.44,
+            "height": 0.38,
+            "units": "normalized"
+          },
+          "scale": "macro",
+          "affects": "lower silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "twin-chin-loops"
+          },
+          "evidenceRef": "catcher-mask-zones/jaw-and-harness.png",
+          "confidence": 0.97,
+          "realization": "cached native silhouette geometry"
+        },
+        {
+          "id": "strap-weave",
+          "kind": "linework",
+          "description": "Near-black woven side and crown straps carry fine directional grain",
+          "region": {
+            "x": 0.06,
+            "y": 0.06,
+            "width": 0.88,
+            "height": 0.62,
+            "units": "normalized"
+          },
+          "scale": "micro",
+          "affects": "roughness and fabric normal",
+          "mapsTo": {
+            "type": "material.localOverrides",
+            "ref": "woven-grain"
+          },
+          "evidenceRef": "catcher-mask-zones/crown.png",
+          "confidence": 0.78,
+          "realization": "cached native fabric material plus narrow strap geometry"
+        }
+      ]
+    },
+    "sourceImage": "docs/references/equipment/catcher-mask.png"
+  },
+  "qualityContract": {
+    "qualityBar": "moderate",
+    "definitionOfDone": [
+      "The mask reads as catcher equipment from field and close-up cameras, with a broad unobstructed eye window, three cage bands, padded crown/cheeks/jaw, and twin chin loops.",
+      "Every rail, pad, and strap visibly overlaps or sockets into its parent; no floating equipment survives the structural pass.",
+      "The cached native factory adds no per-frame geometry allocation and remains within the existing phone draw-call philosophy."
+    ],
+    "minimumSpecDepth": {
+      "macroComponents": 2,
+      "mesoComponents": 3,
+      "microFeatureGroups": 2,
+      "materialLayers": 2,
+      "repetitionSystems": 0,
+      "reviewViewpoints": 3
+    },
+    "featureGroups": [
+      {
+        "id": "overall-silhouette",
+        "name": "Overall silhouette and proportions",
+        "required": true,
+        "qualityCriteria": [
+          "Bounding shape, dominant curves, negative spaces, and scale relationships are explicitly described."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "model reads as a generic placeholder instead of the reference object",
+          "major proportions are guessed without evidence"
+        ]
+      },
+      {
+        "id": "primary-structure",
+        "name": "Primary structure and hierarchy",
+        "required": true,
+        "qualityCriteria": [
+          "Major parts, joints, seams, contact points, and parent-child relationships are named before code generation."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "large visible parts are merged into one mesh",
+          "component hierarchy is too shallow for the observed complexity"
+        ]
+      },
+      {
+        "id": "attachment-joint-correctness",
+        "name": "Attachment and joint correctness",
+        "required": true,
+        "qualityCriteria": [
+          "Every visible child appendage, branch, limb, handle, connector, tube, cable, horn, wing, leg, or hinged part has an attachment contract with parent socket, localStart/localEnd, contact type, embed/overlap, and gap tolerance."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "child part root floats away from the parent",
+          "branch/limb/tube is centered in space instead of pivoting from its root",
+          "parent-child transform mixes world and local coordinates"
+        ]
+      },
+      {
+        "id": "surface-material-response",
+        "name": "Surface material response",
+        "required": true,
+        "qualityCriteria": [
+          "Albedo zones, roughness, normal/bump/displacement intent, cavity dirt, edge wear, and local overrides are specified where visible.",
+          "Important materials define independent albedo, roughness, height/normal, and AO responses instead of reusing one texture for unrelated PBR channels.",
+          "Surface response is decomposed into macro, meso, and micro frequency bands with scale and amplitude tied to object scale."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "surface looks like flat plastic",
+          "local material variation is missing or not tied to image evidence"
+        ]
+      },
+      {
+        "id": "reference-lookdev",
+        "name": "Reference color, material, and lighting response",
+        "required": true,
+        "qualityCriteria": [
+          "Material-pass names the reference-derived albedo palette, roughness variation, tactile normal/bump/displacement response, and local masks.",
+          "When a source image is available, run reference PBR extraction and require confidence >= 0.7 before treating maps as implementation-ready.",
+          "Lighting-pass names key/fill/rim or environment light, exposure, tone mapping, background, and contact shadow behavior.",
+          "Neutral, grazing-angle, and reference-matched renders prove that surface relief survives relighting and is not painted into albedo."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "model has acceptable shape but reads as flat shaded or plastic",
+          "colors are a generic average instead of reference-observed local color zones",
+          "lighting is evenly ambient and cannot reproduce the source value range"
+        ]
+      }
+    ],
+    "visualDeltaChecks": [
+      "silhouette and negative-space delta",
+      "component hierarchy depth delta",
+      "repetition density and distribution delta",
+      "material albedo/roughness/normal response delta",
+      "local feature placement and scale delta"
+    ],
+    "antiShallowSpecRules": [
+      "Do not proceed to code if qualityContract.qualityBar is unassessed.",
+      "Do not proceed to code if the spec only contains a root component for a moderate or complex object.",
+      "Do not proceed to code if required featureGroups are not represented by componentTree, materials, or repetitionSystems.",
+      "Do not proceed to code if visible local features are described only in prose and not attached to components/materials/evidenceRefs.",
+      "Do not proceed past structural-pass if attached child parts lack attachment.parentSocket, localStart, localEnd, embedDepth/overlap, and gapTolerance.",
+      "Do not pass material look-dev when albedo is reused as roughness, height, normal, or AO.",
+      "Do not pass material look-dev without macro, meso, and micro surface frequency bands for close-up materials.",
+      "Do not pass reference-fidelity material look-dev from a source image without usable referencePbr maps or an explicit documented limitation.",
+      "Do not patch a spec with extracted PBR maps when extraction confidence is below the target threshold unless the user explicitly accepts lower fidelity.",
+      "Do not place adjacent separate-geometry parts below 0.02 world-unit seam overlap (source: grimoire/build/geometry_patterns.md).",
+      "Do not satisfy raised or recessed relief, fasteners, or grip structure with a map alone when the feature affects form; use geometry or displacement (source: grimoire/build/geometry_patterns.md).",
+      "Adjacent components must overlap by at least 0.02 world units at shared seams (source: grimoire/build/geometry_patterns.md).",
+      "Raised or recessed relief and fasteners must be geometry, instanced micro-parts, or displacement; a map alone is an approximation (source: grimoire/build/geometry_patterns.md)."
+    ],
+    "mustNotDo": [
+      "Do not proceed to code if qualityContract.qualityBar is unassessed.",
+      "Do not proceed to code if the spec only contains a root component for a moderate or complex object.",
+      "Do not proceed to code if required featureGroups are not represented by componentTree, materials, or repetitionSystems.",
+      "Do not proceed to code if visible local features are described only in prose and not attached to components/materials/evidenceRefs.",
+      "Do not proceed past structural-pass if attached child parts lack attachment.parentSocket, localStart, localEnd, embedDepth/overlap, and gapTolerance.",
+      "Do not pass material look-dev when albedo is reused as roughness, height, normal, or AO.",
+      "Do not pass material look-dev without macro, meso, and micro surface frequency bands for close-up materials.",
+      "Do not pass reference-fidelity material look-dev from a source image without usable referencePbr maps or an explicit documented limitation.",
+      "Do not patch a spec with extracted PBR maps when extraction confidence is below the target threshold unless the user explicitly accepts lower fidelity.",
+      "Do not place adjacent separate-geometry parts below 0.02 world-unit seam overlap (source: grimoire/build/geometry_patterns.md).",
+      "Do not satisfy raised or recessed relief, fasteners, or grip structure with a map alone when the feature affects form; use geometry or displacement (source: grimoire/build/geometry_patterns.md).",
+      "Adjacent components must overlap by at least 0.02 world units at shared seams (source: grimoire/build/geometry_patterns.md).",
+      "Raised or recessed relief and fasteners must be geometry, instanced micro-parts, or displacement; a map alone is an approximation (source: grimoire/build/geometry_patterns.md)."
+    ]
+  },
+  "qualityTargets": {
+    "targetFidelity": 0.7,
+    "mustMatch": [
+      "macro silhouette and proportions",
+      "primary material albedo/roughness response",
+      "reference-derived PBR material response at or above 0.7 confidence when source pixels are usable",
+      "most recognizable local features"
+    ],
+    "niceToHave": [
+      "micro scratches, stains, chips, and dirt masks",
+      "secondary lighting match"
+    ],
+    "fpsTarget": 60,
+    "reviewViewpoints": [
+      "front",
+      "three-quarter",
+      "side",
+      "thickness-axis",
+      "long-axis"
+    ]
+  },
+  "selfCorrectLoop": {
+    "enabled": true,
+    "visualAcceptance": {
+      "reviewer": "ai-vision",
+      "threshold": 0.7,
+      "comparisonArtifactRequired": true,
+      "layerScoresRequired": true,
+      "codePixelDiffIsAcceptanceAuthority": false,
+      "scoringRule": "AI vision must inspect a side-by-side reference/render sheet and score the current pass from 0 to 1. Pixel-diff code may assist diagnostics but cannot approve a pass.",
+      "requiredLayerScores": [
+        "silhouetteProportion",
+        "componentStructure",
+        "formDetail",
+        "materialSurface",
+        "lightingCamera"
+      ],
+      "featureReviewPolicy": {
+        "enabled": true,
+        "reviewUnit": "semantic-subsystem",
+        "maxCriticalFeaturesPerPass": 5,
+        "maxImportantFeaturesPerPass": 3,
+        "criticalDefaultThreshold": 0.8,
+        "importantAverageThreshold": 0.65,
+        "adaptiveEscalation": true,
+        "singleImagePairOnly": true,
+        "selectionRule": "Choose only the most visually salient, identity-defining, user-prioritized, or high-risk semantic systems. Group repeated parts instead of reviewing every mesh. AI vision scores every selected feature from the same full reference/render pair."
+      }
+    },
+    "reviewAfterPasses": [
+      "blockout",
+      "structural-pass",
+      "form-refinement",
+      "material-pass",
+      "surface-pass",
+      "lighting-pass",
+      "interaction-pass",
+      "optimization-pass"
+    ],
+    "allowedActions": [
+      "continue",
+      "refine-spec",
+      "refine-code",
+      "request-input",
+      "stop"
+    ],
+    "specRefineTriggers": [
+      "missing component",
+      "wrong primitive family",
+      "wrong proportions",
+      "material layer under-specified",
+      "local feature not traceable to viewEvidence",
+      "reference ambiguity discovered during implementation"
+    ],
+    "codeRefineTriggers": [
+      "spec is adequate but generated geometry/material does not match",
+      "browser render differs from reference",
+      "performance budget exceeded",
+      "lighting hides geometry or material response"
+    ],
+    "stopCriteria": [
+      "target fidelity reached or user accepts current approximation",
+      "remaining gaps require new reference images or manual art"
+    ],
+    "screenshotPolicy": {
+      "requiredForPasses": [
+        "blockout",
+        "structural-pass",
+        "form-refinement",
+        "material-pass",
+        "surface-pass",
+        "lighting-pass",
+        "interaction-pass"
+      ],
+      "preferredCapture": "in-app-browser-screenshot",
+      "fallbackCapture": "user-supplied-screenshot-path",
+      "minimumEvidence": "Each visual pass needs a reference image, rendered screenshot, side-by-side comparison sheet, AI vision score, layer scores, and critique before choosing continue.",
+      "reviewPairRule": "Compare the same camera/viewpoint whenever possible; do not judge a front reference against a random render angle.",
+      "acceptanceAuthority": "AI vision review of the comparison sheet. Code-generated pixel similarity is not sufficient evidence."
+    }
+  },
+  "featureReviewTargets": [
+    {
+      "id": "eye-window-negative-space",
+      "name": "Open eye-window silhouette",
+      "tier": "critical",
+      "passIds": [
+        "blockout",
+        "structural-pass"
+      ],
+      "minimumScore": 0.84,
+      "mustPass": true,
+      "componentRefs": [
+        "mask-cage",
+        "eye-rails"
+      ],
+      "evidenceRefs": [
+        "full-object"
+      ]
+    },
+    {
+      "id": "crown-and-jaw-cage",
+      "name": "Crown arches and nested jaw loops",
+      "tier": "critical",
+      "passIds": [
+        "structural-pass",
+        "form-refinement"
+      ],
+      "minimumScore": 0.82,
+      "mustPass": true,
+      "componentRefs": [
+        "crown-rails",
+        "chin-loops"
+      ],
+      "evidenceRefs": [
+        "full-object"
+      ]
+    },
+    {
+      "id": "contact-padding-zones",
+      "name": "Brow cheek and jaw padding separation",
+      "tier": "important",
+      "passIds": [
+        "structural-pass",
+        "material-pass"
+      ],
+      "minimumScore": 0.72,
+      "mustPass": false,
+      "componentRefs": [
+        "padding-assembly"
+      ],
+      "evidenceRefs": [
+        "full-object"
+      ]
+    },
+    {
+      "id": "harness-routing",
+      "name": "Conservative visible harness routing",
+      "tier": "detail",
+      "passIds": [
+        "form-refinement",
+        "interaction-pass"
+      ],
+      "minimumScore": 0.65,
+      "mustPass": false,
+      "componentRefs": [
+        "harness"
+      ],
+      "evidenceRefs": [
+        "full-object"
+      ]
+    },
+    {
+      "id": "satin-cage-response",
+      "name": "Near-black satin cage response",
+      "tier": "critical",
+      "passIds": [
+        "material-pass",
+        "surface-pass",
+        "lighting-pass"
+      ],
+      "minimumScore": 0.76,
+      "mustPass": true,
+      "componentRefs": [
+        "mask-cage",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops"
+      ],
+      "evidenceRefs": [
+        "full-object"
+      ]
+    }
+  ],
+  "sculptPipeline": {
+    "passGateMode": "locked-sequential",
+    "passOrder": [
+      "blockout",
+      "structural-pass",
+      "form-refinement",
+      "material-pass",
+      "surface-pass",
+      "lighting-pass",
+      "interaction-pass",
+      "optimization-pass"
+    ],
+    "currentPass": "structural-pass",
+    "completedPasses": [
+      "blockout"
+    ],
+    "lastCompletedPass": "blockout",
+    "blockedReason": "",
+    "nextRequiredEvidence": [
+      "Macro, meso, and repeated structures meet qualityContract.minimumSpecDepth.",
+      "Parent-child relations, joints, seams, sockets, and contact points are explicit.",
+      "Every attached child appendage/connector has parentSocket, localStart/localEnd, contactType, embedDepth or overlap, and gapTolerance.",
+      "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold.",
+      "attachment contracts for child appendages/connectors",
+      "no floating child roots/joints in the browser screenshot",
+      "browser render screenshot from your agent's browser/screenshot tool",
+      "side-by-side reference/render comparison sheet for AI vision review",
+      "AI vision score at or above the visual acceptance threshold",
+      "all critical semantic feature scores from the shared image pair at or above their thresholds",
+      "self-correction review appended with action=continue before the next pass"
+    ]
+  },
+  "lookDevTargets": {
+    "qualityPriority": "reference-fidelity",
+    "materialPass": {
+      "albedoPaletteRequired": true,
+      "roughnessVariationRequired": true,
+      "normalOrBumpRequired": true,
+      "localOverridesRequired": true,
+      "minimumTextureResolution": 1024,
+      "preferredTextureResolution": 2048,
+      "independentMapChannels": [
+        "albedo",
+        "roughness",
+        "height",
+        "normal",
+        "ambient-occlusion"
+      ],
+      "requiredSurfaceFrequencyBands": [
+        "macro",
+        "meso",
+        "micro"
+      ],
+      "geometryReliefRequiredWhenSilhouetteAffected": true,
+      "referencePbrExtraction": {
+        "requiredWhenSourceImagePresent": true,
+        "targetThreshold": 0.7,
+        "stopOnLowConfidence": true,
+        "script": "forge/stage1_intake/extract_pbr_evidence.py",
+        "acceptedLimitation": "single-image extraction is reference-derived inference, not exact photogrammetry"
+      },
+      "mustAvoid": [
+        "single flat albedo per material",
+        "uniform roughness",
+        "albedo texture reused as roughness/height/normal/AO",
+        "single-frequency random noise",
+        "plastic-looking smooth bark, stone, cloth, foliage, or aged material",
+        "local color/detail described only in prose without material masks",
+        "claiming exact PBR recovery when confidence is below the target threshold"
+      ]
+    },
+    "lightingPass": {
+      "requiredTerms": [
+        "key light",
+        "fill light",
+        "rim or environment light",
+        "exposure",
+        "tone mapping",
+        "background",
+        "contact shadow"
+      ],
+      "mustAvoid": [
+        "ambient-only lighting",
+        "flat value range",
+        "missing contact shadow",
+        "reference lighting copied without separating material readability"
+      ]
+    },
+    "screenshotReview": [
+      "Compare albedo palette and local color zones.",
+      "Compare roughness/normal/bump response under light.",
+      "Compare cavity dirt, edge wear, stains, moss, scratches, or other local masks.",
+      "Compare key/fill/rim structure, exposure, tone mapping, background, and contact shadows.",
+      "Capture a neutral-light render to verify material readability without reference lighting.",
+      "Capture a grazing-light close-up to expose flat normals, uniform roughness, tiling, and plastic highlights.",
+      "Capture a reference-matched render from the same camera framing as the source."
+    ]
+  },
+  "actionReadiness": {
+    "contract": "Every macro/meso component should be generated as a stable named Object3D pivot node with a mesh child, action metadata, optional sockets, collider proxy, and destruction metadata.",
+    "defaultRigType": "action-ready-static-rig",
+    "rootMotionNode": "root",
+    "requiredComponentFields": [
+      "id",
+      "parent",
+      "transform",
+      "attachment for child appendages, connectors, limbs, tubes, handles, legs, horns, wings, branches, or cables",
+      "actionProfile.animationRole",
+      "actionProfile.pivot",
+      "actionProfile.collider",
+      "actionProfile.destruction"
+    ],
+    "transformChannels": [
+      "translate",
+      "rotate",
+      "scale",
+      "bend",
+      "twist",
+      "detach",
+      "visibility",
+      "material-state"
+    ],
+    "authoringRules": [
+      "Do not collapse independently movable parts into one mesh.",
+      "Put transforms on component pivot groups, not only on raw meshes.",
+      "For attached child parts, put the pivot at the semantic root/socket and build visible geometry from localStart to localEnd.",
+      "Represent hinge, socket, detachable, and breakable intent even when no animation is implemented yet.",
+      "Use simplified collider proxies for runtime physics instead of visual mesh colliders by default."
+    ],
+    "destructionPolicy": {
+      "defaultBreakable": false,
+      "fractureGroupNaming": "Use stable semantic names such as body-shell, left-hinge, glass-panel, branch-segment.",
+      "debrisStrategy": "Prefer detachable component groups and a small number of procedural fragments over random mesh explosion."
+    }
+  },
+  "assumptions": [
+    "Rear strap routing is a conservative bilateral approximation because it is occluded in the single source view.",
+    "All dimensions are normalized to the existing PlayerActor head, not claimed manufacturing measurements.",
+    "Reference-derived PBR maps are evidence for palette and response; the production phone renderer uses cached native materials rather than loading per-player textures."
+  ],
+  "coordinateFrame": {
+    "front": "negative local Z, matching PlayerActor forward",
+    "up": "positive local Y",
+    "right": "positive local X",
+    "origin": "head pivot center",
+    "scaleReference": "existing PlayerActor head radius 0.24 world units"
+  },
+  "silhouette": {
+    "boundingShape": "tapered oval cage, 0.58 wide by 0.68 tall by 0.34 deep",
+    "aspectRatios": [
+      0.853,
+      1.176,
+      0.586
+    ],
+    "symmetry": "bilateral about local X=0, except subtle source-view lighting",
+    "dominantCurves": [
+      "paired crown rails from brow to rear perimeter",
+      "outward cheek sweep",
+      "nested jaw loops below chin"
+    ],
+    "negativeSpaces": [
+      "broad eye window",
+      "two cheek openings",
+      "central mouth opening"
+    ],
+    "landmarks": [
+      "top crown at y=0.34",
+      "eye rail at y=0.10",
+      "jaw cup at y=-0.18",
+      "lower loop at y=-0.34"
+    ]
+  },
+  "viewEvidence": [
+    {
+      "id": "full-object",
+      "view": "three-quarter-front",
+      "imageRegion": {
+        "x": 0,
+        "y": 0,
+        "width": 1,
+        "height": 1,
+        "units": "normalized"
+      },
+      "observations": [
+        "Near-black satin cage surrounds a broad eye opening.",
+        "Padded crown, cheek, and jaw contact zones sit behind the rails.",
+        "Two nested lower loops define the catcher-mask silhouette.",
+        "Woven side and crown harness remains partially occluded."
+      ],
+      "confidence": 0.88
+    }
+  ],
+  "componentTree": [
+    {
+      "id": "root",
+      "name": "Head attachment root",
+      "level": "macro",
+      "role": "wearable-root",
+      "importance": 1,
+      "confidence": 0.97,
+      "primitive": "ellipsoid",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "A head-relative oval supplies a stable attachment envelope while all visible identity lives in child systems.",
+      "geometryDescriptor": {
+        "topologyIntent": "non-rendered semantic envelope; generated prototype shows a translucent fit guide",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals"
+      },
+      "parent": null,
+      "attachment": null,
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.58,
+        "height": 0.68,
+        "depth": 0.34
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "root",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [
+          {
+            "id": "head-attachment",
+            "localPosition": [
+              0,
+              0,
+              0
+            ],
+            "localRotation": [
+              0,
+              0,
+              0
+            ]
+          }
+        ],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.58,
+            0.68,
+            0.34
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "cage-metal",
+      "materialLayers": [
+        "cage-metal"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "head-clearance",
+          "kind": "contour",
+          "description": "Clearance envelope avoids the procedural face and ears.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "head-clearance"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(23, 25, 27, 1)",
+        "secondaryAlbedo": "rgba(66, 67, 70, 1)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    },
+    {
+      "id": "mask-cage",
+      "name": "Protective cage perimeter",
+      "level": "macro",
+      "role": "cage-assembly",
+      "importance": 1,
+      "confidence": 0.96,
+      "primitive": "torus",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "The visible outer perimeter is an assembled tubular hard-surface network rather than a solid face shell.",
+      "geometryDescriptor": {
+        "topologyIntent": "low-poly cached procedural geometry with silhouette-first radial segmentation",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals"
+      },
+      "parent": "root",
+      "attachment": {
+        "parentId": "root",
+        "parentSocket": "head-attachment",
+        "localStart": [
+          0,
+          0.31,
+          -0.08
+        ],
+        "localEnd": [
+          0,
+          -0.31,
+          -0.13
+        ],
+        "contactType": "overlapping-socket",
+        "overlap": 0.025,
+        "gapTolerance": 0.006,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      },
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.56,
+        "height": 0.65,
+        "depth": 0.31
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -0.13
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "wearable-component",
+        "pivot": {
+          "mode": "parent-socket",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.56,
+            0.65,
+            0.31
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "cage-metal",
+      "materialLayers": [
+        "cage-metal"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "eye-window-rails",
+          "kind": "ridge",
+          "description": "Three horizontal bands and lateral dividers preserve the open eye window.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        },
+        {
+          "id": "weld-overlaps",
+          "kind": "fastener",
+          "description": "Rail junctions overlap by at least 0.025 units to avoid floating seams.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "eye-window-rails",
+        "weld-overlaps"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(23, 25, 27, 1)",
+        "secondaryAlbedo": "rgba(66, 67, 70, 1)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    },
+    {
+      "id": "padding-assembly",
+      "name": "Brow cheek and jaw padding",
+      "level": "macro",
+      "role": "contact-padding",
+      "importance": 0.95,
+      "confidence": 0.91,
+      "primitive": "extrude",
+      "topologyClass": "conforming-shell",
+      "topologyRationale": "Separate shallow padded shells conform behind the cage and remain readable through the negative spaces.",
+      "geometryDescriptor": {
+        "topologyIntent": "low-poly cached procedural geometry with silhouette-first radial segmentation",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals",
+        "profile2D": {
+          "points": [
+            [
+              -0.24,
+              0.18
+            ],
+            [
+              0.24,
+              0.18
+            ],
+            [
+              0.2,
+              -0.22
+            ],
+            [
+              -0.2,
+              -0.22
+            ]
+          ],
+          "depth": 0.13
+        }
+      },
+      "parent": "root",
+      "attachment": {
+        "parentId": "root",
+        "parentSocket": "head-attachment",
+        "localStart": [
+          0,
+          0.25,
+          -0.02
+        ],
+        "localEnd": [
+          0,
+          -0.23,
+          -0.08
+        ],
+        "contactType": "overlapping-socket",
+        "overlap": 0.025,
+        "gapTolerance": 0.006,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      },
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.48,
+        "height": 0.48,
+        "depth": 0.13
+      },
+      "transform": {
+        "position": [
+          0,
+          0,
+          -0.07
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "wearable-component",
+        "pivot": {
+          "mode": "parent-socket",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.48,
+            0.48,
+            0.13
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "padding",
+      "materialLayers": [
+        "padding"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "brow-piping",
+          "kind": "seam",
+          "description": "Raised piping outlines the brow pad.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        },
+        {
+          "id": "cheek-seams",
+          "kind": "seam",
+          "description": "Bilateral cheek pads retain a visible gap and stitched border.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "brow-piping",
+        "cheek-seams"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(41, 43, 45, 1)",
+        "secondaryAlbedo": "rgba(102, 103, 105, 1)",
+        "materialClass": "fabric",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    },
+    {
+      "id": "eye-rails",
+      "name": "Eye-window rail group",
+      "level": "meso",
+      "role": "tube-network",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "tube",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "Three swept rails and vertical dividers are true tubes because they define the front negative space in every view.",
+      "geometryDescriptor": {
+        "topologyIntent": "low-poly cached procedural geometry with silhouette-first radial segmentation",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals",
+        "curveType": "multi-segment quadratic sweep",
+        "radialSegments": 6,
+        "tubeRadius": 0.018
+      },
+      "parent": "mask-cage",
+      "attachment": {
+        "parentId": "mask-cage",
+        "parentSocket": "perimeter-contact",
+        "localStart": [
+          -0.25,
+          0.12,
+          0
+        ],
+        "localEnd": [
+          0.25,
+          -0.08,
+          0
+        ],
+        "contactType": "overlapping-socket",
+        "overlap": 0.025,
+        "gapTolerance": 0.006,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      },
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.52,
+        "height": 0.23,
+        "depth": 0.08
+      },
+      "transform": {
+        "position": [
+          0,
+          0.06,
+          -0.17
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "wearable-component",
+        "pivot": {
+          "mode": "parent-socket",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.52,
+            0.23,
+            0.08
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "cage-metal",
+      "materialLayers": [
+        "cage-metal"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "rail-spacing",
+          "kind": "contour",
+          "description": "Rail spacing leaves an unobstructed central eye band.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "rail-spacing"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(23, 25, 27, 1)",
+        "secondaryAlbedo": "rgba(66, 67, 70, 1)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    },
+    {
+      "id": "crown-rails",
+      "name": "Paired crown rails",
+      "level": "meso",
+      "role": "tube-network",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "curve-sweep",
+      "topologyClass": "continuous-sculpt",
+      "topologyRationale": "Each crown rail visibly bends through depth from the brow toward the rear head envelope.",
+      "geometryDescriptor": {
+        "topologyIntent": "low-poly cached procedural geometry with silhouette-first radial segmentation",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals",
+        "curveType": "cubic-bezier-3d",
+        "radialSegments": 6,
+        "tubeRadius": 0.017
+      },
+      "parent": "mask-cage",
+      "attachment": {
+        "parentId": "mask-cage",
+        "parentSocket": "perimeter-contact",
+        "localStart": [
+          -0.18,
+          0.28,
+          0
+        ],
+        "localEnd": [
+          -0.22,
+          0.05,
+          0.12
+        ],
+        "contactType": "overlapping-socket",
+        "overlap": 0.025,
+        "gapTolerance": 0.006,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      },
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.39,
+        "height": 0.31,
+        "depth": 0.19
+      },
+      "transform": {
+        "position": [
+          0,
+          0.17,
+          -0.08
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "wearable-component",
+        "pivot": {
+          "mode": "parent-socket",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.39,
+            0.31,
+            0.19
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "cage-metal",
+      "materialLayers": [
+        "cage-metal"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "crown-rails",
+          "kind": "ridge",
+          "description": "Mirrored crown tubes preserve the high arched silhouette.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "crown-rails"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(23, 25, 27, 1)",
+        "secondaryAlbedo": "rgba(66, 67, 70, 1)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    },
+    {
+      "id": "chin-loops",
+      "name": "Nested chin loops",
+      "level": "meso",
+      "role": "tube-network",
+      "importance": 0.98,
+      "confidence": 0.97,
+      "primitive": "torus",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "Two nested elliptical tubes extend below the jaw cup and carry the unmistakable lower silhouette.",
+      "geometryDescriptor": {
+        "topologyIntent": "low-poly cached procedural geometry with silhouette-first radial segmentation",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals"
+      },
+      "parent": "mask-cage",
+      "attachment": {
+        "parentId": "mask-cage",
+        "parentSocket": "lower-perimeter",
+        "localStart": [
+          -0.16,
+          -0.2,
+          0
+        ],
+        "localEnd": [
+          0.16,
+          -0.33,
+          0
+        ],
+        "contactType": "overlapping-socket",
+        "overlap": 0.025,
+        "gapTolerance": 0.006,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      },
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.34,
+        "height": 0.22,
+        "depth": 0.08
+      },
+      "transform": {
+        "position": [
+          0,
+          -0.24,
+          -0.16
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "wearable-component",
+        "pivot": {
+          "mode": "parent-socket",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.34,
+            0.22,
+            0.08
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "cage-metal",
+      "materialLayers": [
+        "cage-metal"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "twin-chin-loops",
+          "kind": "ridge",
+          "description": "Outer and inner loops remain separately visible.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "twin-chin-loops"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(23, 25, 27, 1)",
+        "secondaryAlbedo": "rgba(66, 67, 70, 1)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    },
+    {
+      "id": "harness",
+      "name": "Rear woven harness",
+      "level": "meso",
+      "role": "strap-assembly",
+      "importance": 0.72,
+      "confidence": 0.7,
+      "primitive": "curve-sweep",
+      "topologyClass": "conforming-shell",
+      "topologyRationale": "Thin strap ribbons follow the sides and crown of the head attachment envelope.",
+      "geometryDescriptor": {
+        "topologyIntent": "low-poly cached procedural geometry with silhouette-first radial segmentation",
+        "edgeTreatment": {
+          "type": "rounded",
+          "bevelRadius": 0.012,
+          "segments": 2
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates; runtime uses native flat colors",
+        "normalStrategy": "computed vertex normals",
+        "curveType": "ribbon sweep",
+        "radialSegments": 4,
+        "tubeRadius": 0.012
+      },
+      "parent": "root",
+      "attachment": {
+        "parentId": "root",
+        "parentSocket": "head-attachment",
+        "localStart": [
+          -0.24,
+          0.17,
+          0.04
+        ],
+        "localEnd": [
+          0.24,
+          -0.04,
+          0.13
+        ],
+        "contactType": "overlapping-socket",
+        "overlap": 0.025,
+        "gapTolerance": 0.006,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      },
+      "dimensions": {
+        "units": "PlayerActor head-relative",
+        "confidence": 0.86,
+        "width": 0.48,
+        "height": 0.38,
+        "depth": 0.09
+      },
+      "transform": {
+        "position": [
+          0,
+          0.03,
+          0.11
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "wearable-component",
+        "pivot": {
+          "mode": "parent-socket",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": true,
+          "rotate": true,
+          "scale": true,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.48,
+            0.38,
+            0.09
+          ],
+          "isTrigger": false
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "wearable-equipment",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "cage-metal"
+        }
+      },
+      "material": "harness-fabric",
+      "materialLayers": [
+        "harness-fabric"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "id": "strap-routing",
+          "kind": "linework",
+          "description": "Conservative bilateral crown and side routing exposes its inferred status.",
+          "evidenceRefs": [
+            "full-object"
+          ]
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0.62,
+        "microRoughness": 0.12,
+        "bumpAmplitude": 0.01,
+        "normalPattern": "reference-derived evidence; runtime simplified for phone scale",
+        "displacementPattern": "none",
+        "occlusionPattern": "native contact shadow at overlaps",
+        "edgeWearPattern": "restrained edge highlight",
+        "notes": "Identity is carried by geometry and roughness contrast, not opaque model textures."
+      },
+      "evidenceRefs": [
+        "full-object"
+      ],
+      "details": [
+        "strap-routing"
+      ],
+      "fidelityTier": "production-stylized",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(8, 8, 9, 1)",
+        "secondaryAlbedo": "rgba(41, 43, 45, 1)",
+        "materialClass": "fabric",
+        "materialClassConfidence": 0.88,
+        "evidenceRefs": [
+          "full-object"
+        ]
+      }
+    }
+  ],
+  "materials": [
+    {
+      "id": "cage-metal",
+      "name": "Near-black satin cage metal",
+      "type": "standard",
+      "shaderModel": "MeshStandardMaterial / PBR approximation",
+      "baseColor": "#17191B",
+      "color": "#17191B",
+      "albedo": {
+        "dominant": "#17191B",
+        "secondary": [
+          "#292B2D",
+          "#080809",
+          "#424346"
+        ],
+        "samplingNotes": "Reference-derived from foreground pixels; de-lit to reduce baked shadows/highlights.",
+        "map": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_albedo.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_albedo.png",
+          "channel": "albedo",
+          "source": "reference-pixel-extraction"
+        }
+      },
+      "colorVariation": {
+        "palette": [
+          "#17191B",
+          "#292B2D",
+          "#080809",
+          "#424346",
+          "#919091",
+          "#666769"
+        ],
+        "pattern": "reference-derived pixel palette",
+        "amplitude": 0.239,
+        "heightCorrelation": 0.42
+      },
+      "textureResolution": 1024,
+      "textureProjection": {
+        "mode": "uv",
+        "repeat": [
+          2,
+          2
+        ],
+        "anisotropy": 8,
+        "texelDensityIntent": "Preserve stable world/object-scale detail; do not stretch micro detail with component scale."
+      },
+      "surfaceFrequencyBands": [
+        {
+          "id": "macro",
+          "frequency": 2,
+          "amplitude": 0.479,
+          "role": "reference-derived broad albedo and height breakup"
+        },
+        {
+          "id": "meso",
+          "frequency": 14,
+          "amplitude": 0.35,
+          "role": "reference-derived cracks, ridges, pores, grain, or leaf clusters"
+        },
+        {
+          "id": "micro",
+          "frequency": 72,
+          "amplitude": 0.14,
+          "role": "reference-derived micro highlight breakup under grazing light"
+        }
+      ],
+      "roughness": {
+        "base": 0.34,
+        "variation": 0.11,
+        "map": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_roughness.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_roughness.png",
+          "channel": "roughness",
+          "source": "reference-pixel-extraction"
+        },
+        "localResponse": "reference-derived roughness estimate; cavities and textured zones trend rougher, bright highlights trend smoother"
+      },
+      "metalness": {
+        "base": 0.72,
+        "variation": 0.08
+      },
+      "normal": {
+        "pattern": "reference-derived height-gradient normal map",
+        "strength": 0.235,
+        "map": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_normal.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_normal.png",
+          "channel": "normal",
+          "source": "reference-pixel-extraction"
+        },
+        "heightSource": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_height.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_height.png",
+          "channel": "height",
+          "source": "reference-pixel-extraction"
+        },
+        "space": "tangent"
+      },
+      "bump": {
+        "pattern": "reference-derived height field",
+        "amplitude": 0.03,
+        "map": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_height.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_height.png",
+          "channel": "height",
+          "source": "reference-pixel-extraction"
+        }
+      },
+      "displacement": {
+        "pattern": "none",
+        "amplitude": 0,
+        "scale": 1,
+        "silhouetteAffects": false
+      },
+      "ambientOcclusion": {
+        "cavityStrength": 0.38,
+        "contactShadowBias": 0.35,
+        "map": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_ao.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_ao.png",
+          "channel": "ao",
+          "source": "reference-pixel-extraction"
+        },
+        "notes": "Reference-derived cavity estimate from local height minima; verify against grazing-light screenshot."
+      },
+      "wear": {
+        "edgeWear": 0,
+        "scratches": [],
+        "chips": []
+      },
+      "dirt": {
+        "amount": 0,
+        "cavityBias": 0,
+        "color": "#2F2A22"
+      },
+      "localOverrides": [
+        {
+          "id": "reference-pbr-pixel-evidence",
+          "type": "material-map-evidence",
+          "evidenceRefs": [
+            "full-object"
+          ],
+          "channels": [
+            "albedo",
+            "roughness",
+            "height",
+            "normal",
+            "ambient-occlusion"
+          ],
+          "notes": "Use generated maps as material evidence, then refine after browser screenshot comparison."
+        },
+        {
+          "id": "weld-highlight",
+          "type": "roughness-and-AO-mask",
+          "evidenceRefs": [
+            "full-object"
+          ],
+          "roughness": 0.27,
+          "notes": "Junction highlights stay narrow; seams use overlap geometry."
+        }
+      ],
+      "shaderNotes": [
+        "Prefer MeshPhysicalMaterial when clearcoat, sheen, transmission, or thin-surface response is observed; otherwise use MeshStandardMaterial-compatible PBR channels.",
+        "Generate albedo, roughness, height/normal, and AO independently; never alias albedo into roughness.",
+        "Use normal/bump/displacement only when they map to observed surface relief.",
+        "Use displacement geometry when the observed relief changes the close-up silhouette; texture-only relief is insufficient there.",
+        "Reference-derived maps are estimates from image pixels; verify with neutral, grazing, and reference-matched renders.",
+        "Do not treat baked image shadows as final albedo; rerun extraction with a tighter material crop if highlights/shadows pollute the maps."
+      ],
+      "notes": "Reference PBR evidence passed at 0.86 confidence; production uses a cached near-black MeshStandardMaterial and geometric rails for phone performance.",
+      "referencePbr": {
+        "version": "1.0",
+        "sourceImage": "docs/references/equipment/catcher-mask.png",
+        "extractor": "stage1_intake/extract_pbr_evidence.py",
+        "method": "single-image pixel evidence with de-lighting estimate; not photogrammetry",
+        "usable": true,
+        "verdict": "pass",
+        "confidence": 0.86,
+        "estimatedFidelity": 0.86,
+        "targetThreshold": 0.7,
+        "hardLimit": "A single image cannot uniquely recover true albedo/roughness/normal/AO; maps are reference-derived estimates.",
+        "maps": {
+          "albedo": {
+            "path": "docs/equipment-forge/pbr/mask-reference/base_albedo.png",
+            "url": "/docs/equipment-forge/pbr/mask-reference/base_albedo.png",
+            "channel": "albedo",
+            "source": "reference-pixel-extraction"
+          },
+          "roughness": {
+            "path": "docs/equipment-forge/pbr/mask-reference/base_roughness.png",
+            "url": "/docs/equipment-forge/pbr/mask-reference/base_roughness.png",
+            "channel": "roughness",
+            "source": "reference-pixel-extraction"
+          },
+          "height": {
+            "path": "docs/equipment-forge/pbr/mask-reference/base_height.png",
+            "url": "/docs/equipment-forge/pbr/mask-reference/base_height.png",
+            "channel": "height",
+            "source": "reference-pixel-extraction"
+          },
+          "normal": {
+            "path": "docs/equipment-forge/pbr/mask-reference/base_normal.png",
+            "url": "/docs/equipment-forge/pbr/mask-reference/base_normal.png",
+            "channel": "normal",
+            "source": "reference-pixel-extraction"
+          },
+          "ao": {
+            "path": "docs/equipment-forge/pbr/mask-reference/base_ao.png",
+            "url": "/docs/equipment-forge/pbr/mask-reference/base_ao.png",
+            "channel": "ao",
+            "source": "reference-pixel-extraction"
+          }
+        },
+        "diagnostics": {
+          "sourceWidth": 512,
+          "sourceHeight": 512,
+          "mapSize": 1024,
+          "cropBBoxPixels": {
+            "x": 42,
+            "y": 30,
+            "width": 381,
+            "height": 429
+          },
+          "mask": {
+            "backgroundColor": "#D2D2D3",
+            "backgroundNoise": 32.909,
+            "transparentPixelFraction": 0,
+            "foregroundCoverage": 0.332
+          },
+          "mapStats": {
+            "valueRange": 0.5694,
+            "heightP90Gradient": 0.06721,
+            "roughnessBase": 0.702,
+            "roughnessVariation": 0.135,
+            "normalStrength": 0.235,
+            "blurRadius": 21
+          },
+          "palette": [
+            "#17191B",
+            "#292B2D",
+            "#080809",
+            "#424346",
+            "#919091",
+            "#666769"
+          ]
+        },
+        "warnings": [
+          "single-image inverse rendering cannot prove true physical PBR; confidence is capped"
+        ]
+      }
+    },
+    {
+      "id": "padding",
+      "name": "Catcher contact padding",
+      "type": "standard",
+      "qualityTier": "utility",
+      "shaderModel": "MeshStandardMaterial / cached phone-safe approximation",
+      "baseColor": "#292B2D",
+      "color": "#292B2D",
+      "albedo": {
+        "dominant": "#292B2D",
+        "secondary": [
+          "#292B2D",
+          "#666769"
+        ],
+        "samplingNotes": "Sampled from the admitted catcher-mask reference."
+      },
+      "colorVariation": {
+        "palette": [
+          "#292B2D",
+          "#292B2D",
+          "#666769"
+        ],
+        "pattern": "component-zone contrast",
+        "amplitude": 0.12,
+        "heightCorrelation": 0.2
+      },
+      "textureResolution": 1024,
+      "textureProjection": {
+        "mode": "procedural object coordinates",
+        "repeat": [
+          1,
+          1
+        ],
+        "anisotropy": 1,
+        "texelDensityIntent": "No runtime texture allocation; geometry and roughness contrast carry the material."
+      },
+      "surfaceFrequencyBands": [
+        {
+          "id": "macro",
+          "frequency": 2,
+          "amplitude": 0.25,
+          "role": "pad or strap color zoning"
+        },
+        {
+          "id": "meso",
+          "frequency": 12,
+          "amplitude": 0.12,
+          "role": "seams and weave direction"
+        },
+        {
+          "id": "micro",
+          "frequency": 56,
+          "amplitude": 0.04,
+          "role": "restrained highlight breakup"
+        }
+      ],
+      "roughness": {
+        "base": 0.72,
+        "variation": 0.1,
+        "map": "independent procedural material parameter",
+        "localResponse": "cavities trend rougher"
+      },
+      "metalness": {
+        "base": 0,
+        "variation": 0
+      },
+      "normal": {
+        "pattern": "geometry-backed seams plus conservative procedural weave",
+        "strength": 0.16,
+        "space": "tangent"
+      },
+      "bump": {
+        "pattern": "none at production phone distance",
+        "amplitude": 0,
+        "scale": 1
+      },
+      "displacement": {
+        "pattern": "none",
+        "amplitude": 0,
+        "scale": 1,
+        "silhouetteAffects": false
+      },
+      "ambientOcclusion": {
+        "cavityStrength": 0.3,
+        "contactShadowBias": 0.4,
+        "notes": "Native shadowing and geometric overlaps."
+      },
+      "wear": {
+        "edgeWear": 0.03,
+        "scratches": [],
+        "chips": []
+      },
+      "dirt": {
+        "amount": 0.02,
+        "cavityBias": 0.15,
+        "color": "#080809"
+      },
+      "localOverrides": [
+        {
+          "id": "pad-piping",
+          "type": "geometry-seam-and-roughness-zone",
+          "evidenceRefs": [
+            "full-object"
+          ],
+          "roughness": 0.62,
+          "notes": "Raised border is geometry, not painted relief."
+        }
+      ],
+      "shaderNotes": [
+        "Runtime material is cached once and shares geometry-scale detail; no per-athlete texture maps."
+      ],
+      "notes": "Reference-derived stylized utility material."
+    },
+    {
+      "id": "harness-fabric",
+      "name": "Woven harness fabric",
+      "type": "standard",
+      "qualityTier": "utility",
+      "shaderModel": "MeshStandardMaterial / cached phone-safe approximation",
+      "baseColor": "#080809",
+      "color": "#080809",
+      "albedo": {
+        "dominant": "#080809",
+        "secondary": [
+          "#292B2D",
+          "#666769"
+        ],
+        "samplingNotes": "Sampled from the admitted catcher-mask reference."
+      },
+      "colorVariation": {
+        "palette": [
+          "#080809",
+          "#292B2D",
+          "#666769"
+        ],
+        "pattern": "component-zone contrast",
+        "amplitude": 0.12,
+        "heightCorrelation": 0.2
+      },
+      "textureResolution": 1024,
+      "textureProjection": {
+        "mode": "procedural object coordinates",
+        "repeat": [
+          1,
+          1
+        ],
+        "anisotropy": 1,
+        "texelDensityIntent": "No runtime texture allocation; geometry and roughness contrast carry the material."
+      },
+      "surfaceFrequencyBands": [
+        {
+          "id": "macro",
+          "frequency": 2,
+          "amplitude": 0.25,
+          "role": "pad or strap color zoning"
+        },
+        {
+          "id": "meso",
+          "frequency": 12,
+          "amplitude": 0.12,
+          "role": "seams and weave direction"
+        },
+        {
+          "id": "micro",
+          "frequency": 56,
+          "amplitude": 0.04,
+          "role": "restrained highlight breakup"
+        }
+      ],
+      "roughness": {
+        "base": 0.82,
+        "variation": 0.1,
+        "map": "independent procedural material parameter",
+        "localResponse": "cavities trend rougher"
+      },
+      "metalness": {
+        "base": 0,
+        "variation": 0
+      },
+      "normal": {
+        "pattern": "geometry-backed seams plus conservative procedural weave",
+        "strength": 0.16,
+        "space": "tangent"
+      },
+      "bump": {
+        "pattern": "none at production phone distance",
+        "amplitude": 0,
+        "scale": 1
+      },
+      "displacement": {
+        "pattern": "none",
+        "amplitude": 0,
+        "scale": 1,
+        "silhouetteAffects": false
+      },
+      "ambientOcclusion": {
+        "cavityStrength": 0.3,
+        "contactShadowBias": 0.4,
+        "notes": "Native shadowing and geometric overlaps."
+      },
+      "wear": {
+        "edgeWear": 0.03,
+        "scratches": [],
+        "chips": []
+      },
+      "dirt": {
+        "amount": 0.02,
+        "cavityBias": 0.15,
+        "color": "#080809"
+      },
+      "localOverrides": [
+        {
+          "id": "woven-grain",
+          "type": "directional-roughness-zone",
+          "evidenceRefs": [
+            "full-object"
+          ],
+          "roughness": 0.86,
+          "notes": "Fine weave is represented by a restrained material response at phone distance."
+        }
+      ],
+      "shaderNotes": [
+        "Runtime material is cached once and shares geometry-scale detail; no per-athlete texture maps."
+      ],
+      "notes": "Reference-derived stylized utility material."
+    }
+  ],
+  "repetitionSystems": [
+    {
+      "id": "bilateral-cage-symmetry",
+      "name": "Mirrored rail layout",
+      "sourceComponents": [
+        "eye-rails",
+        "crown-rails"
+      ],
+      "instances": 2,
+      "buildsGeometry": true,
+      "realization": "merged cached geometry",
+      "notes": "Symmetry reduces authoring drift while production emits one merged mesh."
+    },
+    {
+      "id": "bilateral-padding",
+      "name": "Mirrored cheek pads",
+      "sourceComponents": [
+        "padding-assembly"
+      ],
+      "instances": 2,
+      "buildsGeometry": true,
+      "realization": "merged cached geometry",
+      "notes": "Left and right pads retain a central gap."
+    }
+  ],
+  "buildPasses": [
+    {
+      "id": "blockout",
+      "goal": "Match macro silhouette and proportions.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Silhouette reads correctly without materials.",
+        "Quality contract has named all required macro feature groups before code generation.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "structural-pass",
+      "goal": "Build the component hierarchy implied by the pre-spec complexity assessment.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Macro, meso, and repeated structures meet qualityContract.minimumSpecDepth.",
+        "Parent-child relations, joints, seams, sockets, and contact points are explicit.",
+        "Every attached child appendage/connector has parentSocket, localStart/localEnd, contactType, embedDepth or overlap, and gapTolerance.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "form-refinement",
+      "goal": "Refine shape, deformation, bevels, tapers, curves, asymmetry, and visible local geometry.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Important visible forms are represented in component geometryDescriptor, deformations, localFeatures, or repetitionSystems.",
+        "Endpoint-based child parts are rooted at their attachment sockets and do not visibly float away from parents.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "material-pass",
+      "goal": "Match material color, roughness, bump, and local variation.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Reference-derived albedo palette records dominant, secondary, and accent colors per visible material.",
+        "Each important material defines roughness variation and at least one normal/bump/displacement response.",
+        "Local material overrides, dirt/wear/stains/moss/chips/scratches or equivalent masks are tied to evidenceRefs.",
+        "Thin, transparent, reflective, wet, or fibrous materials document alpha/transmission/clearcoat/metalness/fiber response when relevant.",
+        "Generated preview uses procedural albedo/roughness/bump texture or vertex color variation instead of one flat color.",
+        "Generated preview uses independent PBR maps at 1024px or higher for the quality-first tier.",
+        "If source pixels are available, referencePbr extraction passed at confidence >= 0.7 or the pass is stopped/requesting better references.",
+        "Macro, meso, and micro surface frequency bands are visible at the intended review distance without obvious tiling.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "surface-pass",
+      "goal": "Add procedural surface locality such as normal/bump/displacement, AO, dirt, stains, chips, grain, moss, scratches, and wear.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Every required material feature group has local overrides or surfaceDetail tied to evidenceRefs.",
+        "A grazing-angle close-up proves that normal/height detail breaks highlights naturally and does not read as smooth plastic.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "lighting-pass",
+      "goal": "Make material and form readable under neutral turntable lighting plus optional reference lighting.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "lightingFromPhoto identifies key light direction/color/intensity, fill light, rim or environment light, and ambient color.",
+        "Exposure, tone mapping, background color/gradient, shadow softness, and contact shadow behavior are specified.",
+        "Lighting does not hide geometry/material gaps and screenshots can be compared fairly to the reference.",
+        "Neutral, grazing, and reference-matched lighting checks distinguish material errors from lighting errors.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "interaction-pass",
+      "goal": "Make the model ready for future animation, transformation, physics, or destruction.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Macro and movable meso components have stable pivot nodes.",
+        "Sockets, collider proxies, and destruction metadata are present for future runtime actions.",
+        "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold."
+      ]
+    },
+    {
+      "id": "optimization-pass",
+      "goal": "Protect runtime performance after visual fidelity is accepted.",
+      "componentRefs": [
+        "root",
+        "mask-cage",
+        "padding-assembly",
+        "eye-rails",
+        "crown-rails",
+        "chin-loops",
+        "harness"
+      ],
+      "acceptance": [
+        "Triangle count, draw calls, instancing, LOD strategy, and FPS target are documented or verified.",
+        "Repeated detail is instanced or simplified where possible without breaking silhouette/material believability."
+      ]
+    }
+  ],
+  "visualEvidence": [
+    {
+      "timestamp": "2026-08-09T18:56:22.511824+00:00",
+      "passId": "blockout",
+      "estimatedFidelity": 0.78,
+      "aiVisionScore": 0.78,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.82,
+        "componentStructure": 0.8,
+        "formDetail": 0.77,
+        "materialSurface": 0.68,
+        "lightingCamera": 0.79
+      },
+      "featureReviews": [
+        {
+          "id": "eye-window-negative-space",
+          "score": 0.86,
+          "notes": "Broad eye window remains unobstructed and reads at field scale."
+        }
+      ],
+      "referenceScreenshot": "docs/references/equipment/catcher-mask.png",
+      "renderScreenshot": "docs/equipment-forge/catcher-mask-three-quarter.png",
+      "comparisonImage": "docs/equipment-forge/catcher-mask-blockout-comparison.png",
+      "cameraView": "three-quarter reference plus front, side, and overhead orbits",
+      "notes": "AI visual review used the full reference/render pair; deterministic IoU remained diagnostic only, per the spec contract.",
+      "aiVisionNotes": "The native prototype is recognizably a catcher mask with convincing depth and open negative space. The largest deltas are denser reference padding, brighter metal response, and simplified rail junctions; these belong to later structural/material passes and do not invalidate the approved blockout."
+    }
+  ],
+  "reviewHistory": [
+    {
+      "timestamp": "2026-08-09T18:56:22.511824+00:00",
+      "passId": "blockout",
+      "estimatedFidelity": 0.78,
+      "aiVisionScore": 0.78,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.82,
+        "componentStructure": 0.8,
+        "formDetail": 0.77,
+        "materialSurface": 0.68,
+        "lightingCamera": 0.79
+      },
+      "featureReviews": [
+        {
+          "id": "eye-window-negative-space",
+          "score": 0.86,
+          "notes": "Broad eye window remains unobstructed and reads at field scale."
+        }
+      ],
+      "action": "continue",
+      "summary": "Purpose-built open cage blockout clears the generic-blob failure and reads as catcher equipment in front, oblique, thickness-axis, and long-axis views.",
+      "matched": [
+        "Open eye-window silhouette",
+        "paired crown rails",
+        "bilateral cheek padding",
+        "nested lower chin loops",
+        "four material groups and 3156-triangle budget"
+      ],
+      "mismatches": [
+        "Reference cage has brighter gunmetal response",
+        "reference rear padding is denser",
+        "prototype rail paths remain deliberately simplified for phone scale",
+        "tier-1 full-foreground IoU is 0.545 because open internal cage/pad segmentation differs despite matched outer scale and aspect"
+      ],
+      "specFixes": [],
+      "codeFixes": [
+        "Refine rail junction overlap in structural pass",
+        "translate four merged groups into cached PlayerActor factories",
+        "verify ball visibility from gameplay cameras"
+      ],
+      "evidence": [
+        "docs/equipment-forge/catcher-mask-front.png",
+        "docs/equipment-forge/catcher-mask-side.png",
+        "docs/equipment-forge/catcher-mask-orbit-long-axis.png",
+        "multi-angle degenerate-view diagnostic passed"
+      ],
+      "mapStrippedRender": "docs/equipment-forge/catcher-mask-mask-isolated.png",
+      "reviewViewpoints": [
+        "front",
+        "three-quarter",
+        "side",
+        "thickness-axis",
+        "long-axis"
+      ],
+      "visualEvidence": {
+        "referenceScreenshot": "docs/references/equipment/catcher-mask.png",
+        "renderScreenshot": "docs/equipment-forge/catcher-mask-three-quarter.png",
+        "comparisonImage": "docs/equipment-forge/catcher-mask-blockout-comparison.png",
+        "cameraView": "three-quarter reference plus front, side, and overhead orbits",
+        "notes": "AI visual review used the full reference/render pair; deterministic IoU remained diagnostic only, per the spec contract.",
+        "aiVisionNotes": "The native prototype is recognizably a catcher mask with convincing depth and open negative space. The largest deltas are denser reference padding, brighter metal response, and simplified rail junctions; these belong to later structural/material passes and do not invalidate the approved blockout."
+      }
+    }
+  ],
+  "lodPlan": [
+    {
+      "tier": "near",
+      "distance": 0,
+      "strategy": "merged cage, padding, and harness groups with six-sided rails"
+    },
+    {
+      "tier": "gameplay",
+      "distance": 8,
+      "strategy": "same cached geometry; micro weave omitted and roughness contrast retained"
+    },
+    {
+      "tier": "far",
+      "distance": 30,
+      "strategy": "mask remains attached but may be culled with the actor by the existing world visibility policy"
+    }
+  ],
+  "performanceBudget": {
+    "qualityPriority": "phone-safe silhouette fidelity",
+    "targetTriangles": 3600,
+    "maxDrawCalls": 5,
+    "textureSize": 0,
+    "fpsTarget": 60,
+    "optimizationPolicy": "Merge cage rails, padding plates, and repetitive details into cached geometries; allocate nothing per frame."
+  },
+  "lightingFromPhoto": [
+    "Key light: large soft neutral source from camera upper-left, intensity reference 1.0.",
+    "Fill light: cool frontal fill at roughly 0.35 of key intensity; retain readable near-black rails.",
+    "Rim/environment light: broad pale studio environment from rear-right at 0.45, with soft contact shadow under the mask.",
+    "Exposure and tone mapping: neutral exposure 1.0 with ACES-filmic preview only; production inherits the game renderer.",
+    "Background: light gray reference sweep; also review against bright sky, dark crowd, grass, dirt, and stadium lights."
+  ],
+  "proceduralStrategy": [
+    "Use the reference to establish negative space and rail routing, then normalize to the existing PlayerActor head.",
+    "Prototype rails as low-sided curve sweeps and padding as shallow shells.",
+    "Translate approved forms into cached native Three.js BufferGeometry factories.",
+    "Merge each material group so equipment costs no per-frame geometry allocation and at most five additional draw calls for the catcher.",
+    "Preserve the source PBR extraction as evidence while shipping phone-safe cached native materials."
+  ],
+  "animationAnchors": [
+    "root attaches to the existing head Object3D and inherits head pose exactly",
+    "mask-cage, padding-assembly, and harness remain stable named groups for replay snapshots and future visibility control"
+  ],
+  "destructionAnchors": [
+    "Not breakable in gameplay; the complete mask is a single detachable presentation attachment."
+  ],
+  "risks": [
+    "Too many cage meshes could increase draw calls; production rails must be merged into one cached geometry.",
+    "The eye window must remain open at gameplay camera distance and must not obscure the ball.",
+    "Mask and helmet combinations are mutually exclusive to prevent z-fighting."
+  ],
+  "localSpecSearch": {
+    "collection": "core_3d",
+    "query": "MBD catcher mask procedural Three.js wearable equipment",
+    "result": "No domain-specific local spec matched; use the existing PlayerActor cached geometry/material conventions as runtime authority.",
+    "evidence": "docs/equipment-forge/local-spec-search.md"
+  },
+  "pbrExtractionHistory": [
+    {
+      "materialId": "base",
+      "confidence": 0.86,
+      "verdict": "pass",
+      "usable": true,
+      "maps": {
+        "albedo": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_albedo.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_albedo.png",
+          "channel": "albedo",
+          "source": "reference-pixel-extraction"
+        },
+        "roughness": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_roughness.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_roughness.png",
+          "channel": "roughness",
+          "source": "reference-pixel-extraction"
+        },
+        "height": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_height.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_height.png",
+          "channel": "height",
+          "source": "reference-pixel-extraction"
+        },
+        "normal": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_normal.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_normal.png",
+          "channel": "normal",
+          "source": "reference-pixel-extraction"
+        },
+        "ao": {
+          "path": "docs/equipment-forge/pbr/mask-reference/base_ao.png",
+          "url": "/docs/equipment-forge/pbr/mask-reference/base_ao.png",
+          "channel": "ao",
+          "source": "reference-pixel-extraction"
+        }
+      }
+    }
+  ],
+  "tier1Results": [
+    {
+      "passed": false,
+      "checks": {
+        "silhouetteIoU": 0.322,
+        "aspectRatioDelta": 0.1296,
+        "scaleDelta": 0.6925,
+        "bilateralSymmetryError": 0.1421,
+        "colorDelta": {
+          "checked": 7,
+          "maxDeltaE": 5.09,
+          "perComponent": [
+            {
+              "componentId": null,
+              "deltaE": 5.09
+            },
+            {
+              "componentId": null,
+              "deltaE": 5.09
+            },
+            {
+              "componentId": null,
+              "deltaE": 2.81
+            },
+            {
+              "componentId": null,
+              "deltaE": 5.09
+            },
+            {
+              "componentId": null,
+              "deltaE": 5.09
+            },
+            {
+              "componentId": null,
+              "deltaE": 5.09
+            },
+            {
+              "componentId": null,
+              "deltaE": 1.69
+            }
+          ],
+          "gated": false
+        }
+      },
+      "failures": [
+        "silhouette IoU 0.322 is below threshold 0.85",
+        "aspect-ratio delta 0.130 exceeds threshold 0.05",
+        "scale delta 0.693 exceeds threshold 0.08",
+        "blockout requires --map-stripped-render evidence"
+      ],
+      "maskWarnings": [
+        "render: image is not clearly isolated from background; using most pixels as material evidence"
+      ],
+      "renderHash": "306731c4df750cdf",
+      "passId": "blockout"
+    },
+    {
+      "passed": false,
+      "checks": {
+        "silhouetteIoU": 0.4051,
+        "aspectRatioDelta": 0.0302,
+        "scaleDelta": 0.217,
+        "bilateralSymmetryError": 0.0258,
+        "colorDelta": {
+          "checked": 7,
+          "maxDeltaE": 6.8,
+          "perComponent": [
+            {
+              "componentId": null,
+              "deltaE": 4.49
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.49
+            },
+            {
+              "componentId": null,
+              "deltaE": 6.8
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.49
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.49
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.49
+            },
+            {
+              "componentId": null,
+              "deltaE": 1.4
+            }
+          ],
+          "gated": false
+        }
+      },
+      "failures": [
+        "silhouette IoU 0.405 is below threshold 0.85",
+        "scale delta 0.217 exceeds threshold 0.08"
+      ],
+      "maskWarnings": [],
+      "renderHash": "228bf0c8a5625f2b",
+      "passId": "blockout",
+      "mapStrippedRender": "docs/equipment-forge/catcher-mask-mask-isolated.png"
+    },
+    {
+      "passed": false,
+      "checks": {
+        "silhouetteIoU": 0.5448,
+        "aspectRatioDelta": 0.0274,
+        "scaleDelta": 0.0156,
+        "bilateralSymmetryError": 0.2223,
+        "colorDelta": {
+          "checked": 7,
+          "maxDeltaE": 6.5,
+          "perComponent": [
+            {
+              "componentId": null,
+              "deltaE": 4.11
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.11
+            },
+            {
+              "componentId": null,
+              "deltaE": 6.5
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.11
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.11
+            },
+            {
+              "componentId": null,
+              "deltaE": 4.11
+            },
+            {
+              "componentId": null,
+              "deltaE": 1.48
+            }
+          ],
+          "gated": false
+        }
+      },
+      "failures": [
+        "silhouette IoU 0.545 is below threshold 0.85"
+      ],
+      "maskWarnings": [],
+      "renderHash": "4639c02b401b914e",
+      "passId": "blockout",
+      "mapStrippedRender": "docs/equipment-forge/catcher-mask-mask-isolated.png"
+    }
+  ]
+}

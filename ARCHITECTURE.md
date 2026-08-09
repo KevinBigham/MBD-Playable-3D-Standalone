@@ -17,7 +17,8 @@ The renderer reads `GameState` every frame and never writes to it.
 |---|---|
 | **TypeScript, strict** | `noUnusedLocals` and `noUnusedParameters` are on; the build type-checks before it bundles |
 | **Vite** | Fast dev server, one-command static production build, no config to speak of |
-| **Three.js** (only runtime dependency) | The look wanted actual low-poly 3D. Nothing else is needed, so nothing else is present |
+| **Three.js** | The live game remains direct low-poly 3D. Optional camera packages are isolated below. |
+| **camera-controls + three-mesh-bvh** | Replay-only Free Cam; lazy camera code plus a self-contained local BVH adapter, never authoritative gameplay |
 | **Vitest** | Same transform pipeline as the build; no separate test toolchain |
 | **DOM for all UI** | Crisp text at any resolution, real layout, trivially accessible. WebGL draws the field and nothing else |
 | **Web Audio, fully synthesised** | No asset pipeline, no licensing surface, and infinite variation for free |
@@ -65,7 +66,11 @@ src/
   save/         localStorage, versioned and defensive
 
   render/       Three.js. reads state, never writes it
-    palette.ts, stadium.ts, actors.ts, camera.ts, fx.ts, world.ts
+    palette.ts, stadium.ts, actors.ts, camera.ts, fx.ts, vfx.ts, post.ts, world.ts
+
+  replay/       recorded presentation replay; no simulation writes
+    contract.ts, buffer.ts, highlights.ts, runtime.ts, overlay.ts
+    free-camera.ts  lazy replay-only camera and static BVH collision
 
   audio/        Web Audio. synthesis only
     audio.ts, music.ts
@@ -79,7 +84,7 @@ src/
     zonepick.ts   screen pixels to the plate plane, for touch-to-swing
     coach.ts, haptics.ts, install.ts, lifecycle.ts
 
-  tests/        vitest — 289 tests across 24 files
+  tests/        vitest — 320 tests across 31 files
 
 scripts/        every one of them runnable, none of them needed to play
   simulate.ts       batch CPU-vs-CPU games; the balance and deadlock hunt
@@ -90,6 +95,10 @@ scripts/        every one of them runnable, none of them needed to play
   model-shot.ts     close-ups of the player models
   swing-shot.ts     a frame strip across the instant of contact
   perf.ts           frame rate, heap and GPU resource growth
+  replay-shot.ts    home-run/catch/final-out replay and skip/freeze captures
+  gfx-compare.ts    identical-frame render-profile benchmark
+  vfx-benchmark.ts production native particle pool benchmark
+  free-camera-check.ts lazy-load, BVH and cleanup receipt
   icons.ts          rasterises the app icons from the SVGs
   export-mbd-world.ts  runs MBD's own generator out of an MBD checkout
   tune-physics.ts   ball-flight calibration table
@@ -308,6 +317,71 @@ scheduled game for external play (`gap #2` in the handoff) or accept one back
 (`gap #3`), so an export button would be the appearance of a closed loop rather
 than a loop.
 
+## Recorded presentation replay
+
+Replay is a reader of **rendered presentation**, not a second run of baseball.
+`GameWorld.writePresentationFrame()` records the actual actor hierarchy, ball,
+markers, and broadcast camera after the live renderer has posed them. A bounded
+`PresentationRingBuffer` samples at 30 Hz for 12 seconds; its fixed Float32
+storage is about 3.55 MiB and never grows. UI score/inning data and semantic
+audio/VFX cues travel beside those transforms.
+
+`ReplayHighlightSelector` admits only reliable exceptional events: home runs,
+high-importance catches/big plays, and the final out. Playback begins only in a
+dead-ball, inning-break, or final phase. While it is active, `App.tick()` does
+not step `GameState`; interpolation reads the buffer and a native broadcast
+sequence moves the camera around recorded anchors. Skip/end restores the exact
+captured `CameraDirectorState`. Replayed contact/audio/VFX never call a sim or
+scoring function.
+
+The checked-in `mbd.broadcast-sequence` JSON is the only production camera
+format. `tools/broadcast-studio/` pins Theatre Core/Studio in a separate package,
+opens a deterministic scene for visual authoring, and exports/validates/promotes
+that native JSON. Neither Theatre package appears in `src/` or the production
+bundle; Studio's AGPL boundary remains development-only.
+
+## Replay Free Cam is a sealed mode
+
+The Free Cam entry point exists only while replay has already frozen the game.
+Its dynamic import loads `camera-controls`; a second local dynamic import loads
+a self-contained three-mesh-bvh adapter. Five simple static boxes represent the
+ground and park perimeter. BVHs accelerate only the camera-control raycasts—no
+ball, athlete, catch, fence, foul, or scoring path can import them.
+
+Exit disposes controls/listeners, five geometries, five bounds trees, and the
+shared material, then reapplies the current authored broadcast shot. When Free
+Cam has never opened, none of its camera/BVH assets are requested. The normal
+game's eager gzip increase for the mode is under one percent; optional assets
+load on entry.
+
+## Athlete presentation and equipment
+
+The existing `PlayerActor` hierarchy remains authoritative. A fixed Float32 pose
+buffer blends native joint transforms across idle/run/ready/throw, stance/swing,
+pitch, dive/land, and slide/recovery changes. The exact
+`SWING_CONTACT_FRAME` bypasses interpolation, so presentation smoothing cannot
+move the barrel away from the authoritative contact instant.
+
+Catcher mask/padding/harness, chest protector, shin guards, catcher/first-base/
+fielding mitt silhouettes, continuous bat and grip, and studded cleats are cached
+procedural geometries parented to the existing sockets. img2threejs and original
+generated equipment references were used only for a development prototype; the
+shipping actors contain native cached factories and no model downloads.
+
+## Render and VFX decisions
+
+`NativeRenderPipeline` is a reversible seam, but all shipping quality profiles
+use the direct antialiased renderer. A real pmndrs/postprocessing composer
+candidate lost edge antialiasing in identical screenshots and missed the median
+Balanced/High budgets, so its code and dependency were removed.
+
+`MbdVfxPresetV1` is the semantic authoring seam for dirt, turf, chalk, wall
+flecks, fireworks, and confetti. Presets compile into the existing deterministic
+420-instance `ParticleField`: one pooled mesh, one particle draw, no simulation
+RNG, and no per-effect cleanup graph. The isolated three.quarks lab proved its
+batching, but it requires Three r182, contributed a 160.35 kB gzip lab bundle,
+and did not beat the native result, so it remains development-only.
+
 ## Determinism
 
 `GameSetup.seed` seeds one `Rng`. Every stochastic decision in a game draws from
@@ -401,13 +475,36 @@ detected by probing a write, not by feature detection.
 - one draw call for the whole crowd (`InstancedMesh`), one for all particles
 - the seating bowl is generated radially from the fence shape, so seats can
   never be in fair territory whatever the park looks like
-- players are procedurally posed — no skinning, no animation clips — so pose
-  changes react instantly to simulation state
+- players are procedurally posed — no skinning or animation clips — and a
+  bounded native transition buffer smooths state changes while the contact
+  frame remains exact
 - crowd wave positions are read from an immutable seat table; deriving them from
   the live matrix makes the whole crowd drift upward a fraction every frame
   (this was a real defect, found and fixed)
 - `manualChunks` splits Three.js into its own chunk so the game code can be
   re-downloaded without it
+- replay Free Cam is a dynamic chunk; its self-contained BVH adapter is fetched
+  only on entry, so live play never builds a tree or runs a collision raycast
+
+## Ballpark asset boundary
+
+`src/assets/ballparks/catalog.json` is the promoted, versioned semantic source
+for every native park. `src/ballpark/contract.ts` validates it fail-closed and
+compiles only `asset.stadium` into the existing `Stadium` interface. Physics
+and rendering still share `fenceAt()` / `fenceOutline()` over that one native
+`Stadium.fence`; there is no visual fence copy.
+
+Optional presentation data is indexed under `src/render/` and can change only
+static stands, batter's eye, scoreboard and tower geometry. It never enters
+`GameState`, `src/sim`, modes, rules or saves. Authoring metadata is ignored by
+both adapters. Existing unknown/retired stadium IDs continue through
+`getStadium()`'s original fallback.
+
+The Pascal host under `tools/pascal-ballpark-studio/` has a separate package
+and lockfile. Its only write API targets the ignored `ballpark-staging/`
+directory. Promotion is an explicit validator-backed command and atomically
+replaces the single tracked catalog. See `BALLPARK_STUDIO.md` for the complete
+boundary and operational flow.
 
 ## Error handling
 

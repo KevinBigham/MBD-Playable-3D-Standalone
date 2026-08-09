@@ -1,0 +1,67 @@
+:root {
+  color: #e9eef5;
+  background: #0b1017;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+button, input, select, textarea { font: inherit; }
+button { border: 1px solid #354151; color: #dce5ef; background: #18212c; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+button:hover { background: #223142; border-color: #60748d; }
+button:disabled { opacity: .42; cursor: default; }
+input, select, textarea { width: 100%; border: 1px solid #344151; border-radius: 5px; color: #edf4fb; background: #0e151e; padding: 7px 8px; }
+input[type="checkbox"], input[type="color"] { width: 38px; height: 28px; padding: 2px; }
+
+.studio-shell { display: grid; grid-template-rows: 66px 1fr; height: 100%; }
+header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #26313e; padding: 8px 18px; background: #101720; }
+h1 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
+.eyebrow { display: block; color: #63cfc1; font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+.toolbar { display: flex; gap: 8px; }
+.stage-button { color: #071615; border-color: #5de0cc; background: #5bcfbd; font-weight: 800; }
+.stage-button:hover { background: #7ee8d7; }
+.studio-grid { display: grid; min-height: 0; grid-template-columns: 292px minmax(420px, 1fr) 330px; }
+.left-panel, .right-panel { overflow-y: auto; background: #111923; }
+.left-panel { border-right: 1px solid #283443; padding: 14px; }
+.right-panel { border-left: 1px solid #283443; }
+.left-panel section { padding-bottom: 15px; margin-bottom: 15px; border-bottom: 1px solid #263240; }
+h2 { margin: 0 0 9px; color: #cdd8e5; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+h3 { margin: 13px 0 7px; color: #9faec0; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+.left-panel select { margin-bottom: 7px; }
+.left-panel section > button { width: 100%; }
+.preset-list, .node-list { display: grid; gap: 5px; }
+.preset-list button, .node-list button { width: 100%; text-align: left; }
+.node-list button.selected { color: #71e1d0; border-color: #4fae9f; background: #17302f; }
+.locked-node { margin-top: 8px; padding: 8px; color: #8393a4; background: #0d141c; border-radius: 5px; font-size: 11px; }
+.receipt-card code { display: block; overflow-wrap: anywhere; color: #6fd9c9; font-size: 11px; }
+.receipt-card p { font-size: 11px; line-height: 1.4; }
+.good { color: #78d79b; }
+.bad, .error { color: #ff8c8c; }
+.warning { color: #f0c66f; }
+.stage-status { padding: 8px; color: #b6c6d8; background: #0c131b; border-radius: 5px; }
+
+.viewport { position: relative; min-width: 0; min-height: 0; background: radial-gradient(circle at 50% 38%, #23384a, #0b1118 70%); }
+.viewport > div:first-child { width: 100%; height: 100%; }
+.viewport-help { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: max-content; max-width: 88%; padding: 7px 11px; color: #ced9e6; background: rgba(7, 11, 16, .78); border: 1px solid rgba(112, 132, 153, .35); border-radius: 6px; font-size: 11px; pointer-events: none; }
+.inspector-title { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; padding: 12px 14px; color: #d9e3ee; background: #101720; border-bottom: 1px solid #283443; font-size: 12px; font-weight: 700; }
+.inspector-title small { color: #738498; font-weight: 500; }
+.custom-inspector { padding: 12px 14px 22px; }
+.inspector-row { display: grid; grid-template-columns: minmax(100px, 1fr) 130px; align-items: center; gap: 8px; margin: 7px 0; color: #aab8c8; font-size: 11px; }
+.inspector-row > span { display: flex; align-items: center; gap: 5px; }
+.gameplay-flag { color: #ffbd5b; font-size: 8px; letter-spacing: .08em; }
+.warning-box { padding: 9px; margin-bottom: 10px; color: #ecc578; background: #302814; border: 1px solid #65532d; border-radius: 5px; font-size: 10px; line-height: 1.4; }
+.fence-inspector { padding-inline: 8px; }
+.fence-inspector table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.fence-inspector th { padding: 4px; color: #8192a6; text-align: left; }
+.fence-inspector td { padding: 3px; vertical-align: top; }
+.fence-inspector input { min-width: 0; padding: 5px; }
+.fence-inspector small { display: block; margin-top: 2px; color: #738398; }
+.fence-inspector td button { padding: 4px 7px; }
+.anchor-add-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.anchor-add-row button { padding: 4px 6px; font-size: 9px; }
+
+@media (max-width: 1100px) {
+  .studio-grid { grid-template-columns: 245px minmax(360px, 1fr) 285px; }
+  .inspector-row { grid-template-columns: 1fr 110px; }
+}

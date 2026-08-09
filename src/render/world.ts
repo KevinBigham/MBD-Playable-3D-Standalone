@@ -9,18 +9,24 @@ import { runnerPos } from '../sim/runners';
 import type { GameEvent, GameState } from '../sim/state';
 import { fieldingSide, lookupPlayer } from '../sim/state';
 import {
+  BALL_REPLAY_FLOATS,
   BallActor,
   type Headgear,
+  type PlayerEquipment,
+  PLAYER_REPLAY_FLOATS,
   PlayerActor,
   type Pose,
   SWING_CONTACT_FRAME,
   actorColorsFor,
 } from './actors';
 import type { Ball } from '../sim/physics';
-import { CameraDirector, followThrough } from './camera';
+import { CameraDirector, type CameraDirectorState, followThrough } from './camera';
+import type { ReplayAnchor } from '../replay/contract';
+import type { ReplayCueKind } from '../replay/highlights';
 import { ImpactRings, ParticleField } from './fx';
 import { buildStadium, type StadiumBuild } from './stadium';
 import { flatMat, shade } from './palette';
+import { NativeRenderPipeline, type RenderProfile } from './post';
 
 /**
  * Binds simulation state to the 3D scene. The renderer owns no game logic: it
@@ -29,9 +35,69 @@ import { flatMat, shade } from './palette';
  */
 
 const PROJECT_SCRATCH = new THREE.Vector3();
+const REPLAY_OBJECT_FLOATS = 11;
+const REPLAY_ACTOR_SLOTS = 15;
+const REPLAY_MARKER_OBJECTS = 7;
+const REPLAY_CAMERA_FLOATS = REPLAY_OBJECT_FLOATS + 1;
+export const WORLD_PRESENTATION_FLOATS =
+  REPLAY_ACTOR_SLOTS * PLAYER_REPLAY_FLOATS +
+  BALL_REPLAY_FLOATS +
+  REPLAY_MARKER_OBJECTS * REPLAY_OBJECT_FLOATS +
+  REPLAY_CAMERA_FLOATS;
+
+export const WORLD_QUATERNION_OFFSETS = (() => {
+  const offsets: number[] = [];
+  const addObjects = (start: number, count: number) => {
+    for (let i = 0; i < count; i++) offsets.push(start + i * REPLAY_OBJECT_FLOATS + 3);
+  };
+  let offset = 0;
+  for (let i = 0; i < REPLAY_ACTOR_SLOTS; i++) {
+    addObjects(offset, PLAYER_REPLAY_FLOATS / REPLAY_OBJECT_FLOATS);
+    offset += PLAYER_REPLAY_FLOATS;
+  }
+  addObjects(offset, BALL_REPLAY_FLOATS / REPLAY_OBJECT_FLOATS);
+  offset += BALL_REPLAY_FLOATS;
+  addObjects(offset, REPLAY_MARKER_OBJECTS);
+  offset += REPLAY_MARKER_OBJECTS * REPLAY_OBJECT_FLOATS;
+  addObjects(offset, 1);
+  return offsets;
+})();
+
+function writeReplayObject(object: THREE.Object3D, target: Float32Array, offset: number): number {
+  target[offset++] = object.position.x;
+  target[offset++] = object.position.y;
+  target[offset++] = object.position.z;
+  target[offset++] = object.quaternion.x;
+  target[offset++] = object.quaternion.y;
+  target[offset++] = object.quaternion.z;
+  target[offset++] = object.quaternion.w;
+  target[offset++] = object.scale.x;
+  target[offset++] = object.scale.y;
+  target[offset++] = object.scale.z;
+  target[offset++] = object.visible ? 1 : 0;
+  return offset;
+}
+
+function applyReplayObject(object: THREE.Object3D, source: Float32Array, offset: number): number {
+  object.position.set(source[offset++], source[offset++], source[offset++]);
+  object.quaternion.set(source[offset++], source[offset++], source[offset++], source[offset++]).normalize();
+  object.scale.set(source[offset++], source[offset++], source[offset++]);
+  object.visible = source[offset++] >= 0.5;
+  return offset;
+}
 
 /** Index of the catcher in GameState.fielders; mirrors CATCHER_SLOT in the sim. */
 const CATCHER_SLOT_RENDER = 1;
+const FIRST_BASE_SLOT_RENDER = 2;
+
+function fielderPresentationRole(index: number): {
+  gear: Headgear;
+  equipment: PlayerEquipment;
+} {
+  if (index === CATCHER_SLOT_RENDER) return { gear: 'catcher', equipment: 'catcher' };
+  if (index === FIRST_BASE_SLOT_RENDER) return { gear: 'cap', equipment: 'firstBase' };
+  return { gear: 'cap', equipment: 'standard' };
+}
 
 /** True while the camera is the tight behind-the-plate duel shot. */
 function nearPlateShot(state: GameState): boolean {
@@ -60,6 +126,8 @@ export interface WorldQuality {
   renderScale: number;
   /** Real cast shadows for players and the ball, instead of painted blobs. */
   shadows: boolean;
+  /** Direct, restrained, or replay-capable broadcast finishing path. */
+  renderProfile: RenderProfile;
 }
 
 /** The subset of derby state the renderer needs. */
@@ -75,6 +143,7 @@ export class GameWorld {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly director: CameraDirector;
+  private readonly renderPipeline: NativeRenderPipeline;
 
   private stadiumBuild: StadiumBuild | null = null;
   private skyDome: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial> | null = null;
@@ -91,6 +160,7 @@ export class GameWorld {
   private selectRing: THREE.Mesh;
   private selectArrow!: THREE.Mesh;
   private runnerRings: THREE.Mesh[] = [];
+  private replayMarkers: THREE.Object3D[] = [];
 
   private hemi: THREE.HemisphereLight;
   private sun: THREE.DirectionalLight;
@@ -106,6 +176,7 @@ export class GameWorld {
     pixelRatioCap: 2,
     renderScale: 1,
     shadows: true,
+    renderProfile: 'performance',
   };
   private night = false;
   private teams: { away: Team; home: Team } | null = null;
@@ -123,6 +194,11 @@ export class GameWorld {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.director = new CameraDirector(canvas.clientWidth / Math.max(1, canvas.clientHeight));
+    this.renderPipeline = new NativeRenderPipeline(
+      this.renderer,
+      this.scene,
+      this.director.camera,
+    );
 
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x445544, 1.15);
     this.scene.add(this.hemi);
@@ -213,10 +289,12 @@ export class GameWorld {
       this.runnerRings.push(ring);
       this.scene.add(ring);
     }
+    this.replayMarkers.push(this.catchMarker, this.selectRing, this.selectArrow, ...this.runnerRings);
   }
 
   setQuality(q: Partial<WorldQuality>): void {
     Object.assign(this.quality, q);
+    this.renderPipeline.setProfile(this.quality.renderProfile);
     this.applyShadowQuality();
     this.resize(this.renderer.domElement.clientWidth, this.renderer.domElement.clientHeight);
   }
@@ -245,7 +323,12 @@ export class GameWorld {
     const ratio = Math.min(window.devicePixelRatio || 1, this.quality.pixelRatioCap);
     this.renderer.setPixelRatio(ratio * this.quality.renderScale);
     this.renderer.setSize(w, h, false);
+    this.renderPipeline.resize(w, h, ratio * this.quality.renderScale);
     this.director.resize(w / h);
+  }
+
+  setReplayPresentation(active: boolean): void {
+    this.renderPipeline.setReplayPresentation(active);
   }
 
   /** Builds the park and the actor pool for a specific matchup. */
@@ -349,14 +432,25 @@ export class GameWorld {
     this.batter = null;
   }
 
-  private makeActor(playerId: string, side: 'away' | 'home', gear: Headgear = 'cap'): ActorSlot {
+  private makeActor(
+    playerId: string,
+    side: 'away' | 'home',
+    gear: Headgear = 'cap',
+    equipment: PlayerEquipment = 'standard',
+  ): ActorSlot {
     const team = side === 'away' ? this.teams!.away : this.teams!.home;
     const player =
       team.players.find((p) => p.id === playerId) ??
       this.teams!.away.players.find((p) => p.id === playerId) ??
       this.teams!.home.players.find((p) => p.id === playerId) ??
       team.players[0];
-    const actor = new PlayerActor(actorColorsFor(player, team), player.body, gear, player.number);
+    const actor = new PlayerActor(
+      actorColorsFor(player, team),
+      player.body,
+      gear,
+      player.number,
+      equipment,
+    );
     actor.setShadows(this.quality.shadows);
     this.scene.add(actor.group);
     return { actor, playerId, pose: 'idle', poseT: 0, lastX: 0, lastZ: 0 };
@@ -393,8 +487,156 @@ export class GameWorld {
     this.director.update(dt, state);
   }
 
-  render(): void {
+  render(dt = 0): void {
+    this.renderPipeline.render(dt);
+  }
+
+  /** Writes the transforms currently on the rendered scene graph. This is the
+   * replay authority; no simulation state is re-run to reconstruct a play. */
+  writePresentationFrame(target: Float32Array): void {
+    if (target.length < WORLD_PRESENTATION_FLOATS) throw new Error('presentation frame is too small');
+    let offset = 0;
+    const writeActor = (actor: PlayerActor | null | undefined) => {
+      if (actor) actor.writeReplay(target, offset);
+      else target.fill(0, offset, offset + PLAYER_REPLAY_FLOATS);
+      offset += PLAYER_REPLAY_FLOATS;
+    };
+    for (let i = 0; i < 9; i++) writeActor(this.fielders[i]?.actor);
+    writeActor(this.batter?.actor);
+    for (let i = 0; i < 4; i++) writeActor(this.runners[i]?.actor);
+    writeActor(this.umpire);
+    this.ball.writeReplay(target, offset);
+    offset += BALL_REPLAY_FLOATS;
+    for (const object of this.replayMarkers) offset = writeReplayObject(object, target, offset);
+    offset = writeReplayObject(this.director.camera, target, offset);
+    target[offset] = this.director.camera.fov;
+  }
+
+  applyPresentationFrame(source: Float32Array): void {
+    if (source.length < WORLD_PRESENTATION_FLOATS) throw new Error('presentation frame is too small');
+    let offset = 0;
+    const applyActor = (actor: PlayerActor | null | undefined) => {
+      if (actor) actor.applyReplay(source, offset);
+      offset += PLAYER_REPLAY_FLOATS;
+    };
+    for (let i = 0; i < 9; i++) applyActor(this.fielders[i]?.actor);
+    applyActor(this.batter?.actor);
+    for (let i = 0; i < 4; i++) applyActor(this.runners[i]?.actor);
+    applyActor(this.umpire);
+    this.ball.applyReplay(source, offset);
+    offset += BALL_REPLAY_FLOATS;
+    for (const object of this.replayMarkers) offset = applyReplayObject(object, source, offset);
+    offset = applyReplayObject(this.director.camera, source, offset);
+    this.director.camera.fov = source[offset];
+    this.director.camera.updateProjectionMatrix();
+  }
+
+  captureDirectorState(): CameraDirectorState {
+    return this.director.captureState();
+  }
+
+  restoreDirectorState(state: CameraDirectorState): void {
+    this.director.restoreState(state);
+  }
+
+  setReplayCamera(eye: THREE.Vector3, look: THREE.Vector3, fov: number): void {
+    this.director.setReplayFrame(eye, look, fov);
+  }
+
+  /** Finds the visible athlete nearest an event location, returning the fixed
+   * replay slot used by the presentation buffer. */
+  nearestReplayActor(x: number, z: number): number {
+    let best = -1;
+    let bestDist = Infinity;
+    for (let slot = 0; slot < REPLAY_ACTOR_SLOTS; slot++) {
+      const actor = this.replayActorAt(slot);
+      if (!actor || !actor.group.visible) continue;
+      const dx = actor.group.position.x - x;
+      const dz = actor.group.position.z - z;
+      const d = dx * dx + dz * dz;
+      if (d < bestDist) {
+        bestDist = d;
+        best = slot;
+      }
+    }
+    return best;
+  }
+
+  replayAnchor(anchor: ReplayAnchor, primaryActor: number, target: THREE.Vector3): boolean {
+    if (anchor === 'home-plate') {
+      target.set(0, 0, 0);
+      return true;
+    }
+    if (anchor === 'recorded-camera') {
+      target.copy(this.director.camera.position);
+      return true;
+    }
+    if (anchor === 'ball') {
+      if (!this.ball.group.visible) return false;
+      target.copy(this.ball.group.position);
+      return true;
+    }
+    const actor = this.replayActorAt(primaryActor);
+    if (!actor || !actor.group.visible) return false;
+    target.copy(actor.group.position);
+    return true;
+  }
+
+  replayActorSlots(): number[] {
+    const slots: number[] = [];
+    for (let slot = 0; slot < REPLAY_ACTOR_SLOTS; slot++) {
+      const actor = this.replayActorAt(slot);
+      if (actor?.group.visible) slots.push(slot);
+    }
+    return slots;
+  }
+
+  replayActorAnchor(slot: number, target: THREE.Vector3): boolean {
+    const actor = this.replayActorAt(slot);
+    if (!actor || !actor.group.visible) return false;
+    target.copy(actor.group.position);
+    return true;
+  }
+
+  capturePhotoPng(): string {
+    // Render immediately before reading the canvas. This avoids enabling
+    // preserveDrawingBuffer for the live renderer and keeps normal gameplay
+    // memory/bandwidth unchanged.
     this.renderer.render(this.scene, this.director.camera);
+    return this.renderer.domElement.toDataURL('image/png');
+  }
+
+  beginReplayEffects(): void {
+    this.particles.clear();
+    this.rings.clear();
+  }
+
+  updateReplayEffects(dt: number): void {
+    if (this.quality.particles) this.particles.update(dt);
+    this.rings.update(dt);
+  }
+
+  fireReplayCue(kind: ReplayCueKind, power: number, primaryActor: number): void {
+    if (!this.quality.particles) return;
+    const point = PROJECT_SCRATCH;
+    const actorCue = kind === 'catch' || kind === 'bigplay';
+    if (!this.replayAnchor(actorCue ? 'primary-actor' : 'ball', primaryActor, point)) {
+      this.replayAnchor('home-plate', primaryActor, point);
+    }
+    if (kind === 'contact' || kind === 'catch' || kind === 'bigplay') {
+      this.rings.spawn(point.x, Math.max(0.8, point.y), point.z, kind === 'contact' ? 0xffe14d : 0x5ce1ff, 0.8 + power, 0.45);
+    } else if (kind === 'homerun' || kind === 'gameover') {
+      this.particles.fireworks(point.x, Math.max(8, point.y + 8), point.z + 8, 0xffe14d);
+    } else if (kind === 'wall') {
+      this.particles.emitPreset('wall-flecks', point.x, Math.max(1, point.y), point.z, 0.75);
+    }
+  }
+
+  private replayActorAt(slot: number): PlayerActor | null {
+    if (slot >= 0 && slot < 9) return this.fielders[slot]?.actor ?? null;
+    if (slot === 9) return this.batter?.actor ?? null;
+    if (slot >= 10 && slot < 14) return this.runners[slot - 10]?.actor ?? null;
+    return slot === 14 ? this.umpire : null;
   }
 
   // -------------------------------------------------------------------------
@@ -429,24 +671,13 @@ export class GameWorld {
       }
       case 'groundfield':
         if (this.quality.particles) {
-          this.particles.burst(ev.x ?? 0, 0.1, ev.z ?? 0, 8, {
-            color: 0xcaa06a,
-            speed: 2.6,
-            up: 0.7,
-            size: 0.08,
-            life: 0.42,
-          });
+          this.particles.emitPreset('dirt-spray', ev.x ?? 0, 0.1, ev.z ?? 0, 0.55);
         }
         break;
       case 'wall':
         this.director.addShake(0.3);
         if (this.quality.particles) {
-          this.particles.burst(ev.x ?? 0, 2.2, ev.z ?? 0, 14, {
-            color: 0xdddddd,
-            speed: 5,
-            size: 0.1,
-            life: 0.5,
-          });
+          this.particles.emitPreset('wall-flecks', ev.x ?? 0, 2.2, ev.z ?? 0);
         }
         break;
       case 'catch':
@@ -486,9 +717,10 @@ export class GameWorld {
       case 'gameover':
         this.crowdEnergy = 1;
         if (this.quality.particles) {
-          for (let i = 0; i < 5; i++) {
+          this.particles.championship(0, 18, 42);
+          for (let i = 0; i < 4; i++) {
             this.particles.fireworks(
-              (i - 2) * 22,
+              (i - 1.5) * 25,
               22 + i * 3,
               70 + i * 6,
               [0xffe14d, 0x5ce1ff, 0xff6b3d, 0x7ee081, 0xc08bff][i],
@@ -512,14 +744,17 @@ export class GameWorld {
   private syncFielders(dt: number, state: GameState): void {
     const side = fieldingSide(state);
     while (this.fielders.length < state.fielders.length) {
-      this.fielders.push(this.makeActor(state.fielders[this.fielders.length].playerId, side));
+      const index = this.fielders.length;
+      const role = fielderPresentationRole(index);
+      this.fielders.push(this.makeActor(state.fielders[index].playerId, side, role.gear, role.equipment));
     }
     for (let i = 0; i < state.fielders.length; i++) {
       const f = state.fielders[i];
       const slot = this.fielders[i];
       if (slot.playerId !== f.playerId) {
         slot.actor.dispose();
-        this.fielders[i] = this.makeActor(f.playerId, side);
+        const role = fielderPresentationRole(i);
+        this.fielders[i] = this.makeActor(f.playerId, side, role.gear, role.equipment);
       }
       const s = this.fielders[i];
       const speed = Math.hypot(f.vx, f.vz);
@@ -529,6 +764,9 @@ export class GameWorld {
       if (f.diveT > 0) {
         pose = 'dive';
         poseT = 1 - f.diveT / 0.55;
+        if (s.pose !== 'dive' && this.quality.particles) {
+          this.particles.emitPreset('grass-fragments', f.x, 0.08, f.z);
+        }
       } else if (f.jumpT > 0) {
         pose = 'jump';
         poseT = 1 - f.jumpT / 0.5;
@@ -565,6 +803,8 @@ export class GameWorld {
       s.actor.update(dt, { x: f.x, z: f.z, speed, facing, pose, poseT });
       s.lastX = f.x;
       s.lastZ = f.z;
+      s.pose = pose;
+      s.poseT = poseT;
     }
   }
 
@@ -667,6 +907,11 @@ export class GameWorld {
       const moved = Math.hypot(dx, dz) / Math.max(1e-5, dt);
       const facing = moved > 0.5 ? Math.atan2(dx, dz) : Math.atan2(-pos.x, -pos.z);
       const pose: Pose = r.slide > 0 ? 'slide' : moved > 0.6 ? 'run' : 'idle';
+      if (pose === 'slide' && s.pose !== 'slide' && this.quality.particles) {
+        this.particles.emitPreset('dirt-spray', pos.x, 0.06, pos.z);
+        const nearLine = Math.abs(Math.abs(pos.x) - Math.abs(pos.z)) < 1.2;
+        if (nearLine) this.particles.emitPreset('chalk-puff', pos.x, 0.05, pos.z, 0.65);
+      }
       s.actor.update(dt, {
         x: pos.x,
         z: pos.z,
@@ -677,6 +922,7 @@ export class GameWorld {
       });
       s.lastX = pos.x;
       s.lastZ = pos.z;
+      s.pose = pose;
     }
   }
 
@@ -924,6 +1170,7 @@ export class GameWorld {
     this.clearActors();
     this.particles.clear();
     this.rings.clear();
+    this.renderPipeline.dispose();
     this.renderer.dispose();
   }
 }

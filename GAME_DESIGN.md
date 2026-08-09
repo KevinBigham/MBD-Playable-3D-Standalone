@@ -847,6 +847,20 @@ of the time. The face is one dark band curved to the skull rather than flat
 panels laid across it, because a flat panel on a curved head has to poke through
 at its corners to be visible at its centre.
 
+The catcher is now a role rather than a cap swap. His silhouette carries a
+barred mask with padding and harness, a chest protector, paired shin guards, and
+a deeper round catcher mitt. First base gets a longer first-base mitt; every
+other fielder gets a compact webbed glove. Bats are one continuous tapered body
+with a wrapped grip, rings, knob, and a hand-aligned socket, and cleats have a
+sole plus visible studs. These are procedural, cached parts of the existing
+actor rather than downloaded models, so they survive both close replay shots
+and normal field distance without an asset-loading path.
+
+Pose changes blend for just long enough to remove the mannequin snap: idle to
+run, run to ready, ready to throw, dive to landing, slide to recovery, and the
+pitch/swing chains. The barrel still arrives on the exact simulation-defined
+contact frame. Smoothing is never allowed to make the result look mistimed.
+
 A limb went from 12 triangles to about 160 and **the draw calls did not move**,
 which is the only number a phone cares about. Eighteen players on the field is
 under 40 000 triangles.
@@ -892,6 +906,29 @@ anything deep, and inside the park looking outward for a home run. Shot changes
 are hard cuts; only the residual settle is blended. Both ball-chasing shots clamp
 their own position back inside the outfield wall, because a ball in the corner
 could otherwise put the camera in row 20 behind a screen of spectators.
+
+The biggest plays get a real replay. The game remembers what was actually drawn
+for the previous twelve seconds and cuts home runs, great catches, big plays,
+and final outs into authored broadcast packages. That distinction matters: a
+replay is evidence of the play that happened, not another roll of the play. It
+can be skipped, freezes every authoritative clock, and returns to precisely the
+live camera it borrowed.
+
+Free Cam is a toy inside that sealed replay moment: orbit, pan, zoom, focus the
+ball or athlete, or jump behind the plate, down a foul line, to the outfield, or
+overhead. It cannot be opened during batting, pitching, fielding, or baserunning.
+The field is still a baseball game before it is a photography tool.
+
+Decorative feedback is baseball-specific and small enough not to hide the ball:
+dirt fans out from a slide or hard pickup, turf blades kick up on a dive, chalk
+flecks near a line, wall fragments mark a carom, home runs get multi-colour
+firework streaks, and the final can add slow confetti. All six shapes share one
+bounded particle draw and disappear when reduced flashing/particles are off.
+
+Image finishing lost its audition. A composer version made the foul lines,
+uniform edges, and ball silhouette rougher and missed its median frame budgets,
+so the direct antialiased image remains the intended broadcast look in every
+shipping quality mode.
 
 Audio is synthesised at runtime — oscillators, generated noise buffers, filters
 and a convolution reverb built from noise. Every trigger perturbs detune, filter

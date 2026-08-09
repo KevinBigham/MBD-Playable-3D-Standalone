@@ -1,0 +1,51 @@
+{
+  "seconds": 8,
+  "rows": [
+    {
+      "profile": "performance",
+      "samples": 478,
+      "medianSubmitMs": 1.3999999910593033,
+      "p95SubmitMs": 2.4000000059604645,
+      "medianFrameMs": 16.69999998807907,
+      "p95FrameMs": 17.700000002980232,
+      "maxDrawCalls": 243,
+      "maxTriangles": 40874,
+      "geometries": 199,
+      "textures": 1,
+      "heapMB": 17.35687255859375,
+      "medianDeltaPct": 0,
+      "p95DeltaPct": 0
+    },
+    {
+      "profile": "balanced",
+      "samples": 483,
+      "medianSubmitMs": 1.5,
+      "p95SubmitMs": 2.7999999970197678,
+      "medianFrameMs": 16.69999998807907,
+      "p95FrameMs": 17.700000002980232,
+      "maxDrawCalls": 238,
+      "maxTriangles": 40814,
+      "geometries": 199,
+      "textures": 1,
+      "heapMB": 17.35687255859375,
+      "medianDeltaPct": 7.14285782709414,
+      "p95DeltaPct": 16.666666252745532
+    },
+    {
+      "profile": "high",
+      "samples": 480,
+      "medianSubmitMs": 2.5,
+      "p95SubmitMs": 4,
+      "medianFrameMs": 16.69999998807907,
+      "p95FrameMs": 17.799999997019768,
+      "maxDrawCalls": 459,
+      "maxTriangles": 72424,
+      "geometries": 224,
+      "textures": 1,
+      "heapMB": 17.35687255859375,
+      "medianDeltaPct": 78.57142971182355,
+      "p95DeltaPct": 66.66666625274553
+    }
+  ],
+  "errors": []
+}

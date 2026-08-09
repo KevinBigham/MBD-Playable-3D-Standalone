@@ -80,6 +80,10 @@ export class Hud {
     this.lineBox.style.display = v ? '' : 'none';
   }
 
+  setReplayMode(v: boolean): void {
+    this.root.classList.toggle('replay-hidden', v);
+  }
+
   /** What the zone should say to a player still learning the touch scheme. */
   setCoach(text: string | null): void {
     this.plate.setCoach(text);

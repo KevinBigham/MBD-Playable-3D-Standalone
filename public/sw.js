@@ -26,7 +26,7 @@
 // Bumped for the rename. The icons and the shell HTML changed identity rather
 // than content, and a cache generation is the only thing that evicts an
 // already-installed copy still wearing the old name and the old tile.
-const CACHE = 'mbd-v4';
+const CACHE = 'mbd-v6';
 
 /** The minimum needed to boot to a playable state with no network at all. */
 const SHELL = [
@@ -48,6 +48,7 @@ const SHELL = [
   // different one — which is exactly the kind of silent substitution the bridge
   // exists to avoid. About 78 kB over the wire.
   './mbd-world.json',
+  './offline-assets.json',
 ];
 
 self.addEventListener('install', (event) => {
@@ -56,7 +57,18 @@ self.addEventListener('install', (event) => {
       .open(CACHE)
       // Individually, so one 404 on an optional icon cannot fail the install
       // and leave the game with no offline support at all.
-      .then((cache) => Promise.allSettled(SHELL.map((url) => cache.add(url))))
+      .then(async (cache) => {
+        const shellResults = await Promise.allSettled(SHELL.map((url) => cache.add(url)));
+        const manifestResponse = await caches.match('./offline-assets.json');
+        if (!manifestResponse) return shellResults;
+        const manifest = await manifestResponse.json();
+        // Precache every hashed build asset, including the replay free-camera
+        // chunk and BVH adapter, before the first offline session. This keeps
+        // the optional feature lazy at runtime while making its first use
+        // deterministic offline after one online install.
+        await Promise.allSettled((manifest.assets ?? []).map((url) => cache.add(url)));
+        return shellResults;
+      })
       .then(() => self.skipWaiting()),
   );
 });
@@ -101,13 +113,15 @@ async function networkFirst(req) {
 }
 
 async function cacheFirst(req) {
-  const cached = await caches.match(req);
+  const cache = await caches.open(CACHE);
+  // Match both the Request and its absolute URL. Chromium/WebKit differ in
+  // how they normalise module-script requests during an offline transition.
+  const cached = (await cache.match(req)) || (await cache.match(req.url));
   if (cached) return cached;
   const res = await fetch(req);
   // Opaque and error responses are not worth keeping: a cached 404 would
   // outlive the deploy that caused it.
   if (res && res.ok && res.type === 'basic') {
-    const cache = await caches.open(CACHE);
     cache.put(req, res.clone());
   }
   return res;

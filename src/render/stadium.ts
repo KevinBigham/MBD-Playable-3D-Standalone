@@ -4,6 +4,8 @@ import { BASES, BASE_PATH, DEG, MOUND_Z } from '../core/constants';
 import { fenceAt, fenceOutline } from '../data/stadiums';
 import { Rng, hashString } from '../core/rng';
 import { flatMat, basicMat, shade } from './palette';
+import type { BallparkPresentationV1 } from '../ballpark/contract';
+import { getBallparkPresentation } from './ballpark-presentations';
 
 /**
  * Builds one ballpark as a single Object3D. Everything is chunky, flat-shaded
@@ -18,6 +20,8 @@ export interface StadiumBuild {
   /** Immutable rest positions for each crowd instance. */
   crowdBase: Float32Array;
   lights: THREE.Group;
+  /** True when the renderer applied a promoted renderer-only presentation. */
+  presentationApplied: boolean;
   wallHeightAt(angleDeg: number): number;
   setShadowReceive(on: boolean): void;
   dispose(): void;
@@ -28,6 +32,7 @@ const FOUL_EXTENT = 34; // how far foul ground runs before the stands
 export function buildStadium(stadium: Stadium, night: boolean): StadiumBuild {
   const root = new THREE.Group();
   const rng = new Rng(hashString(stadium.id));
+  const presentation = getBallparkPresentation(stadium.id);
 
   // The playing surface is the only thing that needs to receive shadows: the
   // stands, the skyline and the wall are all either behind the light or far
@@ -44,16 +49,17 @@ export function buildStadium(stadium: Stadium, night: boolean): StadiumBuild {
   const wall = buildWall(stadium);
   root.add(wall);
 
-  const stands = buildStands(stadium, rng);
+  const stands = buildStands(stadium, rng, presentation?.stands);
   root.add(stands.group);
   root.add(buildBackstop(stadium));
 
-  root.add(buildScoreboard(stadium, night));
+  if (presentation?.batterEye) root.add(buildBatterEye(stadium, presentation.batterEye));
+  root.add(buildScoreboard(stadium, night, presentation?.scoreboard));
 
   const skyline = buildSkyline(stadium, rng);
   root.add(skyline);
 
-  const lights = buildLightTowers(stadium, night);
+  const lights = buildLightTowers(stadium, night, presentation?.lightTowers);
   root.add(lights);
 
   if (stadium.domed) root.add(buildRoof(stadium));
@@ -64,6 +70,7 @@ export function buildStadium(stadium: Stadium, night: boolean): StadiumBuild {
     crowdCount: stands.count,
     crowdBase: stands.base,
     lights,
+    presentationApplied: presentation !== undefined,
     wallHeightAt: (a: number) => fenceAt(stadium, a).height,
     setShadowReceive(on: boolean) {
       surface.traverse((o) => {
@@ -299,7 +306,7 @@ function buildMound(stadium: Stadium): THREE.Group {
 function buildWall(stadium: Stadium): THREE.Group {
   const g = new THREE.Group();
   const pal = stadium.palette;
-  const outline = fenceOutline(stadium, 60);
+  const outline = stadiumWallProfile(stadium, 60);
 
   const positions: number[] = [];
   const indices: number[] = [];
@@ -359,6 +366,14 @@ function buildWall(stadium: Stadium): THREE.Group {
   return g;
 }
 
+/**
+ * Semantic source used to build the visible wall. Exported for the regression
+ * test that proves it samples the same fenceAt() seam used by physics.
+ */
+export function stadiumWallProfile(stadium: Stadium, samples = 60): ReturnType<typeof fenceOutline> {
+  return fenceOutline(stadium, samples);
+}
+
 interface StandsBuild {
   group: THREE.Group;
   crowd: THREE.InstancedMesh;
@@ -374,13 +389,20 @@ interface StandsBuild {
  * (rather than as separate straight runs) is what keeps seats out of fair
  * territory whatever shape the fence happens to be.
  */
-function buildStands(stadium: Stadium, rng: Rng): StandsBuild {
+function buildStands(
+  stadium: Stadium,
+  rng: Rng,
+  profile?: BallparkPresentationV1['stands'],
+): StandsBuild {
   const g = new THREE.Group();
+  g.name = 'mbd-stands';
   const pal = stadium.palette;
 
-  const TIERS = 6;
-  const TIER_DEPTH = 3.1;
-  const TIER_RISE = 1.9;
+  // Legacy parks keep the exact original six-step bowl. Authored 1..3 tiers
+  // map to two low-poly seating steps apiece, retaining the existing language.
+  const TIERS = profile ? profile.tiers * 2 : 6;
+  const TIER_DEPTH = 3.1 * (profile?.depthScale ?? 1);
+  const TIER_RISE = 1.9 * (profile?.heightScale ?? 1);
   const crowdGeo = new THREE.BoxGeometry(0.66, 0.86, 0.55);
   const crowdMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const seats: { x: number; y: number; z: number; color: THREE.Color }[] = [];
@@ -555,26 +577,36 @@ function buildStands(stadium: Stadium, rng: Rng): StandsBuild {
  * but as a silhouette it is the single strongest "this is a ballpark" cue
  * available, and every park gets one sized and coloured to its own palette.
  */
-function buildScoreboard(stadium: Stadium, night: boolean): THREE.Group {
+function buildScoreboard(
+  stadium: Stadium,
+  night: boolean,
+  profile?: BallparkPresentationV1['scoreboard'],
+): THREE.Group {
   const g = new THREE.Group();
+  g.name = 'mbd-scoreboard';
   const pal = stadium.palette;
-  const dist = fenceAt(stadium, 0).dist + 9;
-  const W = 26;
-  const H = 12;
-  const baseY = fenceAt(stadium, 0).height + 5;
+  const angle = profile?.angleDeg ?? 0;
+  const angleRad = angle * DEG;
+  const fence = fenceAt(stadium, angle);
+  const dist = fence.dist + (profile?.distanceBeyondFenceM ?? 9);
+  const W = profile?.widthM ?? 26;
+  const H = profile?.heightM ?? 12;
+  const baseY = profile?.elevationM ?? fence.height + 5;
+  g.position.set(Math.sin(angleRad) * dist, 0, Math.cos(angleRad) * dist);
+  g.rotation.y = angleRad;
 
   const frame = new THREE.Mesh(
     new THREE.BoxGeometry(W, H, 1.2),
     flatMat(shade(pal.wall, -0.25)),
   );
-  frame.position.set(0, baseY + H / 2, dist);
+  frame.position.set(0, baseY + H / 2, 0);
   g.add(frame);
 
   const face = new THREE.Mesh(
     new THREE.BoxGeometry(W - 2.4, H - 2.4, 0.4),
     flatMat(0x11151f, { flat: false }),
   );
-  face.position.set(0, baseY + H / 2, dist - 0.6);
+  face.position.set(0, baseY + H / 2, -0.6);
   g.add(face);
 
   // A block of "pixels" so the face is not a dead rectangle. Deterministic:
@@ -588,17 +620,52 @@ function buildScoreboard(stadium: Stadium, night: boolean): THREE.Group {
     for (let col = 0; col < 9; col++) {
       if ((row * 7 + col * 3) % 4 === 0) continue;
       const cell = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 0.2), lit);
-      cell.position.set(-9 + col * 2.3, baseY + 3 + row * 3, dist - 0.85);
+      const usableW = Math.max(4, W - 6);
+      const usableH = Math.max(3, H - 3);
+      cell.scale.set(Math.min(1, usableW / 20.7), Math.min(1, usableH / 8), 1);
+      cell.position.set(
+        -usableW / 2 + (usableW * col) / 8,
+        baseY + 1.5 + (usableH * row) / 2.5,
+        -0.85,
+      );
       g.add(cell);
     }
   }
 
   for (const sign of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.BoxGeometry(1.1, baseY, 1.1), flatMat(shade(pal.wall, -0.4)));
-    post.position.set(sign * (W / 2 - 2), baseY / 2, dist);
+    post.position.set(sign * (W / 2 - 2), baseY / 2, 0);
     g.add(post);
   }
   return g;
+}
+
+function buildBatterEye(stadium: Stadium, profile: NonNullable<BallparkPresentationV1['batterEye']>): THREE.Group {
+  const group = new THREE.Group();
+  group.name = 'mbd-batter-eye';
+  const material = flatMat(shade(stadium.palette.wall, -0.55));
+  const segments = Math.max(3, Math.ceil((profile.endAngleDeg - profile.startAngleDeg) / 3));
+  for (let index = 0; index < segments; index++) {
+    const start = profile.startAngleDeg + ((profile.endAngleDeg - profile.startAngleDeg) * index) / segments;
+    const end = profile.startAngleDeg + ((profile.endAngleDeg - profile.startAngleDeg) * (index + 1)) / segments;
+    const middle = (start + end) / 2;
+    const middleRad = middle * DEG;
+    const fence = fenceAt(stadium, middle);
+    const radius = fence.dist + 1 + profile.depthM / 2;
+    const arcWidth = Math.max(1, radius * Math.abs((end - start) * DEG) + 0.25);
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(arcWidth, profile.heightM, profile.depthM),
+      material,
+    );
+    panel.position.set(
+      Math.sin(middleRad) * radius,
+      profile.heightM / 2,
+      Math.cos(middleRad) * radius,
+    );
+    panel.rotation.y = middleRad;
+    group.add(panel);
+  }
+  return group;
 }
 
 function buildBackstop(stadium: Stadium): THREE.Group {
@@ -637,19 +704,30 @@ function buildRoof(stadium: Stadium): THREE.Mesh {
   return roof;
 }
 
-function buildLightTowers(stadium: Stadium, night: boolean): THREE.Group {
+function buildLightTowers(
+  stadium: Stadium,
+  night: boolean,
+  authored?: BallparkPresentationV1['lightTowers'],
+): THREE.Group {
   const g = new THREE.Group();
+  g.name = 'mbd-light-towers';
   // Steel, not the park's structure colour: at a park whose structure colour is
   // green the poles vanish into the trees and the lamp banks appear to float.
   const poleMat = flatMat(night ? 0x59606b : 0x767d88);
   const lampMat = new THREE.MeshBasicMaterial({ color: night ? 0xfff6d0 : 0xbfc6cc });
-  for (const angle of [-44, -20, 20, 44]) {
+  const towers = authored ?? [-44, -20, 20, 44].map((angle) => ({
+    angleDeg: angle,
+    distanceBeyondFenceM: 26,
+    heightM: 34,
+  }));
+  for (const tower of towers) {
+    const angle = tower.angleDeg;
     const f = fenceAt(stadium, angle);
     const a = angle * DEG;
-    const d = f.dist + 26;
+    const d = f.dist + tower.distanceBeyondFenceM;
     const x = Math.sin(a) * d;
     const z = Math.cos(a) * d;
-    const h = 34;
+    const h = tower.heightM;
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.9, h, 5), poleMat);
     pole.position.set(x, h / 2, z);
     g.add(pole);

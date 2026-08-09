@@ -1,0 +1,16 @@
+{
+  "model": "mbd-catcher-mask-native-prototype",
+  "parts": [
+    { "name": "mask-cage", "kind": "part", "module": "merged-cage-geometry", "triangles": 2316 },
+    { "name": "padding-assembly", "kind": "part", "module": "merged-padding-geometry", "triangles": 576 },
+    { "name": "eye-rails", "kind": "semantic-pivot", "module": "merged-cage-geometry", "triangles": 0 },
+    { "name": "crown-rails", "kind": "semantic-pivot", "module": "merged-cage-geometry", "triangles": 0 },
+    { "name": "chin-loops", "kind": "semantic-pivot", "module": "merged-cage-geometry", "triangles": 0 },
+    { "name": "harness", "kind": "part", "module": "merged-harness-geometry", "triangles": 264 }
+  ],
+  "unnamedMeshes": 0,
+  "integralMeshes": 4,
+  "drawCalls": 4,
+  "totalTriangles": 3156,
+  "notes": "Semantic pivots remain named/selectable while phone-facing visual rails are merged into four cached material groups."
+}
