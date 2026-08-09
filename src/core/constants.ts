@@ -3,7 +3,8 @@
  *
  * COORDINATE SYSTEM (right-handed, metres):
  *   origin = the back tip of home plate
- *   +X     = toward first base / right field
+ *   -X     = toward first base / right field
+ *   +X     = toward third base / left field
  *   +Z     = toward centre field
  *   +Y     = up
  *
@@ -17,9 +18,11 @@ export const HALF_DIAG = BASE_DIAG / 2;
 
 export const BASES = {
   HOME: { x: 0, z: 0 },
-  FIRST: { x: HALF_DIAG, z: HALF_DIAG },
+  // A camera behind home looks toward +Z, which puts -X on the viewer's right.
+  // First base belongs on that side of the rendered diamond.
+  FIRST: { x: -HALF_DIAG, z: HALF_DIAG },
   SECOND: { x: 0, z: BASE_DIAG },
-  THIRD: { x: -HALF_DIAG, z: HALF_DIAG },
+  THIRD: { x: HALF_DIAG, z: HALF_DIAG },
 } as const;
 
 /** Index 0 = home, 1 = first, 2 = second, 3 = third. Index 4 wraps to home. */
@@ -61,6 +64,9 @@ export const RELEASE_Y = 1.85;
 
 /** The plane the batter actually makes contact on, just in front of the plate. */
 export const CONTACT_Z = 0.62;
+
+/** Visible time after contact for the wrists, bat and body to finish the swing. */
+export const SWING_FOLLOW_THROUGH = 0.42;
 
 /** Strike zone, in metres, centred on x = 0. Scaled per-batter at runtime. */
 export const ZONE_HALF_WIDTH = 0.2159; // 17 in plate / 2

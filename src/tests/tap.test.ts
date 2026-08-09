@@ -168,6 +168,37 @@ describe('touching the zone', () => {
     expect(state.batter.cx).toBeGreaterThan(0.05);
   });
 
+  it('keeps the presentation swing running after a miss ends the pitch', () => {
+    const state = situation(4242);
+    expect(toLivePitch(state)).toBe(true);
+    const info = state.currentPitch!;
+    const inputs = emptyInputPair();
+
+    for (let i = 0; i < 120 * 3 && !state.lastSwing; i++) {
+      clearEdges(inputs.p1);
+      if (state.phase === 'pitch' && state.batter.swingT < 0 && state.ball.t >= info.T - 0.16) {
+        inputs.p1.aimAbsolute = true;
+        inputs.p1.aimX = info.plateX;
+        inputs.p1.aimY = info.plateY > 0.87 ? 0.28 : 1.46;
+        inputs.p1.swing = true;
+      }
+      stepGame(state, inputs);
+    }
+
+    expect(state.lastSwing?.grade).toBe('miss');
+    expect(state.batter.swingT).toBe(-1);
+    expect(state.batter.swingKind).toBe('contact');
+    const ruledAt = state.batter.animT;
+    expect(ruledAt).toBeGreaterThanOrEqual(0);
+
+    for (let i = 0; i < 24; i++) {
+      clearEdges(inputs.p1);
+      stepGame(state, inputs);
+    }
+    expect(state.batter.animT).toBeGreaterThan(ruledAt + 0.15);
+    expect(state.batter.swingKind).toBe('contact');
+  });
+
   it('turns a touch on the crossing point into hard contact, and rewards precision', () => {
     // The promise, measured, and written as the whole curve rather than a
     // threshold — because "does touching the right spot work" and "does missing

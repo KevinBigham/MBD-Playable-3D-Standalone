@@ -139,7 +139,7 @@ export interface BatterState {
   swingResolved: boolean;
   /** Set when the batter is squared to bunt. */
   bunting: boolean;
-  /** Visual follow-through timer. */
+  /** Elapsed presentation time for the current swing; < 0 means inactive. */
   animT: number;
   /** Set for the check-swing ruling. */
   checked: boolean;
@@ -580,7 +580,7 @@ export function createGameState(setup: GameSetup, away: Team, home: Team): GameS
       swingKind: 'none',
       swingResolved: false,
       bunting: false,
-      animT: 0,
+      animT: -1,
       checked: false,
     },
     pitcher: {

@@ -135,6 +135,9 @@ export function stepGame(state: GameState, inputs: InputPair): void {
   if (state.lastSwing && state.lastSwing.t > 0) {
     state.lastSwing.t = Math.max(0, state.lastSwing.t - dt);
   }
+  // Pitch resolution and presentation are separate clocks. A miss or foul can
+  // end the pitch immediately without making the athlete stop mid-swing.
+  if (state.batter.animT >= 0) state.batter.animT += dt;
 
   switch (state.phase) {
     case 'lineup':
@@ -281,7 +284,7 @@ export function startAtBat(state: GameState): void {
     swingKind: 'none',
     swingResolved: false,
     bunting: false,
-    animT: 0,
+    animT: -1,
     checked: false,
   };
 
@@ -546,7 +549,7 @@ function idleFielders(state: GameState, dt: number): void {
     if (f.slot === PITCHER_SLOT) {
       moveFielder(f, dt, 0, MOUND_Z);
     } else if (f.slot === CATCHER_SLOT) {
-      moveFielder(f, dt, 0.42, -2.45);
+      moveFielder(f, dt, -0.42, -2.45);
     } else {
       moveFielder(f, dt, f.homeX, f.homeZ);
     }
@@ -1244,7 +1247,8 @@ function endPitch(state: GameState, _playEnded: boolean): void {
   state.currentPitch = null;
   state.batter.swingT = -1;
   state.batter.swingResolved = false;
-  state.batter.swingKind = 'none';
+  // Keep swingKind and animT until the next windup so the renderer can finish
+  // a miss or foul after the pitch has already been ruled.
   state.batter.checked = false;
   state.cpuRead = null;
   state.cpuSwingAt = null;

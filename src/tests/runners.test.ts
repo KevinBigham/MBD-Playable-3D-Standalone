@@ -309,9 +309,17 @@ describe('runner position helpers', () => {
     expect(second.x).toBeCloseTo(0, 6);
     expect(second.z).toBeCloseTo(BASE_PATH * Math.SQRT2, 6);
     const first = runnerPos(runnerAt(1));
-    expect(first.x).toBeGreaterThan(0);
+    expect(first.x).toBeLessThan(0);
     const third = runnerPos(runnerAt(3));
-    expect(third.x).toBeLessThan(0);
+    expect(third.x).toBeGreaterThan(0);
     expect(first.z).toBeCloseTo(third.z, 6);
+  });
+
+  it('sends a batter-runner from home toward visible first base, not third', () => {
+    const halfway = runnerPos(runnerAt(0.5, { isBatter: true }));
+    // The behind-home game camera maps -X to the right side of the diamond,
+    // where first base appears to the player.
+    expect(halfway.x).toBeLessThan(0);
+    expect(halfway.z).toBeGreaterThan(0);
   });
 });

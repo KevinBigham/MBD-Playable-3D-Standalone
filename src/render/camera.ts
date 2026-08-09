@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MOUND_Z, clamp, clamp01, lerp } from '../core/constants';
+import { MOUND_Z, SWING_FOLLOW_THROUGH, clamp, clamp01, lerp } from '../core/constants';
 import { fenceAt } from '../data/stadiums';
 import type { GameState } from '../sim/state';
 import { horizontalDist } from '../sim/physics';
@@ -77,7 +77,7 @@ function keepInsideYard(eye: THREE.Vector3, state: GameState): void {
  * follow-through. It lives here rather than in world.ts because both the camera
  * and the actors need it, and world.ts already imports this module.
  */
-export const FOLLOW_THROUGH = 0.26;
+export const FOLLOW_THROUGH = SWING_FOLLOW_THROUGH;
 
 export function followThrough(state: GameState): number {
   if (state.phase !== 'inplay' && state.phase !== 'deadball') return -1;

@@ -19,19 +19,19 @@ import { DRAG_K } from '../core/constants';
 /** Standing defensive alignment, in world metres. */
 export const ALIGNMENT: ReadonlyArray<{ x: number; z: number }> = [
   { x: 0, z: MOUND_Z },      // P
-  { x: 0.42, z: -2.45 },     // C
-  { x: 17.4, z: 24.6 },      // 1B
-  { x: 9.6, z: 34.0 },       // 2B
-  { x: -17.0, z: 24.2 },     // 3B
-  { x: -9.9, z: 34.2 },      // SS
+  { x: -0.42, z: -2.45 },    // C
+  { x: -17.4, z: 24.6 },     // 1B
+  { x: -9.6, z: 34.0 },      // 2B
+  { x: 17.0, z: 24.2 },      // 3B
+  { x: 9.9, z: 34.2 },       // SS
   // Outfield depth stays where it is. Doubles ran a third below the real rate
   // and moving the outfielders back to a realistic 295 ft did produce them —
   // along with an extra hit a game of bloops falling in front, which pushed
   // BABIP to .393. The shortfall was never depth: it was that the hitter did
   // not turn first hard enough. See advanceMargin in runners.ts.
-  { x: -38.0, z: 74.0 },     // LF
+  { x: 38.0, z: 74.0 },      // LF
   { x: 0, z: 88.0 },         // CF
-  { x: 38.0, z: 74.0 },      // RF
+  { x: -38.0, z: 74.0 },     // RF
 ];
 
 /**
@@ -51,14 +51,14 @@ const ALIGN_DELTA: Record<DefensiveAlignment, ReadonlyArray<readonly [number, nu
   //        P        C        1B            2B            3B            SS            LF           CF          RF
   normal: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
   // Middle infielders cheat two steps toward the bag and one step in.
-  dp: [[0, 0], [0, 0], [-0.6, -0.8], [-2.4, -1.7], [0.6, -0.8], [2.5, -1.7], [0, 0], [0, 0], [0, 0]],
+  dp: [[0, 0], [0, 0], [0.6, -0.8], [2.4, -1.7], [-0.6, -0.8], [-2.5, -1.7], [0, 0], [0, 0], [0, 0]],
   // All four infielders on the grass; the outfield comes in to back up a play
   // at the plate, which is what makes a sacrifice fly a real gamble.
-  in: [[0, 0], [0, 0], [-1.2, -5.6], [-0.8, -7.5], [1.2, -5.6], [0.8, -7.5], [0, -5], [0, -5], [0, -5]],
+  in: [[0, 0], [0, 0], [1.2, -5.6], [0.8, -7.5], [-1.2, -5.6], [-0.8, -7.5], [0, -5], [0, -5], [0, -5]],
   // Corners on the lines, outfield deep and wide.
-  nodoubles: [[0, 0], [0, 0], [3.2, 0.4], [0, 1.2], [-3.2, 0.4], [0, 1.2], [-3.4, 7], [0, 6], [3.4, 7]],
+  nodoubles: [[0, 0], [0, 0], [-3.2, 0.4], [0, 1.2], [3.2, 0.4], [0, 1.2], [3.4, 7], [0, 6], [-3.4, 7]],
   // First and third crash for the bunt; the middle slides over to cover.
-  corners: [[0, 0], [0, 0], [-2.4, -9.1], [3.4, -1.4], [2.2, -9.0], [3.9, -1.4], [0, 0], [0, 0], [0, 0]],
+  corners: [[0, 0], [0, 0], [2.4, -9.1], [-3.4, -1.4], [-2.2, -9.0], [-3.9, -1.4], [0, 0], [0, 0], [0, 0]],
 };
 
 /** Home position for a slot under a given alignment, before any pull shift. */
@@ -481,4 +481,3 @@ export function throwError(
   const sigma = (0.13 + distance * 0.0125) * (1.45 - skill) * (rush ? 1.5 : 1);
   return { x: (rand() * 2 - 1) * sigma, z: (rand() * 2 - 1) * sigma };
 }
-

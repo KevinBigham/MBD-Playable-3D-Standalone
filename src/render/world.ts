@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Stadium, Team } from '../core/types';
-import { CONTACT_Z, MOUND_Z, PITCH_TELL_REVEAL, clamp01 } from '../core/constants';
+import { CONTACT_Z, MOUND_Z, PITCH_TELL_REVEAL, SWING_FOLLOW_THROUGH, clamp01 } from '../core/constants';
 import { PITCHES } from '../data/pitches';
 import { batterBoxX, swingProfile } from '../sim/contact';
 import { humanIsBatting, humanIsPitching } from '../sim/game';
@@ -107,6 +107,26 @@ function nearPlateShot(state: GameState): boolean {
     state.phase === 'pitch' ||
     followThrough(state) >= 0
   );
+}
+
+/** Presentation-authoritative swing state. Unlike swingT, this survives the
+ * pitch ruling long enough for misses and fouls to finish on screen. */
+function swingPresentation(state: GameState): { active: boolean; poseT: number } {
+  const elapsed = state.batter.animT;
+  const kind = state.batter.swingKind;
+  if (elapsed < 0 || kind === 'none' || !state.batter.playerId) return { active: false, poseT: 0 };
+
+  const batter = lookupPlayer(state, state.batter.playerId);
+  const profile = swingProfile(batter, kind, state.difficulty, humanIsBatting(state));
+  const duration = profile.latency + SWING_FOLLOW_THROUGH;
+  if (elapsed >= duration) return { active: false, poseT: 1 };
+
+  const poseT =
+    elapsed <= profile.latency
+      ? (elapsed / Math.max(0.001, profile.latency)) * SWING_CONTACT_FRAME
+      : SWING_CONTACT_FRAME +
+        ((elapsed - profile.latency) / SWING_FOLLOW_THROUGH) * (1 - SWING_CONTACT_FRAME);
+  return { active: true, poseT: clamp01(poseT) };
 }
 
 interface ActorSlot {
@@ -831,25 +851,19 @@ export class GameWorld {
     // and the player never saw a swing finish. For one beat after contact the
     // batter stays and the runner is held back; they occupy the same spot at
     // home anyway, so nothing else moves.
+    const swing = swingPresentation(state);
     const isRunning = state.runners.some((r) => r.isBatter && !r.out && !r.scored);
-    this.batter.actor.setVisible(!isRunning || followThrough(state) >= 0);
+    this.batter.actor.setVisible(!isRunning || swing.active);
 
     let pose: Pose = 'batStance';
     let poseT = 0;
-    if (state.batter.swingKind === 'bunt' && state.batter.swingT >= 0) {
+    if (state.batter.swingKind === 'bunt' && swing.active) {
       pose = 'bunt';
-    } else if (state.batter.bunting && state.batter.swingT < 0) {
+    } else if (state.batter.bunting && !swing.active) {
       pose = 'bunt';
-    } else if (state.batter.swingT >= 0) {
+    } else if (swing.active) {
       pose = 'batSwing';
-      // The pose clock is scaled so the barrel reaches the plate exactly when
-      // the engine says the ball was struck. `swingT` freezes at contact, since
-      // the pitch stops being stepped, so the follow-through is driven by the
-      // play clock instead — the two are consecutive halves of one swing.
-      const kind = state.batter.swingKind === 'none' ? 'contact' : state.batter.swingKind;
-      const prof = swingProfile(batter, kind, state.difficulty, humanIsBatting(state));
-      const duration = Math.max(0.05, prof.latency / SWING_CONTACT_FRAME);
-      poseT = clamp01((state.batter.swingT + Math.max(0, followThrough(state))) / duration);
+      poseT = swing.poseT;
     }
 
     this.batter.actor.update(dt, {
@@ -881,6 +895,7 @@ export class GameWorld {
     const battingIsAway = state.half === 'top';
     const side = battingIsAway ? 'away' : 'home';
     const live = state.runners.filter((r) => !r.out && !r.scored);
+    const swingActive = swingPresentation(state).active;
 
     while (this.runners.length < live.length) {
       this.runners.push(this.makeActor(live[this.runners.length].playerId, side, 'helmet'));
@@ -900,7 +915,7 @@ export class GameWorld {
       // The batter-runner exists from the instant of contact, but for one beat
       // the batter actor is still finishing his swing in the same spot. Drawing
       // both puts two men at home plate inside each other.
-      s.actor.setVisible(!(r.isBatter && followThrough(state) >= 0));
+      s.actor.setVisible(!(r.isBatter && swingActive));
       const pos = runnerPos(r);
       const dx = pos.x - s.lastX;
       const dz = pos.z - s.lastZ;

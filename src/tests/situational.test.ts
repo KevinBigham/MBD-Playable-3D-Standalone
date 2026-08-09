@@ -73,8 +73,8 @@ describe('defensive alignments move real people', () => {
       expect(alignedHome(slot, 'nodoubles').z).toBeGreaterThan(alignedHome(slot, 'normal').z + 4);
     }
     // First and third widen toward their foul lines.
-    expect(alignedHome(SLOT.B1, 'nodoubles').x).toBeGreaterThan(alignedHome(SLOT.B1, 'normal').x);
-    expect(alignedHome(SLOT.B3, 'nodoubles').x).toBeLessThan(alignedHome(SLOT.B3, 'normal').x);
+    expect(alignedHome(SLOT.B1, 'nodoubles').x).toBeLessThan(alignedHome(SLOT.B1, 'normal').x);
+    expect(alignedHome(SLOT.B3, 'nodoubles').x).toBeGreaterThan(alignedHome(SLOT.B3, 'normal').x);
   });
 
   it('corners in charges first and third for the bunt', () => {
