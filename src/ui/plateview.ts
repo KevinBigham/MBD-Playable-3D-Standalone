@@ -66,6 +66,18 @@ interface Pt {
 /** How many tracker dots are drawn before the oldest start being dropped. */
 const MAX_DOTS = 14;
 
+/**
+ * Radius of the live crossing target, in screen pixels.
+ * It starts nearly half a strike-zone tall and closes continuously to the
+ * baseball-sized target at the exact moment the pitch reaches the plate.
+ */
+export function pitchTargetRadius(zoneH: number, progress: number): number {
+  const u = Math.max(0, Math.min(1, progress));
+  const finalRadius = Math.max(7, zoneH * 0.075);
+  const initialRadius = Math.max(finalRadius * 5, zoneH * 0.48);
+  return finalRadius + (initialRadius - finalRadius) * Math.pow(1 - u, 1.08);
+}
+
 export class PlateView {
   readonly root: HTMLDivElement;
   private svg: SVGSVGElement;
@@ -380,23 +392,25 @@ export class PlateView {
 
     if (inFlight && info) {
       const u = Math.min(1, state.ball.t / Math.max(0.001, info.T));
-      // The pitcher always sees where their own pitch is going — they threw it.
-      // The hitter's marker is the difficulty-gated assist.
-      const reveal = pitching && !batting ? 0.0 : PITCH_TELL_REVEAL[state.difficulty];
-      const fade = (u - reveal) / 0.18;
-      if (fade > 0) {
+      // A human batter sees the crossing target from release. Pitch identity
+      // and break colour remain difficulty-gated above; this neutral gold ring
+      // is a timing instrument, not advance knowledge of the pitch type.
+      const reveal = batting ? 0 : pitching ? 0 : PITCH_TELL_REVEAL[state.difficulty];
+      if (u >= reveal && reveal < 1) {
         visible = true;
+        const progress = (u - reveal) / Math.max(0.001, 1 - reveal);
         const pt = p(info.plateX, info.plateY);
-        const alpha = Math.min(1, fade);
+        const alpha = 0.52 + progress * 0.48;
         this.tracker.setAttribute('opacity', alpha.toFixed(2));
-        const r = Math.max(5, zoneH * 0.075);
+        const r = pitchTargetRadius(zoneH, progress);
+        const finalR = pitchTargetRadius(zoneH, 1);
         this.trackerRing.setAttribute('cx', pt.x.toFixed(1));
         this.trackerRing.setAttribute('cy', pt.y.toFixed(1));
-        this.trackerRing.setAttribute('r', (r + (1 - alpha) * r * 3).toFixed(1));
+        this.trackerRing.setAttribute('r', r.toFixed(1));
         this.trackerDot.setAttribute('cx', pt.x.toFixed(1));
         this.trackerDot.setAttribute('cy', pt.y.toFixed(1));
-        this.trackerDot.setAttribute('r', (r * 0.55).toFixed(1));
-        const c = cssColor(PITCHES[info.type].color);
+        this.trackerDot.setAttribute('r', (finalR * (0.2 + progress * 0.35)).toFixed(1));
+        const c = batting ? '#ffd15c' : cssColor(PITCHES[info.type].color);
         this.trackerRing.setAttribute('stroke', c);
         this.trackerDot.setAttribute('fill', c);
       }

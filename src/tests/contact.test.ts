@@ -4,6 +4,7 @@ import { Rng } from '../core/rng';
 import type { BatterAttributes, BodyType, Handedness, Player } from '../core/types';
 import {
   type ContactResult,
+  HUMAN_TIMING_WINDOW_MULTIPLIER,
   inStrikeZone,
   pullDirection,
   resolveSwing,
@@ -269,8 +270,23 @@ describe('contact rating', () => {
     const allstar = swingProfile(SLUGGER, 'contact', 'allstar', true).window;
     expect(rookie).toBeGreaterThan(pro);
     expect(pro).toBeGreaterThan(allstar);
+    const cpuWindow = swingProfile(SLUGGER, 'contact', 'allstar', false).window;
     for (const d of ['rookie', 'pro', 'allstar'] as const) {
-      expect(swingProfile(SLUGGER, 'contact', d, false).window).toBe(allstar);
+      expect(swingProfile(SLUGGER, 'contact', d, false).window).toBe(cpuWindow);
+    }
+  });
+
+  it('triples the human timing window on every difficulty and swing kind', () => {
+    const assist = { rookie: 2.5, pro: 2.1, allstar: 1 } as const;
+    for (const kind of ['contact', 'power', 'bunt'] as const) {
+      const cpu = swingProfile(SLUGGER, kind, 'allstar', false);
+      for (const difficulty of ['rookie', 'pro', 'allstar'] as const) {
+        const human = swingProfile(SLUGGER, kind, difficulty, true);
+        expect(human.window / cpu.window).toBeCloseTo(
+          assist[difficulty] * HUMAN_TIMING_WINDOW_MULTIPLIER,
+          9,
+        );
+      }
     }
   });
 
@@ -290,12 +306,12 @@ describe('contact rating', () => {
       // Both axes scale together, so which pitches are hard to reach never
       // changes with the setting — only how wrong you are allowed to be.
       expect(rookie.rx / ace.rx).toBeCloseTo(rookie.ry / ace.ry, 9);
-      // Ace promises no assist, and that has to stay literally true: a human on
-      // Ace gets exactly the profile the CPU gets.
+      // Ace keeps no *reach* assist, while the requested timing multiplier is
+      // universal for a human hitter.
       const cpu = swingProfile(SLUGGER, kind, 'allstar', false);
       expect(ace.rx).toBe(cpu.rx);
       expect(ace.ry).toBe(cpu.ry);
-      expect(ace.window).toBe(cpu.window);
+      expect(ace.window).toBeCloseTo(cpu.window * HUMAN_TIMING_WINDOW_MULTIPLIER, 9);
       // And the assist never touches how hard the ball comes off the bat.
       expect(rookie.evMult).toBe(cpu.evMult);
       expect(rookie.latency).toBe(cpu.latency);

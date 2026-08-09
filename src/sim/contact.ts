@@ -53,9 +53,7 @@ export interface SwingProfile {
  * fair-ball band and the barrel with them, in proportion, for free.
  *
  * Neither is ever given to the CPU, and neither touches the ball's flight: the
- * pitch arrives at the same place at the same time whoever is hitting. Ace is
- * deliberately 1.0 on both — it is the setting that promises no assist, and it
- * has to keep meaning that.
+ * pitch arrives at the same place at the same time whoever is hitting.
  */
 const ASSIST: Record<Difficulty, { window: number; reach: number }> = {
   rookie: { window: 2.5, reach: 2.4 },
@@ -64,6 +62,9 @@ const ASSIST: Record<Difficulty, { window: number; reach: number }> = {
 };
 
 const NO_ASSIST = { window: 1, reach: 1 };
+
+/** Explicit player-facing tuning: human hitters get three times as long. */
+export const HUMAN_TIMING_WINDOW_MULTIPLIER = 3;
 
 export function swingProfile(
   batter: Player,
@@ -74,13 +75,14 @@ export function swingProfile(
   const c = attr01(batter.bat.contact);
   const p = attr01(batter.bat.power);
   const a = human ? ASSIST[difficulty] : NO_ASSIST;
+  const timingWindow = a.window * (human ? HUMAN_TIMING_WINDOW_MULTIPLIER : 1);
 
   if (kind === 'bunt') {
     return {
       latency: 0.055,
       rx: (0.17 + c * 0.09) * a.reach,
       ry: (0.2 + c * 0.1) * a.reach,
-      window: (0.085 + c * 0.04) * a.window,
+      window: (0.085 + c * 0.04) * timingWindow,
       evMult: 0.24,
       loft: -4,
     };
@@ -91,7 +93,7 @@ export function swingProfile(
       latency: 0.165,
       rx: (0.108 + c * 0.075) * 0.85 * a.reach,
       ry: (0.132 + c * 0.098) * 0.85 * a.reach,
-      window: (0.056 + c * 0.044) * 0.86 * a.window,
+      window: (0.056 + c * 0.044) * 0.86 * timingWindow,
       evMult: 1.085 + p * 0.05,
       loft: 9,
     };
@@ -101,7 +103,7 @@ export function swingProfile(
     latency: 0.125,
     rx: (0.108 + c * 0.075) * a.reach,
     ry: (0.132 + c * 0.098) * a.reach,
-    window: (0.056 + c * 0.044) * a.window,
+    window: (0.056 + c * 0.044) * timingWindow,
     evMult: 0.945,
     loft: 0,
   };

@@ -108,10 +108,9 @@ export const OUTFIELD_GRASS_RADIUS = 140;
  * ball renderer so the two never disagree.
  *
  * The value is the fraction of the pitch's flight that must elapse before the
- * hitter is shown what the pitch is and where it is going to cross. Rookie shows
- * it early enough to move to; Pro shows it in time to act on but late enough
- * that a guess was already worth making; on Ace it is never shown at all, which
- * is what "no assist" means.
+ * hitter is shown the pitch's identity and break shape. The shrinking crossing
+ * target is now a universal human-batting timing aid and appears at release;
+ * this gate still controls when the coloured path reveals what the pitch is.
  *
  * Pro used to be 0.62 and it was the single meanest number in the game. On a
  * phone, seeing the crossing point is not the end of the job — it is the *start*

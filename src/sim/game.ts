@@ -120,6 +120,30 @@ const PLAY_TIME_LIMIT = 26;
  */
 const MAX_PRESS_AGE = 1 / 15;
 
+/** The normal post-plate hold, retained for CPU hitters and unassisted play. */
+const BASE_LATE_SWING_GRACE = 0.16;
+
+/**
+ * Latest useful human button press after plate arrival.
+ *
+ * A three-times-wider timing profile is not real if the taken-pitch rule ends
+ * the pitch at the old 160 ms boundary. Keep the pitch live until even the
+ * slowest available swing would fall beyond the contact model's outer edge.
+ */
+function lateSwingGrace(
+  batter: Player,
+  difficulty: GameState['difficulty'],
+  human: boolean,
+): number {
+  if (!human) return BASE_LATE_SWING_GRACE;
+  let latest = BASE_LATE_SWING_GRACE;
+  for (const kind of ['contact', 'power', 'bunt'] as const) {
+    const profile = swingProfile(batter, kind, difficulty, true);
+    latest = Math.max(latest, profile.window * 1.27 - profile.latency + TICK_DT);
+  }
+  return latest;
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -810,7 +834,7 @@ function updatePitchFlight(state: GameState, dt: number, inputs: InputPair): voi
     }
   }
 
-  if (done && ball.t >= pitchInfo.T + 0.16) {
+  if (done && ball.t >= pitchInfo.T + lateSwingGrace(batter, state.difficulty, batInput !== null)) {
     if (bs.swingT >= 0 && !bs.swingResolved) {
       const profile = swingProfile(batter, bs.swingKind === 'none' ? 'contact' : bs.swingKind, state.difficulty, batInput !== null);
       const pressT = ball.t - bs.swingT;

@@ -29,7 +29,7 @@ export interface DifficultyParams {
 export const DIFFICULTY: Record<Difficulty, DifficultyParams> = {
   rookie: {
     label: 'ROOKIE',
-    blurb: 'Big sweet spot, wide timing, and you see the pitch almost as it leaves the hand. CPU misses spots and lets balls drop.',
+    blurb: 'Big sweet spot, widest timing, and the pitch reveals its shape almost out of the hand. CPU misses spots and lets balls drop.',
     perception: 0.42,
     timingSense: 0.4,
     command: 0.45,
@@ -41,7 +41,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyParams> = {
   },
   pro: {
     label: 'PRO',
-    blurb: 'The honest setting. You still get a real sweet spot and see where the pitch is going in time to move. CPU works the count and hits its spots often.',
+    blurb: 'The honest setting. The landing target is immediate and the pitch reveals its shape in time to react. CPU works the count and hits its spots often.',
     perception: 0.66,
     timingSense: 0.66,
     command: 0.7,
@@ -53,7 +53,7 @@ export const DIFFICULTY: Record<Difficulty, DifficultyParams> = {
   },
   allstar: {
     label: 'ACE',
-    blurb: 'No assist at all: no widened sweet spot, no widened timing, and the pitch is never shown to you. CPU sequences, chases nothing and throws to the right base.',
+    blurb: 'The landing target and wider human timing remain, but there is no reach assist and the pitch never reveals its type. CPU sequences, chases nothing and throws to the right base.',
     perception: 0.86,
     timingSense: 0.85,
     command: 0.9,

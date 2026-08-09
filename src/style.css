@@ -1068,8 +1068,13 @@ html.rotated #touch {
 }
 
 .pv-tracker-ring {
-  fill: none;
-  stroke-width: 3;
+  fill: rgba(255, 209, 92, 0.055);
+  stroke-width: 4.5;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
+}
+
+.pv-tracker-dot {
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.9));
 }
 
 /* The live pitch path: a bright line inside a dark casing so it survives grass,

@@ -199,6 +199,33 @@ describe('touching the zone', () => {
     expect(state.batter.swingKind).toBe('contact');
   });
 
+  it('keeps a crossed pitch live for the tripled late timing window', () => {
+    const state = situation(4242);
+    expect(toLivePitch(state)).toBe(true);
+    const info = state.currentPitch!;
+    const profile = swingProfile(currentBatter(state), 'contact', state.difficulty, true);
+    const inputs = emptyInputPair();
+    const targetTimingNorm = 0.6;
+    const pressAt = info.T + profile.window * targetTimingNorm - profile.latency;
+
+    // This is well past the old hard 160 ms taken-pitch boundary.
+    expect(pressAt - info.T).toBeGreaterThan(0.16);
+    for (let i = 0; i < 120 * 3 && !state.lastSwing; i++) {
+      clearEdges(inputs.p1);
+      if (state.phase === 'pitch' && state.batter.swingT < 0 && state.ball.t >= pressAt) {
+        inputs.p1.aimAbsolute = true;
+        inputs.p1.aimX = info.plateX;
+        inputs.p1.aimY = info.plateY;
+        inputs.p1.swing = true;
+      }
+      stepGame(state, inputs);
+    }
+
+    expect(state.lastSwing).not.toBeNull();
+    expect(state.lastSwing!.grade).not.toBe('miss');
+    expect(state.lastSwing!.timingNorm).toBeCloseTo(targetTimingNorm, 1);
+  });
+
   it('turns a touch on the crossing point into hard contact, and rewards precision', () => {
     // The promise, measured, and written as the whole curve rather than a
     // threshold — because "does touching the right spot work" and "does missing
