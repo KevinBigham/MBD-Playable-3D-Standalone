@@ -16,6 +16,7 @@ import { PITCHES, pitchBreak } from '../data/pitches';
 import { playerById } from '../data/teams';
 import {
   BALL_RADIUS,
+  canBeFlyOut,
   horizontalDist,
   isFair,
   launchFree,
@@ -1401,7 +1402,7 @@ function updateInPlay(state: GameState, dt: number, inputs: InputPair): void {
 function updateFlyBallOutlook(state: GameState): void {
   const ball = state.ball;
   const play = state.play;
-  if (ball.mode !== 'batted' || ball.rolling || ball.y < 1.2) {
+  if (!canBeFlyOut(ball) || ball.y < 1.2) {
     play.likelyCatch = false;
     return;
   }
@@ -1713,7 +1714,6 @@ function tryCatches(state: GameState, dt: number): void {
   void dt;
   const ball = state.ball;
   if (ball.mode !== 'batted' && ball.mode !== 'thrown') return;
-  const play = state.play;
 
   for (const f of state.fielders) {
     if (f.hasBall) continue;
@@ -1743,14 +1743,11 @@ function tryCatches(state: GameState, dt: number): void {
     const success = fieldingSuccess(f, speed, movingFast, airborne, diving);
     const routine = success > 0.93 && !diving;
     if (state.rng.chance(success)) {
-      if (airborne && ball.bounces === 0 && play.fair !== false) {
-        catchFlyBall(state, f);
-      } else if (airborne && ball.bounces === 0 && play.fair === false) {
-        // Foul fly caught: still an out.
-        catchFlyBall(state, f);
-      } else {
-        acquireBall(state, f, true);
-      }
+      // Fair and foul flies are both outs only before anything else touches
+      // the ball. In particular, catching a rebound directly off the wall is
+      // the same as fielding it after a bounce: possession, but no batter out.
+      if (airborne && canBeFlyOut(ball)) catchFlyBall(state, f);
+      else acquireBall(state, f, true);
     } else {
       deflect(state, f, routine ? 'error' : 'muff');
     }

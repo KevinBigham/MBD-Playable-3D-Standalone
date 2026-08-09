@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import type { BodyType } from '../core/types';
 import {
   PLAYER_REPLAY_FLOATS,
@@ -38,6 +39,13 @@ function replayQuaternion(frame: Float32Array, object: number): [number, number,
 function quaternionAngle(a: [number, number, number, number], b: [number, number, number, number]): number {
   const dot = Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]));
   return 2 * Math.acos(dot);
+}
+
+function barrelTip(actor: PlayerActor): THREE.Vector3 {
+  actor.group.updateMatrixWorld(true);
+  const bat = actor.group.getObjectByName('baseball-bat');
+  if (!bat) throw new Error('player actor has no baseball bat');
+  return bat.localToWorld(new THREE.Vector3(0, 0.855, 0));
 }
 
 describe('procedural athlete equipment', () => {
@@ -155,5 +163,29 @@ describe('native pose transitions', () => {
     // and spent the rest of the swing changing only root height.
     expect(quaternionAngle(replayQuaternion(frame(atExtension), 12), replayQuaternion(frame(finished), 12)))
       .toBeGreaterThan(0.7);
+  });
+
+  it('sweeps the barrel through a full-radius arc instead of cutting through the torso', () => {
+    const actor = new PlayerActor(COLORS, 'average', 'helmet');
+    const opts = { x: 0, z: 0, speed: 0, facing: 0, pose: 'batSwing' as const, handed: -1 };
+    const samples: THREE.Vector3[] = [];
+    for (let i = 0; i <= 48; i++) {
+      actor.update(0, { ...opts, poseT: 0.25 + (i / 48) * 0.75 });
+      samples.push(barrelTip(actor));
+    }
+
+    const contact = new PlayerActor(COLORS, 'average', 'helmet');
+    contact.update(0, { ...opts, poseT: SWING_CONTACT_FRAME });
+    const contactTip = barrelTip(contact);
+    const arcLength = samples.slice(1).reduce(
+      (sum, point, i) => sum + point.distanceTo(samples[i]),
+      0,
+    );
+
+    // The old backwards wrist turn collapsed to a 0.16 m radius mid-swing and
+    // traced only 3.18 m in total. Contact should now happen at full extension,
+    // followed by a visibly broad wrap around the body.
+    expect(Math.hypot(contactTip.x, contactTip.z)).toBeGreaterThan(1.15);
+    expect(arcLength).toBeGreaterThan(7);
   });
 });

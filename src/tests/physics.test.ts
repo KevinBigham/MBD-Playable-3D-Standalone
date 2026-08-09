@@ -4,6 +4,7 @@ import type { Stadium } from '../core/types';
 import { getStadium } from '../data/stadiums';
 import {
   horizontalDist,
+  canBeFlyOut,
   isFair,
   launchFree,
   makeBall,
@@ -179,6 +180,24 @@ describe('ground balls', () => {
       expect(t).toBeLessThan(20);
       expect(ball.vy).toBe(0);
     }
+  });
+});
+
+describe('wall rebounds', () => {
+  it('become live balls that cannot be caught for a fly out', () => {
+    const stadium = getStadium('comet-dome');
+    const fence = stadium.fence.find((point) => point.angle === 0) ?? stadium.fence[0];
+    const ball = makeBall();
+    launchFree(ball, 0, Math.min(2, fence.height - 0.5), fence.dist - 0.2, 0, 0, 36, 'batted', 0, 0);
+
+    expect(canBeFlyOut(ball)).toBe(true);
+    const result = stepFree(ball, TICK_DT, stadium, stadium.carry);
+
+    expect(result.hitWall).toBe(true);
+    expect(ball.touched).toBe(true);
+    expect(ball.bounces).toBe(0);
+    expect(ball.rolling).toBe(false);
+    expect(canBeFlyOut(ball)).toBe(false);
   });
 });
 

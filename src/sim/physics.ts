@@ -272,6 +272,17 @@ export function horizontalDist(x: number, z: number): number {
 }
 
 /**
+ * True only while a batted ball can still be retired as a caught fly.
+ *
+ * `touched` deliberately includes the outfield wall as well as the ground and
+ * a fielder. A rebound off the fence remains airborne in the physics engine,
+ * but by rule it is now a live ball rather than a fly-out opportunity.
+ */
+export function canBeFlyOut(ball: Ball): boolean {
+  return ball.mode === 'batted' && !ball.rolling && ball.bounces === 0 && !ball.touched;
+}
+
+/**
  * Fixed-step projectile integration with quadratic drag, backspin lift,
  * sidespin curve, wall collisions and ground bounce/roll.
  */

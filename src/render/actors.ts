@@ -1616,15 +1616,15 @@ export class PlayerActor {
     this.armL.rotation.x = -1.95 - load * 0.12 + ease * 1.3 - follow * 1.15;
     this.armL.rotation.z = handed * (-0.25 + ease * 0.8 + follow * 0.55);
     this.foreL.rotation.x = -0.35 + ease * 0.35 - follow * 1.35;
-    // Contact is the point of maximum extension. After it, the wrists fold and
-    // the barrel rises over the lead shoulder while the hips, chest and arms
-    // keep carrying the swing around the body. Previously none of these bat or
-    // arm transforms changed after k=0.6, so the final 40% was a frozen bat
-    // with only a tiny vertical body shift.
+    // Contact is the point of maximum extension. The old wrist turn stopped
+    // short and then reversed during follow-through, making the barrel cut
+    // through the hitter's torso and shrinking its radius to 16 cm. This turn
+    // keeps travelling through a complete circle: out over the plate at
+    // contact, around the body, then up over the lead shoulder.
     this.bat.rotation.set(
-      0.5 - ease * 1.0 + follow * 0.65,
+      0.5 - ease * 1.0 + follow * 1.7,
       0,
-      handed * (0.4 - ease * 2.4 + follow * 0.8),
+      handed * (0.4 - ease * 5.6 - follow * 2.0),
     );
 
     // Back foot pivots up on the toe, front leg braces straight.
