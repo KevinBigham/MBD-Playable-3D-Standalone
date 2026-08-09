@@ -120,6 +120,12 @@ import {
   saveCustomPlayers,
 } from '../modes/creator';
 import { escapeHtml } from './hud';
+import { ReplayRuntime } from '../replay/runtime';
+import { ReplayOverlay } from '../replay/overlay';
+import type { ReplaySemanticCue } from '../replay/highlights';
+import type { ReplayFreeCameraAction } from '../replay/overlay';
+import type { ReplayFreeCamera, ReplayCameraPreset } from '../replay/free-camera';
+import * as THREE from 'three';
 
 type Mode = 'menu' | 'game' | 'derby';
 
@@ -214,6 +220,12 @@ export class App implements AppApi {
   private toastT = 0;
   private frameTimes: number[] = [];
   private resultShown = false;
+  private replay: ReplayRuntime;
+  private replayOverlay: ReplayOverlay;
+  private replayFreeCamera: ReplayFreeCamera | null = null;
+  private replayFreeCameraLoading = false;
+  private readonly replayFocus = new THREE.Vector3();
+  private replayAthleteIndex = 0;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -232,12 +244,36 @@ export class App implements AppApi {
     this.settings = { ...DEFAULT_SETTINGS, ...this.deviceDefaults(), ...(saved ?? {}) };
     this.world = new GameWorld(canvas);
     this.hud = new Hud(this.input);
+    this.replayOverlay = new ReplayOverlay(
+      () => this.replay.skip(),
+      () => void this.toggleReplayFreeCamera(),
+      (action) => this.handleReplayFreeCameraAction(action),
+    );
+    this.replay = new ReplayRuntime(this.world, {
+      onStart: (info) => {
+        this.world.setReplayPresentation(true);
+        this.replayOverlay.show(info);
+        this.hud.setReplayMode(true);
+        this.touch.setTapMode('off');
+        this.touch.setVisible(false);
+      },
+      onFrame: (info) => this.replayOverlay.update(info),
+      onEnd: () => {
+        this.exitReplayFreeCamera(false);
+        this.world.setReplayPresentation(false);
+        this.replayOverlay.hide();
+        this.hud.setReplayMode(false);
+      },
+      onCue: (cue) => this.playReplayCue(cue),
+    });
     this.touch = new TouchControls(() => this.requestPause());
     this.touch.setZoneMapper(this.zoneAt);
     // Three touches and the game stops explaining itself. See Coach.
     this.touch.onZoneTap = (kind) => this.coach.note(kind);
     this.input.attachTouch(this.touch);
     this.uiRoot.appendChild(this.touch.root);
+    this.uiRoot.appendChild(this.replayOverlay.root);
+    this.canvas.addEventListener('webglcontextlost', () => this.replay.reset());
     this.applySettings();
 
     window.addEventListener('resize', this.onResize);
@@ -253,6 +289,7 @@ export class App implements AppApi {
         // live pitch with a count you did not choose is the game punishing
         // someone for their phone ringing, so it pauses instead. Pause first:
         // it wants to make a sound, and the line below takes sound away.
+        if (this.replay.active) this.replay.skip();
         if (this.mode !== 'menu' && !this.paused) this.openPause();
         this.audio.suspend();
         this.haptics.silence();
@@ -420,6 +457,12 @@ export class App implements AppApi {
         // Cast shadows are the single most expensive thing on the field — an
         // extra depth pass over every player — so Performance drops them.
         shadows: this.settings.quality !== 'performance',
+        renderProfile:
+          this.settings.quality === 'high'
+            ? 'high'
+            : this.settings.quality === 'balanced'
+              ? 'balanced'
+              : 'performance',
       });
     }
     this.hud.setLineScoreVisible(this.settings.showLineScore);
@@ -446,6 +489,9 @@ export class App implements AppApi {
       pixelRatioCap: step.pixelRatioCap,
       renderScale: step.renderScale,
       shadows: step.shadows,
+      // Auto is the phone-safe servo: it never silently adds full-resolution
+      // composer buffers while the device is heating up.
+      renderProfile: 'performance',
     });
   }
 
@@ -611,6 +657,7 @@ export class App implements AppApi {
   }
 
   private recoverFromError(): void {
+    this.replay.reset();
     if (this.mode !== 'menu') {
       this.mode = 'menu';
       this.game = null;
@@ -623,6 +670,15 @@ export class App implements AppApi {
 
   private dispatchInput(): void {
     const actions = this.input.takeMenuActions();
+
+    if (this.replay.active) {
+      if (this.replay.freeCameraActive) {
+        if (actions.some((action) => action === 'back' || action === 'pause')) this.exitReplayFreeCamera();
+      } else if (actions.some((action) => action === 'confirm' || action === 'back' || action === 'pause')) {
+        this.replay.skip();
+      }
+      return;
+    }
 
     if (this.mode !== 'menu' && !this.paused) {
       if (actions.includes('pause') || actions.includes('back')) {
@@ -646,6 +702,11 @@ export class App implements AppApi {
   }
 
   private tick(dt: number): void {
+    if (this.replay.active) {
+      this.replay.update(dt);
+      this.input.consumeEdges();
+      return;
+    }
     const top = this.paused ? this.pauseScreen : this.stack[this.stack.length - 1];
     top?.update(dt);
 
@@ -695,14 +756,35 @@ export class App implements AppApi {
   }
 
   private draw(dt: number): void {
+    if (this.replay.active) {
+      this.replayFreeCamera?.update(dt);
+      this.world.render(dt);
+      this.touch.setTapMode('off');
+      this.touch.setVisible(false);
+      this.audio.setCrowd(0.55, 0.65);
+      return;
+    }
     const state = this.mode === 'game' && this.game ? this.game : this.attract;
     if (this.mode === 'derby' && this.derby) {
       this.drawDerby(dt);
     } else if (state) {
-      this.world.update(dt, state, (ev) => this.onGameEvent(ev.kind, ev.power ?? 0.5, ev.text));
+      this.world.update(dt, state, (ev) => {
+        if (this.mode === 'game' && this.game) this.replay.observe(ev, this.game);
+        this.onGameEvent(ev.kind, ev.power ?? 0.5, ev.text);
+      });
       this.audio.setCrowd(0.2 + this.world.crowdLevel() * 0.8, this.world.crowdLevel());
+      if (this.mode === 'game' && this.game) {
+        this.replay.capture(dt, this.game, this.settings.automaticReplays);
+        this.replay.maybeStart(this.game.phase);
+      }
     }
-    this.world.render();
+    if (this.replay.active) {
+      this.world.render(dt);
+      this.touch.setTapMode('off');
+      this.touch.setVisible(false);
+      return;
+    }
+    this.world.render(dt);
 
     if (this.mode === 'game' && this.game) {
       const tapMode = this.tapModeFor(this.game);
@@ -848,6 +930,125 @@ export class App implements AppApi {
 
     const sfx = map[kind];
     if (sfx) this.audio.playSfx(sfx, { power });
+  }
+
+  private playReplayCue(cue: ReplaySemanticCue): void {
+    const map: Partial<Record<ReplaySemanticCue['kind'], SfxName>> = {
+      catch: 'glove',
+      wall: 'wallHit',
+      homerun: 'homerun',
+      bigplay: 'bigPlay',
+      gameover: 'gameOver',
+    };
+    if (cue.kind === 'contact') {
+      this.audio.playSfx(cue.power > 0.72 ? 'contactBarrel' : cue.power > 0.42 ? 'contactSolid' : 'contactWeak', { power: cue.power * 0.82 });
+      return;
+    }
+    const sound = map[cue.kind];
+    if (sound) this.audio.playSfx(sound, { power: cue.power * 0.82 });
+  }
+
+  replayDiagnostics(): ReturnType<ReplayRuntime['diagnostics']> & { active: boolean } {
+    return { ...this.replay.diagnostics(), active: this.replay.active };
+  }
+
+  previewReplay(kind: 'home-run' | 'great-catch' | 'final-out'): boolean {
+    return this.mode === 'game' && this.replay.preview(kind);
+  }
+
+  /** Fixture seam for proving the normal event-consumption path in CI. */
+  replayFixtureEvent(kind: 'homerun' | 'bigplay' | 'gameover'): boolean {
+    if (this.mode !== 'game' || !this.game) return false;
+    this.replay.observe({ kind, power: 1, x: this.game.ball.x, z: this.game.ball.z }, this.game);
+    // The normal draw loop supplies post-roll frames and calls maybeStart at
+    // the real safe phase; this seam only injects an event-shaped fixture.
+    return true;
+  }
+
+  replayFixtureStartAtSafePhase(): boolean {
+    return this.mode === 'game' && this.replay.maybeStart('deadball');
+  }
+
+  private async toggleReplayFreeCamera(): Promise<void> {
+    if (this.replay.freeCameraActive) {
+      this.exitReplayFreeCamera();
+      return;
+    }
+    if (this.replayFreeCameraLoading || !this.replay.pauseForFreeCamera()) return;
+    this.replayFreeCameraLoading = true;
+    try {
+      const { ReplayFreeCamera } = await import('../replay/free-camera');
+      if (!this.replay.active || !this.replay.freeCameraActive) return;
+      if (!this.replay.primaryAnchor('athlete', this.replayFocus)) {
+        this.replay.primaryAnchor('plate', this.replayFocus);
+      }
+      this.replayFreeCamera = new ReplayFreeCamera(this.world.director.camera, this.canvas);
+      await this.replayFreeCamera.enter(this.replayFocus);
+      this.replayOverlay.setFreeCamera(true);
+    } catch (error) {
+      console.warn('Replay free camera unavailable; returning to broadcast replay.', error);
+      this.replay.resumeFromFreeCamera();
+    } finally {
+      this.replayFreeCameraLoading = false;
+    }
+  }
+
+  private exitReplayFreeCamera(resume = true): void {
+    this.replayFreeCamera?.dispose();
+    this.replayFreeCamera = null;
+    this.replayOverlay.setFreeCamera(false);
+    if (resume) this.replay.resumeFromFreeCamera();
+  }
+
+  private handleReplayFreeCameraAction(action: ReplayFreeCameraAction): void {
+    const camera = this.replayFreeCamera;
+    if (!camera?.active) return;
+    if (action === 'exit') {
+      this.exitReplayFreeCamera();
+      return;
+    }
+    if (action === 'toggle-hud') {
+      this.replayOverlay.togglePhotoHud();
+      return;
+    }
+    if (action === 'capture-photo') {
+      const data = this.captureReplayPhoto();
+      if (!data) return;
+      const link = document.createElement('a');
+      link.href = data;
+      link.download = `mbd-replay-photo-${Date.now()}.png`;
+      link.click();
+      return;
+    }
+    if (action === 'reset') {
+      camera.reset();
+      return;
+    }
+    if (action === 'next-athlete') {
+      const slots = this.replay.selectableActors();
+      if (slots.length) {
+        this.replayAthleteIndex = (this.replayAthleteIndex + 1) % slots.length;
+        if (this.replay.actorAnchor(slots[this.replayAthleteIndex], this.replayFocus)) camera.focus(this.replayFocus);
+      }
+      return;
+    }
+    if (action === 'focus-ball' || action === 'focus-athlete') {
+      const anchor = action === 'focus-ball' ? 'ball' : 'athlete';
+      if (this.replay.primaryAnchor(anchor, this.replayFocus)) camera.focus(this.replayFocus);
+      return;
+    }
+    if (!this.replay.primaryAnchor('plate', this.replayFocus)) this.replayFocus.set(0, 0, 0);
+    camera.preset(action as ReplayCameraPreset, this.replayFocus);
+  }
+
+  replayFreeCameraDiagnostics(): { loaded: boolean; active: boolean; colliders: number; bvhTrees: number } {
+    return this.replayFreeCamera
+      ? { loaded: true, ...this.replayFreeCamera.diagnostics() }
+      : { loaded: false, active: false, colliders: 0, bvhTrees: 0 };
+  }
+
+  captureReplayPhoto(): string | null {
+    return this.replay.freeCameraActive ? this.world.capturePhotoPng() : null;
   }
 
   // ----------------------------------------------------------- screen stack
@@ -1007,6 +1208,7 @@ export class App implements AppApi {
   }
 
   gotoMainMenu(): void {
+    this.replay.reset();
     this.clearStack();
     this.mode = 'menu';
     this.updateRotateGate();
@@ -2274,6 +2476,7 @@ export class App implements AppApi {
    * creating one, so a restored game takes exactly the same path in.
    */
   private enterGame(state: GameState, away: Team, home: Team): void {
+    this.replay.reset();
     this.game = state;
     this.world.loadMatch(getStadium(state.setup.stadiumId), state.setup.night, away, home);
     this.clearStack();
@@ -2358,6 +2561,7 @@ export class App implements AppApi {
   }
 
   private showPostgame(): void {
+    this.replay.reset();
     const g = this.game!;
     const result = g.result!;
     this.hud.root.remove();

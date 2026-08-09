@@ -663,6 +663,8 @@ html.rotated #touch {
   font-variant-numeric: tabular-nums;
 }
 
+#hud.replay-hidden { display: none; }
+
 .hud-score {
   position: absolute;
   top: 14px;
@@ -2563,4 +2565,91 @@ body.touch-mode .title-press {
 
 body.touch-mode .title-press .only-touch {
   font-size: clamp(15px, 4.6vw, 22px);
+}
+
+/* Native replay presentation. The wide translucent ribbon preserves sight of
+   the ball while still making it impossible to mistake replay for live play. */
+.replay-overlay {
+  position: absolute;
+  z-index: 34;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  top: max(12px, env(safe-area-inset-top));
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px 13px;
+  border: 2px solid rgba(255, 209, 92, 0.9);
+  background: linear-gradient(90deg, rgba(11, 16, 32, 0.94), rgba(19, 26, 48, 0.8));
+  box-shadow: var(--shadow);
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+
+.replay-overlay.hidden { display: none; }
+.replay-flag {
+  padding: 8px 10px;
+  background: var(--gold);
+  color: #10131f;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+.replay-copy { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.replay-score { color: var(--ink-dim); font: 700 12px var(--mono); white-space: nowrap; }
+.replay-skip,
+.replay-free {
+  pointer-events: auto;
+  border: 1px solid rgba(244, 239, 227, 0.55);
+  background: rgba(11, 16, 32, 0.8);
+  color: var(--ink);
+  padding: 7px 9px;
+  font: 800 11px var(--font);
+  letter-spacing: 0.12em;
+}
+.replay-free { border-color: rgba(92, 225, 255, 0.75); color: #9deeff; }
+.replay-camera-tools {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+.replay-overlay.free-camera .replay-camera-tools { display: flex; }
+.replay-camera-tools button {
+  border: 1px solid rgba(92, 225, 255, 0.55);
+  background: rgba(7, 16, 29, 0.9);
+  color: #dcefff;
+  padding: 7px 9px;
+  font: 800 10px var(--font);
+  letter-spacing: .1em;
+}
+.replay-camera-tools span {
+  color: rgba(220, 239, 255, 0.78);
+  font: 700 9px var(--mono);
+  letter-spacing: .08em;
+}
+.replay-overlay.photo-hud-hidden > :not(.replay-camera-tools) { opacity: 0; pointer-events: none; }
+.replay-overlay.photo-hud-hidden .replay-camera-tools button[data-action="toggle-hud"] { color: var(--gold); }
+.replay-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
+.replay-track i { display: block; width: 100%; height: 100%; transform: scaleX(0); transform-origin: left; background: var(--gold); }
+
+@media (max-width: 640px) {
+  .replay-overlay { grid-template-columns: auto 1fr auto auto; gap: 8px; padding: 7px 8px 11px; }
+  .replay-score { display: none; }
+  .replay-flag { font-size: 10px; padding: 7px 8px; }
+  .replay-copy { font-size: 11px; }
+  .replay-skip { padding: 8px; }
+  .replay-skip kbd { display: none; }
+  .replay-free, .replay-skip { padding: 8px 6px; font-size: 9px; }
+  .replay-camera-tools { gap: 4px; }
+  .replay-camera-tools button { padding: 7px 6px; font-size: 8px; }
+  .replay-camera-tools span { display: none; }
 }

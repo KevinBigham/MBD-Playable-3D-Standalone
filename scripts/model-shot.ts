@@ -29,7 +29,7 @@ const W = 1000;
 const H = 1000;
 
 type Vec = [number, number, number];
-type Shot = { name: string; eye: Vec; look: Vec; fov: number };
+type Shot = { name: string; eye: Vec; look: Vec; fov: number; forceEquipment?: string };
 type Spot = { slot: number; x: number; z: number };
 
 /**
@@ -46,6 +46,8 @@ type Spot = { slot: number; x: number; z: number };
 function shotsFor(spots: Spot[], hand: number): Shot[] {
   const at = (slot: number): Spot => spots.find((s) => s.slot === slot) ?? { slot, x: 0, z: 18 };
   const p = at(0);
+  const catcher = at(1);
+  const firstBase = at(2);
   const ss = at(5);
   const out: Shot[] = [];
 
@@ -63,6 +65,32 @@ function shotsFor(spots: Spot[], hand: number): Shot[] {
 
   const head = toward(p, 1.5, 0.35);
   out.push({ name: 'pitcher-head', eye: [head[0], 1.98, head[2]], look: [p.x, 1.86, p.z], fov: 24 });
+
+  const catcherFront = toward(catcher, 1.75, 0.28);
+  out.push({
+    name: 'catcher-equipment',
+    eye: [catcherFront[0], 1.45, catcherFront[2]],
+    look: [catcher.x, 1.05, catcher.z],
+    fov: 27,
+    forceEquipment: 'catcher',
+  });
+  const catcherFull = toward(catcher, 3.15, 0.45);
+  out.push({
+    name: 'catcher-full-kit',
+    eye: [catcherFull[0], 1.72, catcherFull[2]],
+    look: [catcher.x, .78, catcher.z],
+    fov: 31,
+    forceEquipment: 'catcher',
+  });
+
+  const firstBaseFront = toward(firstBase, 2.25, 0.45);
+  out.push({
+    name: 'first-base-mitt',
+    eye: [firstBaseFront[0], 1.82, firstBaseFront[2]],
+    look: [firstBase.x, 1.28, firstBase.z],
+    fov: 27,
+    forceEquipment: 'firstBase',
+  });
 
   // High and behind, the angle the fielding camera actually uses: the top of a
   // cap is the part of a fielder a player looks at for most of a game.
@@ -188,6 +216,12 @@ async function main(): Promise<void> {
         }
       ).mbd.world;
       const cam = w.director.camera;
+      if (s.forceEquipment) {
+        (w.scene as { traverse: (visit: (object: { visible: boolean; userData?: Record<string, unknown> }) => void) => void })
+          .traverse((object) => {
+            if (object.userData?.equipment === s.forceEquipment) object.visible = true;
+          });
+      }
       cam.fov = s.fov;
       cam.updateProjectionMatrix();
       cam.position.set(s.eye[0], s.eye[1], s.eye[2]);

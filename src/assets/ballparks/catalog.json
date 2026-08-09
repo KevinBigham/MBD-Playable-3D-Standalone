@@ -1,0 +1,582 @@
+{
+  "schema": "mbd.ballpark.catalog",
+  "version": 1,
+  "assets": [
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "anchor-yard",
+        "name": "Anchor Yard",
+        "city": "Ironport",
+        "blurb": "Riveted steel and a 12-metre wall in left. The short porch in right is a rumour that keeps coming true.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 96,
+            "heightM": 11.5
+          },
+          {
+            "angleDeg": -30,
+            "distanceM": 106,
+            "heightM": 11.5
+          },
+          {
+            "angleDeg": -14,
+            "distanceM": 118,
+            "heightM": 3.2
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 121,
+            "heightM": 3.2
+          },
+          {
+            "angleDeg": 16,
+            "distanceM": 112,
+            "heightM": 2.4
+          },
+          {
+            "angleDeg": 32,
+            "distanceM": 98,
+            "heightM": 2.4
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 92,
+            "heightM": 2.4
+          }
+        ],
+        "carry": 1,
+        "windMps": {
+          "x": 0.6,
+          "z": -0.4
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 3111482,
+          "grassAlt": 3574082,
+          "dirt": 10119999,
+          "wall": 2051402,
+          "wallTrim": 15909198,
+          "stands": 2373711,
+          "sky": 9357552,
+          "skyNight": 857904,
+          "structure": 5925496
+        },
+        "skyline": "towers"
+      },
+      "presentation": {
+        "stands": {
+          "depthScale": 1.12,
+          "heightScale": 1.18,
+          "tiers": 3
+        },
+        "batterEye": {
+          "startAngleDeg": -9,
+          "endAngleDeg": 9,
+          "heightM": 12.5,
+          "depthM": 4
+        },
+        "scoreboard": {
+          "angleDeg": 18,
+          "distanceBeyondFenceM": 14,
+          "widthM": 24,
+          "heightM": 10,
+          "elevationM": 7
+        },
+        "lightTowers": [
+          {
+            "angleDeg": -42,
+            "distanceBeyondFenceM": 24,
+            "heightM": 38
+          },
+          {
+            "angleDeg": -14,
+            "distanceBeyondFenceM": 22,
+            "heightM": 36
+          },
+          {
+            "angleDeg": 16,
+            "distanceBeyondFenceM": 22,
+            "heightM": 36
+          },
+          {
+            "angleDeg": 42,
+            "distanceBeyondFenceM": 24,
+            "heightM": 38
+          }
+        ]
+      },
+      "authoring": {
+        "author": "MBD Ballpark Studio",
+        "notes": "Gameplay-neutral authored presentation showcase for Anchor Yard.",
+        "pascalSceneVersion": "0.9.2"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "sandpit",
+        "name": "The Sandpit",
+        "city": "Cactus Flats",
+        "blurb": "Enormous foul ground and gaps that swallow line drives. Bring a hat and a lot of patience.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 101,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": -28,
+            "distanceM": 120,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": -12,
+            "distanceM": 128,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 130,
+            "heightM": 3
+          },
+          {
+            "angleDeg": 12,
+            "distanceM": 127,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": 28,
+            "distanceM": 119,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 100,
+            "heightM": 2.6
+          }
+        ],
+        "carry": 1.03,
+        "windMps": {
+          "x": -0.9,
+          "z": 0.5
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 6195780,
+          "grassAlt": 7051854,
+          "dirt": 12618578,
+          "wall": 9065523,
+          "wallTrim": 16766073,
+          "stands": 11104586,
+          "sky": 15911306,
+          "skyNight": 1708080,
+          "structure": 12886122
+        },
+        "skyline": "mesa"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "comet-dome",
+        "name": "The Comet Dome",
+        "city": "Nova Bay",
+        "blurb": "Perfectly symmetrical, permanently lit, permanently loud. The turf plays fast and the roof holds the noise in.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 100,
+            "heightM": 3
+          },
+          {
+            "angleDeg": -25,
+            "distanceM": 114,
+            "heightM": 3
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 123,
+            "heightM": 3
+          },
+          {
+            "angleDeg": 25,
+            "distanceM": 114,
+            "heightM": 3
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 100,
+            "heightM": 3
+          }
+        ],
+        "carry": 0.99,
+        "windMps": {
+          "x": 0,
+          "z": 0
+        },
+        "domed": true,
+        "turf": true,
+        "palette": {
+          "grass": 2854765,
+          "grassAlt": 3384189,
+          "dirt": 7163750,
+          "wall": 2761552,
+          "wallTrim": 11766015,
+          "stands": 3813227,
+          "sky": 1774656,
+          "skyNight": 1314611,
+          "structure": 10325216
+        },
+        "skyline": "dome"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "bayou-bowl",
+        "name": "Bayou Bowl",
+        "city": "Bayou City",
+        "blurb": "Thick air, close walls and a crowd that starts stomping in the first. Fly balls do not come down where you expect.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 92,
+            "heightM": 3.4
+          },
+          {
+            "angleDeg": -24,
+            "distanceM": 104,
+            "heightM": 3.4
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 115,
+            "heightM": 4.6
+          },
+          {
+            "angleDeg": 24,
+            "distanceM": 103,
+            "heightM": 3.4
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 91,
+            "heightM": 3.4
+          }
+        ],
+        "carry": 1.07,
+        "windMps": {
+          "x": 0.2,
+          "z": 1.1
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 2911028,
+          "grassAlt": 3439164,
+          "dirt": 8215092,
+          "wall": 1982246,
+          "wallTrim": 14263361,
+          "stands": 2837045,
+          "sky": 11065024,
+          "skyNight": 728858,
+          "structure": 4942666
+        },
+        "skyline": "bayou"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "summit-field",
+        "name": "Summit Field",
+        "city": "Alpine Summit",
+        "blurb": "Two kilometres up. The ball carries like a rumour and centre field runs forever to compensate.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 103,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": -26,
+            "distanceM": 121,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 134,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": 26,
+            "distanceM": 122,
+            "heightM": 2.6
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 104,
+            "heightM": 2.6
+          }
+        ],
+        "carry": 1.11,
+        "windMps": {
+          "x": -0.3,
+          "z": 0.3
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 3506002,
+          "grassAlt": 4034912,
+          "dirt": 9072976,
+          "wall": 2902627,
+          "wallTrim": 15267071,
+          "stands": 4219005,
+          "sky": 8373487,
+          "skyNight": 660520,
+          "structure": 14674677
+        },
+        "skyline": "peaks"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "the-foundry",
+        "name": "The Foundry",
+        "city": "Rustforge",
+        "blurb": "Short everywhere, walled everywhere. Every fly ball is an argument with a sheet of corrugated steel.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 90,
+            "heightM": 8.5
+          },
+          {
+            "angleDeg": -22,
+            "distanceM": 100,
+            "heightM": 8.5
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 110,
+            "heightM": 9.5
+          },
+          {
+            "angleDeg": 22,
+            "distanceM": 99,
+            "heightM": 8.5
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 89,
+            "heightM": 8.5
+          }
+        ],
+        "carry": 1.02,
+        "windMps": {
+          "x": 0,
+          "z": -0.7
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 3828540,
+          "grassAlt": 4422213,
+          "dirt": 7820858,
+          "wall": 6044202,
+          "wallTrim": 16751933,
+          "stands": 4866104,
+          "sky": 14137231,
+          "skyNight": 1840144,
+          "structure": 8019014
+        },
+        "skyline": "stacks"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "grove-park",
+        "name": "Grove Park",
+        "city": "Redwood Grove",
+        "blurb": "Low walls, an absurd centre-field cavern and actual trees over the batter’s eye. Triples happen here.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 98,
+            "heightM": 1.6
+          },
+          {
+            "angleDeg": -26,
+            "distanceM": 118,
+            "heightM": 1.6
+          },
+          {
+            "angleDeg": -6,
+            "distanceM": 133,
+            "heightM": 1.6
+          },
+          {
+            "angleDeg": 6,
+            "distanceM": 132,
+            "heightM": 1.6
+          },
+          {
+            "angleDeg": 26,
+            "distanceM": 116,
+            "heightM": 1.6
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 97,
+            "heightM": 1.6
+          }
+        ],
+        "carry": 0.98,
+        "windMps": {
+          "x": 0.4,
+          "z": -0.5
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 2581295,
+          "grassAlt": 3044151,
+          "dirt": 7294771,
+          "wall": 1915426,
+          "wallTrim": 15786160,
+          "stands": 3360047,
+          "sky": 10342376,
+          "skyNight": 662040,
+          "structure": 4156218
+        },
+        "skyline": "forest"
+      }
+    },
+    {
+      "schema": "mbd.ballpark",
+      "version": 1,
+      "units": "meters",
+      "coordinateSystem": {
+        "x": "left-right",
+        "y": "up",
+        "z": "home-to-center",
+        "sprayAngleDeg": "left-negative-right-positive"
+      },
+      "stadium": {
+        "id": "thunder-ridge",
+        "name": "Thunder Ridge",
+        "city": "Prairie Rock",
+        "blurb": "Nothing between the plate and the horizon but weather. The wind decides at least one game a week.",
+        "fence": [
+          {
+            "angleDeg": -45,
+            "distanceM": 99,
+            "heightM": 3.6
+          },
+          {
+            "angleDeg": -24,
+            "distanceM": 116,
+            "heightM": 3.6
+          },
+          {
+            "angleDeg": 0,
+            "distanceM": 126,
+            "heightM": 4.2
+          },
+          {
+            "angleDeg": 24,
+            "distanceM": 115,
+            "heightM": 3.6
+          },
+          {
+            "angleDeg": 45,
+            "distanceM": 98,
+            "heightM": 3.6
+          }
+        ],
+        "carry": 1.01,
+        "windMps": {
+          "x": 1.6,
+          "z": 1.4
+        },
+        "domed": false,
+        "turf": false,
+        "palette": {
+          "grass": 4883264,
+          "grassAlt": 5608265,
+          "dirt": 10254920,
+          "wall": 8007478,
+          "wallTrim": 16766826,
+          "stands": 9059394,
+          "sky": 12376559,
+          "skyNight": 1055276,
+          "structure": 12099690
+        },
+        "skyline": "plains"
+      }
+    }
+  ]
+}

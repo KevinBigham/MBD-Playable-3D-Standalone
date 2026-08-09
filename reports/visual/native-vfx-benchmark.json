@@ -1,0 +1,13 @@
+{
+  "seconds": 6,
+  "samples": 378,
+  "medianUpdateMs": 0.09999999403953552,
+  "p95UpdateMs": 0.19999998807907104,
+  "peakParticles": 300,
+  "capacity": 420,
+  "drawMeshes": 1,
+  "geometries": 196,
+  "textures": 1,
+  "heapMB": 17.35687255859375,
+  "errors": []
+}

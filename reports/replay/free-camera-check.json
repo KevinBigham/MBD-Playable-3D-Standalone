@@ -1,0 +1,21 @@
+{
+  "preview": true,
+  "active": {
+    "loaded": true,
+    "active": true,
+    "colliders": 5,
+    "bvhTrees": 5
+  },
+  "afterExit": {
+    "loaded": false,
+    "active": false,
+    "colliders": 0,
+    "bvhTrees": 0
+  },
+  "loadedResources": [
+    "http://127.0.0.1:4173/assets/free-camera-0p-lqSOi.js",
+    "http://127.0.0.1:4173/assets/replay-camera-vendor-D8Qr5Vvt.js",
+    "http://127.0.0.1:4173/vendor/three-mesh-bvh-adapter.js"
+  ],
+  "errors": []
+}

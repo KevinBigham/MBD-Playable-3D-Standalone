@@ -33,6 +33,15 @@ one binary art or audio file in `src/`. Players are jointed low-poly models buil
 from primitives, ballparks are generated from their own fence curves, every sound
 is synthesised by the Web Audio API, and type is set in system fonts.
 
+Exceptional plays now cut to a true **instant replay** made from the
+presentation frames that were actually rendered—not a second simulation. Home
+runs, great catches, big defensive plays, and final outs can use authored
+broadcast shots, semantic replay audio, slow presentation, and a skippable
+ribbon. During replay, **Free Cam** pauses the replay clock and offers
+orbit/pan/zoom, ball and athlete focus, plate/foul-line/outfield/overhead
+presets, and a clean return to the exact broadcast camera. It is never
+available while a live pitch, ball, runner, or fielder can advance.
+
 ---
 
 ## Install
@@ -341,12 +350,13 @@ you can hit against it.
 npm test
 ```
 
-**289 tests across 24 files, about 70 seconds.** RNG determinism, ball-flight
+**320 tests across 31 files.** RNG determinism, ball-flight
 calibration, the swing model, baseball rules driven through the real engine,
 runner invariants, situational baseball (alignments, tag-ups, contested steals),
 season and cup integrity, the derby, box-score bookkeeping, the MBD bridge
-against the contract's own safety rules, and a batch of 100 CPU-versus-CPU games
-checked for deadlocks, invalid states and believable statistics.
+against the contract's own safety rules, replay immutability/camera restore,
+pose/contact alignment, equipment caching, bounded VFX, and a batch of 100
+CPU-versus-CPU games checked for deadlocks, invalid states and believable statistics.
 
 Extra harnesses, none of them needed to play:
 
@@ -370,6 +380,24 @@ npm run preview    # serves dist/ on http://localhost:4173
 `dist/` is a static folder. It can be opened from any static host; no backend,
 no account and no paid service is involved at any point.
 
+## Ballpark Studio
+
+Ballparks can be authored in an isolated Pascal development tool, exported as
+strict versioned semantic JSON, impact-tested through the game's actual
+physics, and promoted explicitly into the native catalog:
+
+```bash
+npm install --prefix tools/pascal-ballpark-studio
+npm run ballpark:studio
+npm run ballpark:validate
+npm run ballpark:roundtrip
+npm run ballpark:impact -- --asset src/assets/ballparks/catalog.json --id anchor-yard --seed 12345 --samples 10000
+```
+
+Pascal is not part of the game runtime or production dependency graph. See
+[BALLPARK_STUDIO.md](BALLPARK_STUDIO.md) for the asset contract, authoring and
+promotion workflow, exact package pins, MCP compatibility audit, and rollback.
+
 To regenerate the screenshots and the gameplay recording in `docs/`, or to
 measure frame rate and memory, first download the browser Playwright drives
 (once per machine):
@@ -389,6 +417,11 @@ npm run test:phone             # the phone audit, in WebKit, with real touches
 npm run test:world             # a first visit lands in the right league, everywhere
 npm run shots                  # close-ups of the player models, five framings
 npm run swing                  # a frame strip across the instant of contact
+npm run replay:shots           # home run, great catch, final out, phone, skip/freeze
+npm run replay:camera:check    # lazy free camera, five BVHs, and zero-resource exit
+npm run gfx:compare            # identical-frame quality/readability comparison
+npm run gfx:soak               # frame rate, heap, scene and GPU-resource trend
+npm run vfx:benchmark          # bounded native particle update and visual receipt
 npm run icons                  # re-rasterise the PNG icons from the SVGs
 ```
 
@@ -422,6 +455,33 @@ does not produce a hit. It exists because Chromium is a good stand-in for
 Android and a poor one for the iPhone: it will happily report that
 `user-scalable=no` stopped a pinch zoom, which on iOS Safari it has not done
 since iOS 10.
+
+## Broadcast and equipment development tools
+
+Replay cameras are authored in the isolated Theatre.js studio and promoted as
+strict native MBD JSON. Baseball equipment was prototyped through img2threejs
+against original generated reference sheets, then translated into cached native
+Three.js factories. three.quarks remains an isolated VFX laboratory; its runtime
+lost to the game's one-mesh native particle pool. The pmndrs/postprocessing
+candidate was removed after identical screenshots showed worse edge/ball clarity
+and its median submission times missed the profile budgets.
+
+```bash
+npm install --prefix tools/broadcast-studio
+npm run replay:studio
+npm run replay:export
+npm run replay:validate
+npm run replay:promote
+
+npm install --prefix tools/vfx-lab
+npm run vfx:lab:build
+```
+
+Theatre Studio and three.quarks are absent from the production app.
+`camera-controls` and the BVH adapter are downloaded only after the player
+enters replay Free Cam. Pins, licenses, update/removal instructions, and
+benchmark decisions are in
+[`docs/THIRD_PARTY_TOOLING.md`](docs/THIRD_PARTY_TOOLING.md).
 
 ## Known limitations
 
@@ -483,6 +543,7 @@ These are documented deliberately; none of them blocks a complete game.
 - [CONTROLS.md](CONTROLS.md) — every input, both players, keyboard and gamepad
 - [GAME_DESIGN.md](GAME_DESIGN.md) — the design and every tuned number
 - [ARCHITECTURE.md](ARCHITECTURE.md) — how the code is organised and why
+- [BALLPARK_STUDIO.md](BALLPARK_STUDIO.md) — semantic ballpark authoring, validation, impact and promotion
 - [TEST_REPORT.md](TEST_REPORT.md) — what was tested and what was found
 - [BUILD_LOG.md](BUILD_LOG.md) — decisions, defects, fixes, remaining risks
 - [LICENSES.md](LICENSES.md) — dependencies and originality statement

@@ -211,6 +211,11 @@ async function main(): Promise<void> {
     await browser.close();
     process.exit(1);
   }
+  if (!connected) {
+    console.error('no swing put the ball in play — contact synchronisation was not actually exercised');
+    await browser.close();
+    process.exit(1);
+  }
 
   // Centre the strip on the contact instant. The bat is due at the plate
   // CONTACT_AT after the press, which is the whole thing being checked, so the

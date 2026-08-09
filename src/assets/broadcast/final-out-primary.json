@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "final-out-primary",
+  "label": "Final Out — Play and Result",
+  "kind": "final-out",
+  "shots": [
+    {
+      "id": "decisive-play",
+      "start": 0,
+      "end": 0.7,
+      "anchor": "ball",
+      "fallbackAnchor": "recorded-camera",
+      "eyeFrom": [-11, 8, -24],
+      "eyeTo": [-7, 6, -16],
+      "lookFrom": [0, -1, 4],
+      "lookTo": [0, -1, 2],
+      "fovFrom": 46,
+      "fovTo": 39,
+      "ease": "smoothstep",
+      "cut": true
+    },
+    {
+      "id": "diamond-release",
+      "start": 0.7,
+      "end": 1,
+      "anchor": "home-plate",
+      "fallbackAnchor": "recorded-camera",
+      "eyeFrom": [-18, 13, -27],
+      "eyeTo": [18, 16, -31],
+      "lookFrom": [0, 1.3, 20],
+      "lookTo": [0, 1.8, 24],
+      "fovFrom": 45,
+      "fovTo": 50,
+      "ease": "ease-in-out-cubic",
+      "cut": true
+    }
+  ]
+}

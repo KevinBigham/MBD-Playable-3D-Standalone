@@ -75,6 +75,8 @@ export interface GameSettings {
   musicVolume: number;
   sfxVolume: number;
   cameraShake: boolean;
+  /** Automatic, recorded-presentation instant replays after exceptional plays. */
+  automaticReplays: 'off' | 'short' | 'full';
   reducedFlashing: boolean;
   showLineScore: boolean;
   /** The strike-zone overlay, contact cursor and pitch tracker at the plate. */
@@ -105,6 +107,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   musicVolume: 0.55,
   sfxVolume: 0.85,
   cameraShake: true,
+  automaticReplays: 'full',
   reducedFlashing: false,
   showLineScore: true,
   plateView: true,
@@ -900,6 +903,12 @@ const HINTS: Record<ActionId, string> = {
 // ---------------------------------------------------------------------------
 
 const PITCH_TEMPO_ORDER: PitchTempo[] = ['brisk', 'standard', 'relaxed', 'sandlot'];
+const REPLAY_ORDER: GameSettings['automaticReplays'][] = ['off', 'short', 'full'];
+
+function cycleReplay(cur: GameSettings['automaticReplays'], dir: number): GameSettings['automaticReplays'] {
+  const i = REPLAY_ORDER.indexOf(cur);
+  return REPLAY_ORDER[(i + dir + REPLAY_ORDER.length) % REPLAY_ORDER.length];
+}
 
 const PITCH_TEMPO_LABEL: Record<PitchTempo, string> = {
   brisk: 'BRISK — REAL TIME',
@@ -969,6 +978,24 @@ export function buildSettingsRows(app: AppApi): MenuRow[] {
       onLeft: toggle('cameraShake'),
       onRight: toggle('cameraShake'),
       onSelect: toggle('cameraShake'),
+    },
+    {
+      id: 'replays',
+      label: 'Automatic replays',
+      value: () => s.automaticReplays.toUpperCase(),
+      hint: 'Off disables them. Short keeps the decisive beat. Full includes the complete recorded approach and broadcast camera sequence.',
+      onLeft: () => {
+        s.automaticReplays = cycleReplay(s.automaticReplays, -1);
+        app.saveSettings();
+      },
+      onRight: () => {
+        s.automaticReplays = cycleReplay(s.automaticReplays, 1);
+        app.saveSettings();
+      },
+      onSelect: () => {
+        s.automaticReplays = cycleReplay(s.automaticReplays, 1);
+        app.saveSettings();
+      },
     },
     {
       id: 'contrast',
@@ -1138,6 +1165,7 @@ export function settingsSummaryHtml(app: AppApi): string {
       <tr><td style="text-align:left">Music</td><td>${s.muted ? 'MUTED' : pct(s.musicVolume)}</td></tr>
       <tr><td style="text-align:left">Sound</td><td>${s.muted ? 'MUTED' : pct(s.sfxVolume)}</td></tr>
       <tr><td style="text-align:left">Camera shake</td><td>${yn(s.cameraShake)}</td></tr>
+      <tr><td style="text-align:left">Automatic replays</td><td>${s.automaticReplays.toUpperCase()}</td></tr>
       <tr><td style="text-align:left">High contrast HUD</td><td>${yn(s.highContrast)}</td></tr>
       <tr><td style="text-align:left">Reduced flashing</td><td>${yn(s.reducedFlashing)}</td></tr>
       <tr><td style="text-align:left">Plate view</td><td>${yn(s.plateView)}</td></tr>
@@ -1547,4 +1575,3 @@ export class PlayerCreatorScreen extends Screen {
     this.refreshSelection();
   }
 }
-

@@ -67,6 +67,18 @@ That is the complete runtime dependency list. It ships in the production bundle.
 None of these ship in the production bundle. Full license texts for every
 package are installed under `node_modules/<package>/LICENSE`.
 
+## Isolated ballpark-authoring tool
+
+`tools/pascal-ballpark-studio/` is a development-only package with its own
+lockfile. It pins the official `@pascal-app/core`, `viewer`, and `editor`
+packages at 0.9.2 and `@pascal-app/nodes` at 0.1.1, plus their React/Three.js
+peer stack. Pascal is MIT licensed, copyright 2026 Pascal Group Inc.; its full
+notice is preserved at `tools/pascal-ballpark-studio/PASCAL_LICENSE.txt`.
+
+Those packages are absent from the root production dependency graph and MBD
+browser bundle. Their licenses and transitive notices are also installed under
+the studio's `node_modules/` directory for development installs.
+
 ## Reference material
 
 Publicly available gameplay footage, reviews and manuals of late-1990s console

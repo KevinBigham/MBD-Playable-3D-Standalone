@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VFX_PRESETS, type MbdVfxPresetId, type MbdVfxPresetV1 } from './vfx';
 
 /**
  * One pooled particle system for the whole game: dust, sparks, grass, confetti
@@ -22,6 +23,9 @@ interface Particle {
   r: number;
   g: number;
   b: number;
+  sx: number;
+  sy: number;
+  sz: number;
 }
 
 const MAX = 420;
@@ -50,7 +54,7 @@ export class ParticleField {
       this.pool.push({
         x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
         life: 0, maxLife: 1, size: 0.1, drag: 0.2, gravity: 9.8, spin: 0,
-        r: 1, g: 1, b: 1,
+        r: 1, g: 1, b: 1, sx: 1, sy: 1, sz: 1,
       });
     }
   }
@@ -80,15 +84,19 @@ export class ParticleField {
       life?: number;
       gravity?: number;
       drag?: number;
+      colors?: readonly number[];
+      aspect?: readonly [number, number, number];
     },
   ): void {
-    const c = new THREE.Color(opts.color);
+    const palette = opts.colors?.length ? opts.colors : [opts.color];
+    const c = new THREE.Color();
     const speed = opts.speed ?? 4;
     const spread = opts.spread ?? 1;
     const up = opts.up ?? 1;
     for (let i = 0; i < count; i++) {
       const p = this.spawn();
       if (!p) return;
+      c.setHex(palette[Math.floor(this.rand() * palette.length)] ?? opts.color);
       const a = this.rand() * Math.PI * 2;
       const s = speed * (0.4 + this.rand() * 0.6);
       p.x = x + (this.rand() - 0.5) * 0.2;
@@ -103,6 +111,9 @@ export class ParticleField {
       p.gravity = opts.gravity ?? 11;
       p.drag = opts.drag ?? 1.2;
       p.spin = (this.rand() - 0.5) * 12;
+      p.sx = opts.aspect?.[0] ?? 1;
+      p.sy = opts.aspect?.[1] ?? 1;
+      p.sz = opts.aspect?.[2] ?? 1;
       const tint = 0.82 + this.rand() * 0.35;
       p.r = Math.min(1, c.r * tint);
       p.g = Math.min(1, c.g * tint);
@@ -110,18 +121,37 @@ export class ParticleField {
     }
   }
 
+  emitPreset(
+    id: MbdVfxPresetId,
+    x: number,
+    y: number,
+    z: number,
+    scale = 1,
+    primaryColor?: number,
+  ): void {
+    const preset: MbdVfxPresetV1 = VFX_PRESETS[id];
+    const colors = primaryColor === undefined ? preset.colors : [primaryColor, ...preset.colors];
+    this.burst(x, y, z, Math.max(1, Math.round(preset.count * Math.max(0.25, scale))), {
+      color: colors[0],
+      colors,
+      speed: preset.speed * Math.sqrt(Math.max(0.25, scale)),
+      spread: preset.spread,
+      up: preset.up,
+      size: preset.size,
+      life: preset.life,
+      gravity: preset.gravity,
+      drag: preset.drag,
+      aspect: preset.aspect,
+    });
+  }
+
   /** Ring of confetti used for home runs and big defensive plays. */
   fireworks(x: number, y: number, z: number, color: number): void {
-    this.burst(x, y, z, 64, {
-      color,
-      speed: 15,
-      spread: 1,
-      up: 1.6,
-      size: 0.14,
-      life: 1.15,
-      gravity: 16,
-      drag: 0.6,
-    });
+    this.emitPreset('home-run-firework', x, y, z, 1, color);
+  }
+
+  championship(x: number, y: number, z: number): void {
+    this.emitPreset('championship-confetti', x, y, z);
   }
 
   update(dt: number): void {
@@ -160,7 +190,7 @@ export class ParticleField {
       this.posV.set(p.x, p.y, p.z);
       this.euler.set(p.spin * (1 - t) * 2, p.spin * (1 - t), 0);
       this.quat.setFromEuler(this.euler);
-      this.scaleV.set(s, s, s);
+      this.scaleV.set(s * p.sx, s * p.sy, s * p.sz);
       this.matrix.compose(this.posV, this.quat, this.scaleV);
       this.mesh.setMatrixAt(j, this.matrix);
       this.colorAttr.setXYZ(j, p.r * t, p.g * t, p.b * t);
@@ -172,6 +202,14 @@ export class ParticleField {
   clear(): void {
     this.active = 0;
     this.mesh.count = 0;
+  }
+
+  get activeCount(): number {
+    return this.active;
+  }
+
+  get capacity(): number {
+    return MAX;
   }
 }
 

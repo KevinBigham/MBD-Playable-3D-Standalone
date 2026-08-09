@@ -1,0 +1,30 @@
+{
+  "name": "@mbd/broadcast-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 4186",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc --noEmit && vite build",
+    "export": "tsx scripts/export.ts",
+    "validate": "tsx scripts/validate.ts",
+    "promote": "tsx scripts/promote.ts",
+    "roundtrip": "vitest run src/roundtrip.test.ts",
+    "capture-project": "tsx scripts/capture-project.ts"
+  },
+  "dependencies": {
+    "@theatre/core": "0.7.2",
+    "@theatre/studio": "0.7.2",
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "@types/three": "0.169.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.21",
+    "vitest": "2.1.9"
+  }
+}

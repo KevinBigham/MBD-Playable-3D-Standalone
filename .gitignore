@@ -1,7 +1,7 @@
-node_modules/
-dist/
-*.log
-.DS_Store
-.vite/
-test-results/
-.claude/settings.local.json
+/ballpark-staging/
+/node_modules/
+/dist/
+/tools/*/node_modules/
+/tools/*/dist/
+/tools/pascal-ballpark-studio/node_modules/
+/tools/pascal-ballpark-studio/dist/

@@ -1,0 +1,16 @@
+:root { color: #f4efe3; background: #090d19; font-family: system-ui, sans-serif; }
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+.shell { display: grid; grid-template-columns: 300px 1fr; height: 100%; }
+.panel { padding: 18px; background: #11182b; border-right: 1px solid #33405d; overflow: auto; }
+h1 { margin: 0 0 6px; color: #ffd15c; font-size: 18px; letter-spacing: .12em; }
+p { color: #a9aebe; font-size: 13px; line-height: 1.45; }
+label { display: block; margin: 15px 0 5px; color: #ffd15c; font-size: 11px; letter-spacing: .12em; }
+select, button { width: 100%; padding: 10px; color: #f4efe3; background: #1c2741; border: 1px solid #53617c; }
+button { margin-top: 10px; cursor: pointer; font-weight: 700; }
+.viewport { position: relative; min-width: 0; }
+canvas { width: 100%; height: 100%; display: block; }
+.safe { position: absolute; inset: 5%; border: 1px dashed rgba(255,209,92,.55); pointer-events: none; }
+.status { min-height: 42px; padding: 9px; margin-top: 12px; background: #090d19; font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+.license { margin-top: 24px; font-size: 11px; }
+@media (max-width: 760px) { .shell { grid-template-columns: 220px 1fr; } }

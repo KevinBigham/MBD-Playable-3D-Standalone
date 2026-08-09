@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "great-catch-primary",
+  "label": "Great Catch — Defender Focus",
+  "kind": "great-catch",
+  "shots": [
+    {
+      "id": "approach",
+      "start": 0,
+      "end": 0.58,
+      "anchor": "ball",
+      "fallbackAnchor": "home-plate",
+      "eyeFrom": [-13, 9, -22],
+      "eyeTo": [-8, 7, -16],
+      "lookFrom": [0, -1, 3],
+      "lookTo": [0, -1.5, 2],
+      "fovFrom": 47,
+      "fovTo": 40,
+      "ease": "smoothstep",
+      "cut": true
+    },
+    {
+      "id": "glove-side",
+      "start": 0.58,
+      "end": 1,
+      "anchor": "primary-actor",
+      "fallbackAnchor": "ball",
+      "eyeFrom": [-7, 3.3, -8],
+      "eyeTo": [6, 3.8, -7],
+      "lookFrom": [0, 1.1, 0],
+      "lookTo": [0, 1.3, 0],
+      "fovFrom": 36,
+      "fovTo": 40,
+      "ease": "ease-in-out-cubic",
+      "cut": true
+    }
+  ]
+}

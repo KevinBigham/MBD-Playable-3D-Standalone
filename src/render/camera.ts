@@ -31,6 +31,16 @@ interface Shot {
   rate: number;
 }
 
+export interface CameraDirectorState {
+  eye: [number, number, number];
+  look: [number, number, number];
+  fov: number;
+  current: ShotName;
+  shake: number;
+  shakeSeed: number;
+  orbit: number;
+}
+
 /**
  * Pulls a camera position back inside the outfield wall.
  *
@@ -103,6 +113,42 @@ export class CameraDirector {
   resize(aspect: number): void {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+  }
+
+  captureState(): CameraDirectorState {
+    return {
+      eye: [this.eye.x, this.eye.y, this.eye.z],
+      look: [this.look.x, this.look.y, this.look.z],
+      fov: this.camera.fov,
+      current: this.current,
+      shake: this.shake,
+      shakeSeed: this.shakeSeed,
+      orbit: this.orbit,
+    };
+  }
+
+  restoreState(state: CameraDirectorState): void {
+    this.eye.fromArray(state.eye);
+    this.look.fromArray(state.look);
+    this.current = state.current;
+    this.shake = state.shake;
+    this.shakeSeed = state.shakeSeed;
+    this.orbit = state.orbit;
+    this.camera.position.copy(this.eye);
+    this.camera.fov = state.fov;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(this.look);
+  }
+
+  /** Exact authored replay camera. No smoothing is applied here: the sequence
+   * evaluator already owns cuts and easing. */
+  setReplayFrame(eye: THREE.Vector3, look: THREE.Vector3, fov: number): void {
+    this.eye.copy(eye);
+    this.look.copy(look);
+    this.camera.position.copy(eye);
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(look);
   }
 
   /** Chooses and applies the right shot for the current game state. */

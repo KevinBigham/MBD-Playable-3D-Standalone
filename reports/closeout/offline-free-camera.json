@@ -1,0 +1,58 @@
+{
+  "cacheReceipt": {
+    "keys": [
+      "mbd-v6"
+    ],
+    "urls": [
+      "http://127.0.0.1:4173/offline-assets.json",
+      "http://127.0.0.1:4173/apple-touch-icon.png",
+      "http://127.0.0.1:4173/assets/index-CuD3jdq8.css",
+      "http://127.0.0.1:4173/assets/index-_FI1iLvR.js",
+      "http://127.0.0.1:4173/assets/three-Dk6omNgT.js",
+      "http://127.0.0.1:4173/icon-192.png",
+      "http://127.0.0.1:4173/icon-512.png",
+      "http://127.0.0.1:4173/assets/free-camera-0p-lqSOi.js",
+      "http://127.0.0.1:4173/icon-maskable-512.png",
+      "http://127.0.0.1:4173/assets/replay-camera-vendor-D8Qr5Vvt.js",
+      "http://127.0.0.1:4173/icon-maskable.svg",
+      "http://127.0.0.1:4173/icon.svg",
+      "http://127.0.0.1:4173/index.html",
+      "http://127.0.0.1:4173/mbd-world.json",
+      "http://127.0.0.1:4173/sw.js",
+      "http://127.0.0.1:4173/manifest.webmanifest",
+      "http://127.0.0.1:4173/vendor/three-mesh-bvh-adapter.js",
+      "http://127.0.0.1:4173/"
+    ],
+    "probes": [
+      {
+        "url": "http://127.0.0.1:4173/assets/free-camera-0p-lqSOi.js",
+        "status": 200,
+        "type": "basic"
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/replay-camera-vendor-D8Qr5Vvt.js",
+        "status": 200,
+        "type": "basic"
+      },
+      {
+        "url": "http://127.0.0.1:4173/vendor/three-mesh-bvh-adapter.js",
+        "status": 200,
+        "type": "basic"
+      }
+    ],
+    "controller": true
+  },
+  "diagnostics": {
+    "loaded": true,
+    "active": true,
+    "colliders": 5,
+    "bvhTrees": 5
+  },
+  "afterExit": {
+    "loaded": false,
+    "active": false,
+    "colliders": 0,
+    "bvhTrees": 0
+  },
+  "failed": []
+}
