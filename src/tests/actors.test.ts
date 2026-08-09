@@ -25,6 +25,21 @@ function names(actor: PlayerActor): string[] {
   return result;
 }
 
+/** Quaternion X for one object in PlayerActor's stable replay layout. */
+function replayQuaternionX(frame: Float32Array, object: number): number {
+  return frame[object * 11 + 3];
+}
+
+function replayQuaternion(frame: Float32Array, object: number): [number, number, number, number] {
+  const offset = object * 11 + 3;
+  return [frame[offset], frame[offset + 1], frame[offset + 2], frame[offset + 3]];
+}
+
+function quaternionAngle(a: [number, number, number, number], b: [number, number, number, number]): number {
+  const dot = Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]));
+  return 2 * Math.acos(dot);
+}
+
 describe('procedural athlete equipment', () => {
   it('builds role-specific catcher and first-base silhouettes', () => {
     const catcher = new PlayerActor(COLORS, 'stocky', 'catcher', 22, 'catcher');
@@ -112,5 +127,33 @@ describe('native pose transitions', () => {
 
     expect([...frame(transitioned)]).toEqual([...frame(direct)]);
     expect(poseTransitionDuration('batStance', 'batSwing')).toBeLessThan(0.06);
+  });
+
+  it('folds the trailing knee so the run cycle faces the direction of travel', () => {
+    const actor = new PlayerActor(COLORS, 'average');
+    const speed = 6;
+    // PlayerActor advances phase by dt * (3.2 + speed * 1.5), and poseRun uses
+    // sin(phase * 2). Put the left leg at the back of its stride exactly.
+    const dt = Math.PI / (4 * (3.2 + speed * 1.5));
+    actor.update(dt, { x: 0, z: 0, speed, facing: 0, pose: 'run', poseT: 0 });
+    const running = frame(actor);
+
+    // Replay objects 10/11 are the left/right shins. At this phase the left
+    // leg trails and must be the bent one; bending the right leg reads backward.
+    expect(Math.abs(replayQuaternionX(running, 10))).toBeGreaterThan(0.4);
+    expect(Math.abs(replayQuaternionX(running, 11))).toBeLessThan(1e-6);
+  });
+
+  it('keeps the bat moving through the full follow-through', () => {
+    const atExtension = new PlayerActor(COLORS, 'average', 'helmet');
+    const finished = new PlayerActor(COLORS, 'average', 'helmet');
+    const opts = { x: 0, z: 0, speed: 0, facing: 0, pose: 'batSwing' as const, handed: -1 };
+    atExtension.update(0, { ...opts, poseT: 0.6 });
+    finished.update(0, { ...opts, poseT: 1 });
+
+    // Replay object 12 is the bat. The old pose stopped it completely at 60%
+    // and spent the rest of the swing changing only root height.
+    expect(quaternionAngle(replayQuaternion(frame(atExtension), 12), replayQuaternion(frame(finished), 12)))
+      .toBeGreaterThan(0.7);
   });
 });

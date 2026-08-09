@@ -1506,8 +1506,12 @@ export class PlayerActor {
     this.legR.rotation.x = -s * amp;
     // Knees fold on the recovery half of the stride and straighten on the
     // drive, which is the difference between running and marching.
-    this.shinL.rotation.x = Math.max(0, -s) * amp * 1.5;
-    this.shinR.rotation.x = Math.max(0, s) * amp * 1.5;
+    // A positive hip angle puts that foot behind the body (the model faces
+    // +Z). Bend that trailing leg, not the one reaching forward. Reversing
+    // these two signs makes the stride read as running backwards even while
+    // the actor is translating toward the next base.
+    this.shinL.rotation.x = Math.max(0, s) * amp * 1.5;
+    this.shinR.rotation.x = Math.max(0, -s) * amp * 1.5;
     this.armL.rotation.x = -s * amp * 0.85;
     this.armR.rotation.x = s * amp * 0.85;
     this.foreL.rotation.x = -1.15;
@@ -1600,19 +1604,28 @@ export class PlayerActor {
     // the arms and the bat, so the swing rotates as one piece.
     // The torso now carries the arms, so its turn is roughly half what the old
     // shoulders-independent version used — the arms get the rest for free.
-    this.torso.rotation.y = handed * (0.25 + load * 0.2 - ease * 1.5);
-    this.torso.rotation.x = -ease * 0.1;
-    this.root.rotation.y = this.facing + handed * (0.15 - ease * 0.35);
+    this.torso.rotation.y = handed * (0.25 + load * 0.2 - ease * 1.5 - follow * 0.45);
+    this.torso.rotation.x = -ease * 0.1 - follow * 0.08;
+    this.root.rotation.y = this.facing + handed * (0.15 - ease * 0.35 - follow * 0.22);
 
     // Elbows straighten as the barrel comes round, which is the whole visual of
     // "getting extended".
-    this.armR.rotation.x = -2.15 - load * 0.15 + ease * 1.5;
-    this.armR.rotation.z = handed * (-0.35 + ease * 0.9);
-    this.foreR.rotation.x = -0.3 + ease * 0.3;
-    this.armL.rotation.x = -1.95 - load * 0.12 + ease * 1.3;
-    this.armL.rotation.z = handed * (-0.25 + ease * 0.8);
-    this.foreL.rotation.x = -0.35 + ease * 0.35;
-    this.bat.rotation.set(0.5 - ease * 1.0, 0, handed * (0.4 - ease * 2.4));
+    this.armR.rotation.x = -2.15 - load * 0.15 + ease * 1.5 - follow * 0.85;
+    this.armR.rotation.z = handed * (-0.35 + ease * 0.9 + follow * 0.35);
+    this.foreR.rotation.x = -0.3 + ease * 0.3 - follow * 1.0;
+    this.armL.rotation.x = -1.95 - load * 0.12 + ease * 1.3 - follow * 1.15;
+    this.armL.rotation.z = handed * (-0.25 + ease * 0.8 + follow * 0.55);
+    this.foreL.rotation.x = -0.35 + ease * 0.35 - follow * 1.35;
+    // Contact is the point of maximum extension. After it, the wrists fold and
+    // the barrel rises over the lead shoulder while the hips, chest and arms
+    // keep carrying the swing around the body. Previously none of these bat or
+    // arm transforms changed after k=0.6, so the final 40% was a frozen bat
+    // with only a tiny vertical body shift.
+    this.bat.rotation.set(
+      0.5 - ease * 1.0 + follow * 0.65,
+      0,
+      handed * (0.4 - ease * 2.4 + follow * 0.8),
+    );
 
     // Back foot pivots up on the toe, front leg braces straight.
     this.legR.rotation.x = -0.2 - ease * 0.34;
