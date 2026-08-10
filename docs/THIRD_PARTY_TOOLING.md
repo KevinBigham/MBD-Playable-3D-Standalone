@@ -12,6 +12,21 @@ work. None of these tools may enter authoritative baseball simulation.
 | [three.quarks](https://github.com/Alchemist0823/three.quarks) | `0.17.1` with `three@0.182.0` | MIT | Accepted as isolated lab; runtime rejected | `tools/vfx-lab`; informs `MbdVfxPresetV1` |
 | [camera-controls](https://github.com/yomotsu/camera-controls) | `3.1.2` | MIT | Accepted, replay-only runtime | Lazy Free Cam module after replay freezes play |
 | [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) | `0.9.14` | MIT | Accepted, replay-only runtime | Self-contained local lazy adapter; five static camera proxies |
+| [CMU Motion Capture Database / una-dinosauria mirror](https://github.com/una-dinosauria/cmu-mocap) | commit `09a07f54f3bbb58797325f009282d0b2048a2871`, `124_07.bvh` SHA-256 `fe848034a77cac57ff49a77e9a57d2af3d714f549ced078b128e458910666ba4` | CMU database usage terms | Accepted, offline source only | Frames 264–425 bake to `src/render/batting-motion.generated.ts`; raw BVH never ships |
+
+## CMU batting-motion bake
+
+The pin above is parsed only by an explicitly invoked development command:
+
+```bash
+npm run mocap:bake:batting -- --input /absolute/path/to/124_07.bvh
+```
+
+The command fails closed on byte length, SHA-256, frame count, or frame-time
+drift. It creates 17 samples from stance to contact and 17 from contact to
+finish, sharing the exact `0.425` contact sample for 33 total. Runtime has no BVH
+request, loader, mixer, skinned mesh, or new dependency. Source fingers/thumbs
+are deliberately ignored; original low-poly hands and bat-socket IK own the grip.
 
 ## Theatre.js Broadcast Studio
 

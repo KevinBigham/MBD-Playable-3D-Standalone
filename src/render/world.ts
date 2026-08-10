@@ -16,9 +16,9 @@ import {
   PLAYER_REPLAY_FLOATS,
   PlayerActor,
   type Pose,
-  SWING_CONTACT_FRAME,
   actorColorsFor,
 } from './actors';
+import { swingPoseProgress } from './batting';
 import type { Ball } from '../sim/physics';
 import { CameraDirector, type CameraDirectorState, followThrough } from './camera';
 import type { ReplayAnchor } from '../replay/contract';
@@ -121,12 +121,7 @@ function swingPresentation(state: GameState): { active: boolean; poseT: number }
   const duration = profile.latency + SWING_FOLLOW_THROUGH;
   if (elapsed >= duration) return { active: false, poseT: 1 };
 
-  const poseT =
-    elapsed <= profile.latency
-      ? (elapsed / Math.max(0.001, profile.latency)) * SWING_CONTACT_FRAME
-      : SWING_CONTACT_FRAME +
-        ((elapsed - profile.latency) / SWING_FOLLOW_THROUGH) * (1 - SWING_CONTACT_FRAME);
-  return { active: true, poseT: clamp01(poseT) };
+  return { active: true, poseT: swingPoseProgress(elapsed, profile.latency) };
 }
 
 interface ActorSlot {
@@ -152,10 +147,12 @@ export interface WorldQuality {
 
 /** The subset of derby state the renderer needs. */
 export interface DerbyDrawState {
-  entrants: { playerId: string; teamId: string }[];
+  entrants: { playerId: string; teamId: string; human: boolean }[];
   current: number;
   phase: string;
   swingT: number;
+  animT: number;
+  swingKind: 'contact' | 'power';
   ball: Ball;
 }
 
@@ -1098,7 +1095,8 @@ export class GameWorld {
     }
     const handed = player.bats === 'L' ? 1 : -1;
     const boxX = handed > 0 ? 0.78 : -0.78;
-    const pose: Pose = derby.swingT >= 0 ? 'batSwing' : 'batStance';
+    const pose: Pose = derby.animT >= 0 ? 'batSwing' : 'batStance';
+    const profile = swingProfile(player, derby.swingKind, 'pro', e.human);
     this.batter.actor.setVisible(true);
     this.batter.actor.update(dt, {
       x: boxX,
@@ -1106,7 +1104,7 @@ export class GameWorld {
       speed: 0,
       facing: handed > 0 ? -Math.PI / 2 : Math.PI / 2,
       pose,
-      poseT: clamp01(derby.swingT / 0.42),
+      poseT: swingPoseProgress(derby.animT, profile.latency),
       handed,
     });
 

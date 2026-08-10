@@ -32,11 +32,8 @@ const OUT = process.env.SHOT_DIR ?? 'docs/screenshots';
 const W = 900;
 const H = 700;
 
-/** Where in the swing the engine strikes the ball, seconds after the press. */
-const CONTACT_AT = 0.125;
-
 interface Frame {
-  swingT: number;
+  animT: number;
   clock: number;
   phase: string;
   grade: string;
@@ -75,7 +72,7 @@ async function toLiveStrike(page: Page): Promise<void> {
  * and a round trip per frame samples at about 10 Hz, which is three frames
  * across a swing that lasts a third of a second.
  */
-async function swingOnce(page: Page): Promise<Frame[]> {
+async function swingOnce(page: Page, pressLead: number): Promise<Frame[]> {
   const target = await page.evaluate(() => {
     const m = window as unknown as {
       mbd: {
@@ -85,21 +82,21 @@ async function swingOnce(page: Page): Promise<Frame[]> {
     };
     const info = m.mbd.game.currentPitch;
     const p = m.mbd.world.project(info.plateX, info.plateY, 0.62);
-    return { x: p.x, y: p.y };
+    return { x: p.x * window.innerWidth, y: p.y * window.innerHeight };
   });
   // Wait on the *simulation's* clock, not on wall time. `waitForTimeout` assumes
   // the two run together, and under a software renderer they do not — a slow
   // frame is clamped by MAX_FRAME_DT, so game time falls behind and every tap
   // lands early. Polling the ball's own flight time removes the assumption.
   await page.waitForFunction(
-    () => {
+    (lead) => {
       const g = (
         window as unknown as { mbd: { game?: { currentPitch: { T: number } | null; ball: { t: number } } } }
       ).mbd.game;
       const info = g?.currentPitch;
-      return !!info && g.ball.t >= info.T - 0.125;
+      return !!info && g.ball.t >= info.T - lead;
     },
-    undefined,
+    pressLead,
     { timeout: 30000, polling: 'raf' },
   );
   await page.touchscreen.tap(target.x, target.y);
@@ -110,7 +107,7 @@ async function swingOnce(page: Page): Promise<Frame[]> {
         game?: {
           phase: string;
           play: { clock: number; live: boolean };
-          batter: { swingT: number };
+          batter: { animT: number };
           lastSwing: { grade: string } | null;
         };
         world: {
@@ -120,7 +117,7 @@ async function swingOnce(page: Page): Promise<Frame[]> {
         };
       };
     };
-    const out: { swingT: number; clock: number; phase: string; grade: string; png: string }[] = [];
+    const out: { animT: number; clock: number; phase: string; grade: string; png: string }[] = [];
     // A plain loop awaiting one animation frame at a time, deliberately: a named
     // recursive callback inside evaluate() picks up esbuild's keepNames shim and
     // dies in the page with "__name is not defined".
@@ -135,7 +132,7 @@ async function swingOnce(page: Page): Promise<Frame[]> {
         // Keyed on the swing rather than on the play, because a swing that
         // misses never makes the play live — and a miss is still a swing whose
         // animation has to be right.
-        swingT: g?.batter.swingT ?? -1,
+        animT: g?.batter.animT ?? -1,
         clock: g?.play.live ? g.play.clock : -1,
         phase: g?.phase ?? '',
         grade: g?.lastSwing?.grade ?? '',
@@ -190,9 +187,10 @@ async function main(): Promise<void> {
   // *connects*, and a tap timed from outside the page carries tens of
   // milliseconds of slop. Stops at the first one that put a ball in play.
   let frames: Frame[] = [];
-  for (let attempt = 0; attempt < 12; attempt++) {
+  const pressLeads = [0.24, 0.21, 0.18, 0.15, 0.12, 0.09, 0.06];
+  for (let attempt = 0; attempt < 21; attempt++) {
     await toLiveStrike(page);
-    const shot = await swingOnce(page);
+    const shot = await swingOnce(page, pressLeads[attempt % pressLeads.length]);
     if (!frames.length) frames = shot;
     if (shot.some((f) => f.clock >= 0)) {
       frames = shot;
@@ -200,12 +198,13 @@ async function main(): Promise<void> {
     }
   }
 
-  const swung = frames.filter((f) => f.swingT >= 0);
+  const swung = frames.filter((f) => f.animT >= 0);
   const connected = frames.some((f) => f.clock >= 0);
   console.log(
     `${frames.length} frames, ${swung.length} during the swing, ` +
       `${connected ? 'ball in play' : 'no contact'}`,
   );
+  console.log(`grades: ${[...new Set(frames.map((frame) => frame.grade).filter(Boolean))].join(', ') || 'none'}`);
   if (!swung.length) {
     console.error('no swing was ever made — the tap did not reach the engine');
     await browser.close();
@@ -217,10 +216,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Centre the strip on the contact instant. The bat is due at the plate
-  // CONTACT_AT after the press, which is the whole thing being checked, so the
-  // frames worth keeping are the ones either side of it.
-  const dist = (f: Frame): number => (f.swingT < 0 ? Infinity : Math.abs(f.swingT - CONTACT_AT));
+  // The engine starts play.clock on the actual ball-departure frame, so this
+  // stays authoritative even when player attributes change swing latency.
+  const dist = (f: Frame): number => (f.clock < 0 ? Infinity : Math.abs(f.clock));
   let best = 0;
   for (let i = 1; i < frames.length; i++) if (dist(frames[i]) < dist(frames[best])) best = i;
 
@@ -235,7 +233,7 @@ async function main(): Promise<void> {
   const picked = frames.slice(Math.max(0, best - 2), best + 5);
   picked.forEach((f, i) => {
     const label =
-      f.clock >= 0 ? `after${Math.round(f.clock * 1000)}` : `swing${Math.round(f.swingT * 1000)}`;
+      f.clock >= 0 ? `after${Math.round(f.clock * 1000)}` : `swing${Math.round(f.animT * 1000)}`;
     const file = `${OUT}/swing-${i}-${label}.png`;
     writeFileSync(file, Buffer.from(f.png.split(',')[1], 'base64'));
     console.log(`wrote ${file}  (${f.phase}${f.grade ? `, ${f.grade}` : ''})`);

@@ -68,6 +68,8 @@ export interface DerbyState {
   cursorX: number;
   cursorY: number;
   swingT: number;
+  /** Presentation clock that survives pitch resolution through the finish. */
+  animT: number;
   swingKind: 'contact' | 'power';
   swingResolved: boolean;
   pitchT: number;
@@ -115,6 +117,7 @@ export function createDerby(setup: DerbySetup): DerbyState {
     cursorX: 0,
     cursorY: ZONE_CENTER_Y,
     swingT: -1,
+    animT: -1,
     swingKind: 'contact',
     swingResolved: false,
     pitchT: 0,
@@ -166,6 +169,7 @@ function throwBP(state: DerbyState): void {
   });
   state.pitchT = state.ball.pitch!.T;
   state.swingT = -1;
+  state.animT = -1;
   state.swingResolved = false;
   state.phase = 'pitch';
   state.phaseT = 0;
@@ -174,6 +178,7 @@ function throwBP(state: DerbyState): void {
 export function stepDerby(state: DerbyState, inputs: InputPair, teams: Team[]): void {
   const dt = TICK_DT;
   state.phaseT += dt;
+  if (state.animT >= 0) state.animT += dt;
   if (state.bannerT > 0) state.bannerT = Math.max(0, state.bannerT - dt);
 
   const batter = derbyBatter(state, teams);
@@ -201,6 +206,7 @@ export function stepDerby(state: DerbyState, inputs: InputPair, teams: Team[]): 
           moveCursor(state, input, dt);
           if (input.swing || input.power) {
             state.swingT = 0;
+            state.animT = 0;
             state.swingKind = input.power ? 'power' : 'contact';
           }
         } else {
@@ -284,6 +290,7 @@ function cpuDerbySwing(state: DerbyState, batter: Player): void {
   const pressAt = state.pitchT - profile.latency + state.rng.normal(0, 0.014);
   if (state.ball.t >= pressAt) {
     state.swingT = 0;
+    state.animT = 0;
     state.swingKind = 'power';
   }
 }
@@ -410,6 +417,7 @@ function resetForTurn(state: DerbyState): void {
   state.cursorX = 0;
   state.cursorY = ZONE_CENTER_Y;
   state.swingT = -1;
+  state.animT = -1;
   state.swingResolved = false;
   state.lastResult = null;
   state.ball.mode = 'held';

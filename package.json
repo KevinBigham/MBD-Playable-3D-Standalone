@@ -22,6 +22,8 @@
     "icons": "tsx scripts/icons.ts",
     "shots": "tsx scripts/model-shot.ts",
     "swing": "tsx scripts/swing-shot.ts",
+    "batting:shots": "tsx scripts/batting-shot.ts",
+    "mocap:bake:batting": "tsx scripts/mocap/bake-batting-motion.ts",
     "gfx:compare": "tsx scripts/gfx-compare.ts",
     "gfx:soak": "tsx scripts/perf.ts",
     "vfx:benchmark": "tsx scripts/vfx-benchmark.ts",

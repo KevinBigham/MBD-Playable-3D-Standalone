@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { BodyType } from '../core/types';
 import {
   PLAYER_REPLAY_FLOATS,
+  PLAYER_REPLAY_OBJECT_INDEX,
   PlayerActor,
   SWING_CONTACT_FRAME,
   actorResourceCounts,
@@ -148,8 +149,8 @@ describe('native pose transitions', () => {
 
     // Replay objects 10/11 are the left/right shins. At this phase the left
     // leg trails and must be the bent one; bending the right leg reads backward.
-    expect(Math.abs(replayQuaternionX(running, 10))).toBeGreaterThan(0.4);
-    expect(Math.abs(replayQuaternionX(running, 11))).toBeLessThan(1e-6);
+    expect(Math.abs(replayQuaternionX(running, PLAYER_REPLAY_OBJECT_INDEX.shinLeft))).toBeGreaterThan(0.4);
+    expect(Math.abs(replayQuaternionX(running, PLAYER_REPLAY_OBJECT_INDEX.shinRight))).toBeLessThan(1e-6);
   });
 
   it('keeps the bat moving through the full follow-through', () => {
@@ -161,7 +162,10 @@ describe('native pose transitions', () => {
 
     // Replay object 12 is the bat. The old pose stopped it completely at 60%
     // and spent the rest of the swing changing only root height.
-    expect(quaternionAngle(replayQuaternion(frame(atExtension), 12), replayQuaternion(frame(finished), 12)))
+    expect(quaternionAngle(
+      replayQuaternion(frame(atExtension), PLAYER_REPLAY_OBJECT_INDEX.bat),
+      replayQuaternion(frame(finished), PLAYER_REPLAY_OBJECT_INDEX.bat),
+    ))
       .toBeGreaterThan(0.7);
   });
 

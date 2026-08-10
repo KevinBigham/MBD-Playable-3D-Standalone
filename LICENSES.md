@@ -7,8 +7,9 @@ project.
 
 - No commercial game ROM was inspected, distributed, emulated, decompiled or
   extracted from at any point.
-- No third-party game assets of any kind are present: no textures, sprites,
-  models, animations, interface artwork, fonts, audio files or music.
+- No third-party binary game assets are present: no textures, sprites, models,
+  animation files, interface artwork, fonts, audio files or music. Batting body
+  mechanics use the attributed, numeric CMU-derived curve documented below.
 - No real trademark, real club, real ballpark, real athlete, real league or real
   broadcaster appears anywhere in the code, the data or any user-visible string.
 - This game's own league — the ten clubs of the Meridian Circuit, eight
@@ -24,6 +25,8 @@ project.
 repository.** There is not a single binary asset in `src/`:
 
 - Geometry is built procedurally from `three` primitives in `src/render/`.
+- Batting motion is sampled from a compact native numeric module generated
+  offline; no BVH parser, clip, mixer, skinned model, or motion file ships.
 - Colours and palettes are numeric literals in `src/data/` and `src/render/`.
 - All sound effects and all music are synthesised with the Web Audio API in
   `src/audio/` — oscillators, noise buffers filled in JavaScript, biquad
@@ -80,6 +83,26 @@ browser bundle. Their licenses and transitive notices are also installed under
 the studio's `node_modules/` directory for development installs.
 
 ## Reference material
+
+### CMU baseball-swing motion
+
+Batting hips, torso, head, legs, and elbow intent are derived from CMU subject
+124 motion 07. The development-only bake uses frames 264–425 from
+`data/124/124_07.bvh` in the
+[`una-dinosauria/cmu-mocap`](https://github.com/una-dinosauria/cmu-mocap)
+mirror at commit `09a07f54f3bbb58797325f009282d0b2048a2871`. The pinned input has
+SHA-256 `fe848034a77cac57ff49a77e9a57d2af3d714f549ced078b128e458910666ba4`.
+Only `src/render/batting-motion.generated.ts` is committed. The raw BVH remains
+outside the repository and production build.
+
+The CMU database permits use of its motion data while prohibiting direct resale
+of the database itself. Its requested acknowledgement is preserved here:
+
+> The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.
+
+CMU notes that the finger and thumb joints were not motion-captured reliably.
+Accordingly, visible palms, curled fingers, thumbs, grip sockets, and both-arm IK
+are original procedural geometry/code rather than claims about captured hand motion.
 
 Publicly available gameplay footage, reviews and manuals of late-1990s console
 baseball games were used only to understand broad genre behaviour and player

@@ -26,12 +26,13 @@ row away under *World* and is what seasons and the cup are played on. Eight
 ballparks serve both.
 
 Mr. Baseball Dynasty is a spiritual successor to the fast, personality-filled console
-baseball games of the late 1990s. Everything in it — the league, the players,
-the parks, the art, the sound, the music and the code — is original and
-generated at runtime. No third-party game assets are used anywhere: there is not
-one binary art or audio file in `src/`. Players are jointed low-poly models built
-from primitives, ballparks are generated from their own fence curves, every sound
-is synthesised by the Web Audio API, and type is set in system fonts.
+baseball games of the late 1990s. Its league, players, parks, art, sound, music,
+and code are original and generated at runtime. No third-party binary model,
+texture, interface, audio, or motion asset ships with the game. Players are
+jointed low-poly models built from primitives, ballparks are generated from their
+own fence curves, every sound is synthesised by the Web Audio API, and type is
+set in system fonts. The native batting pose curve is derived offline from an
+attributed CMU baseball swing; the raw BVH is neither committed nor distributed.
 
 Exceptional plays now cut to a true **instant replay** made from the
 presentation frames that were actually rendered—not a second simulation. Home

@@ -1,11 +1,25 @@
 import * as THREE from 'three';
 import type { BodyType, Player } from '../core/types';
+import {
+  SWING_CONTACT_FRAME,
+  createBattingMotionSample,
+  sampleBattingMotion,
+  type BattingMotionSample,
+} from './batting';
+import {
+  createTwoBoneIKScratch,
+  solveTwoBoneIK,
+  type TwoBoneChain,
+  type TwoBoneIKScratch,
+} from './kinematics';
 import { flatMat, shade, skinColor } from './palette';
 
+export { SWING_CONTACT_FRAME } from './batting';
+
 /**
- * Low-poly athletes: turned, tapered forms on a jointed skeleton, animated
- * purely procedurally — no skinning, no clips, no imported assets — which keeps
- * the whole roster cheap and lets poses react instantly to the simulation.
+ * Low-poly athletes: turned, tapered forms on a jointed skeleton, animated by
+ * compact native pose curves and procedural constraints — no runtime skinning,
+ * clips, or imported binary assets — which keeps the whole roster cheap.
  *
  * They used to be boxes, and a box has one fatal problem as anatomy: it is the
  * same width all the way along. The joints were always right and the shapes
@@ -51,6 +65,21 @@ export interface ActorColors {
   trim: number;
   accent: number;
   skin: number;
+}
+
+export interface BattingDiagnostics {
+  shoulderLeft: THREE.Vector3;
+  shoulderRight: THREE.Vector3;
+  elbowLeft: THREE.Vector3;
+  elbowRight: THREE.Vector3;
+  wristLeft: THREE.Vector3;
+  wristRight: THREE.Vector3;
+  handAnchorLeft: THREE.Vector3;
+  handAnchorRight: THREE.Vector3;
+  gripBottom: THREE.Vector3;
+  gripTop: THREE.Vector3;
+  buntSupport: THREE.Vector3;
+  batTip: THREE.Vector3;
 }
 
 /**
@@ -481,6 +510,60 @@ function batGripGeo(): THREE.BufferGeometry {
 }
 
 /**
+ * A readable low-poly hand in one draw. Batting hands are modelled around a
+ * handle passing through local Y at z=0; relaxed hands retain an open thumb and
+ * tapered fingers for fielding/running silhouettes.
+ */
+function playerHandGeo(key: string, width: number, side: number, grip: boolean): THREE.BufferGeometry {
+  return mergedGeometry(key, () => {
+    const s = width;
+    const pieces: THREE.BufferGeometry[] = [];
+    if (grip) {
+      pieces.push(
+        bakedGeometry(new THREE.SphereGeometry(.052 * s, 8, 5), [0, -.038, -.029 * s], [0, 0, 0], [1, 1.08, .62]),
+        bakedGeometry(new THREE.BoxGeometry(.088 * s, .036, .032 * s), [0, -.016, .014 * s], [.12, 0, 0]),
+      );
+      for (const x of [-.029, -.01, .01, .029]) {
+        pieces.push(
+          bakedGeometry(
+            new THREE.CylinderGeometry(.0105 * s, .013 * s, .064, 5),
+            [x * s, -.042, .020 * s],
+            [.2, 0, side * .08],
+          ),
+        );
+      }
+      pieces.push(
+        bakedGeometry(
+          new THREE.CylinderGeometry(.013 * s, .016 * s, .072, 6),
+          [side * .042 * s, -.025, -.003],
+          [.65, 0, side * 1.02],
+        ),
+      );
+    } else {
+      pieces.push(
+        bakedGeometry(new THREE.SphereGeometry(.052 * s, 8, 5), [0, -.043, 0], [0, 0, 0], [.92, 1.12, .62]),
+        bakedGeometry(new THREE.BoxGeometry(.082 * s, .058, .034 * s), [0, -.092, .002], [.08, 0, 0]),
+        bakedGeometry(
+          new THREE.CylinderGeometry(.012 * s, .016 * s, .073, 6),
+          [side * .047 * s, -.064, .002],
+          [.15, 0, side * .72],
+        ),
+      );
+      for (const x of [-.028, -.009, .01, .029]) {
+        pieces.push(
+          bakedGeometry(
+            new THREE.CylinderGeometry(.0085 * s, .011 * s, .052, 5),
+            [x * s, -.113, .003],
+            [.05, 0, side * .025],
+          ),
+        );
+      }
+    }
+    return pieces;
+  });
+}
+
+/**
  * Seven-segment digits, as blocks.
  *
  * A jersey number is the single most human thing that can be put on a back, and
@@ -681,8 +764,6 @@ export function actorResourceCounts(): { geometries: number; materials: number }
  * was 6% of the way through its arc. The ball departed and then the batter swung
  * at where it had been.
  */
-export const SWING_CONTACT_FRAME = 0.425;
-
 /** Batters/runners wear a helmet; the catcher gets a fitted cage; others a cap. */
 export type Headgear = 'cap' | 'helmet' | 'catcher';
 
@@ -703,6 +784,22 @@ export function poseTransitionDuration(from: Pose, to: Pose): number {
 const REPLAY_OBJECT_FLOATS = 11;
 const PLAYER_REPLAY_OBJECTS = 14;
 export const PLAYER_REPLAY_FLOATS = REPLAY_OBJECT_FLOATS * PLAYER_REPLAY_OBJECTS;
+export const PLAYER_REPLAY_OBJECT_INDEX = {
+  group: 0,
+  root: 1,
+  torso: 2,
+  head: 3,
+  armLeft: 4,
+  armRight: 5,
+  forearmLeft: 6,
+  forearmRight: 7,
+  legLeft: 8,
+  legRight: 9,
+  shinLeft: 10,
+  shinRight: 11,
+  bat: 12,
+  glove: 13,
+} as const;
 
 function writeReplayObject(object: THREE.Object3D, target: Float32Array, offset: number): number {
   target[offset++] = object.position.x;
@@ -738,6 +835,8 @@ export class PlayerActor {
   /** Elbow joints, children of the arms. */
   private foreL!: THREE.Group;
   private foreR!: THREE.Group;
+  private wristL!: THREE.Group;
+  private wristR!: THREE.Group;
   private legL!: THREE.Group;
   private legR!: THREE.Group;
   /** Knee joints, children of the legs. */
@@ -746,11 +845,44 @@ export class PlayerActor {
   private bat!: THREE.Group;
   private glove!: THREE.Mesh;
   private shadow!: THREE.Mesh;
-  /** Bare hands, swapped to batting gloves whenever the bat is out. */
-  private handL!: THREE.Mesh;
-  private handR!: THREE.Mesh;
+  private handRelaxedL!: THREE.Mesh;
+  private handRelaxedR!: THREE.Mesh;
+  private handGripL!: THREE.Mesh;
+  private handGripR!: THREE.Mesh;
+  private wristMeshL!: THREE.Mesh;
+  private wristMeshR!: THREE.Mesh;
+  private handAnchorL!: THREE.Object3D;
+  private handAnchorR!: THREE.Object3D;
+  private batGripBottom!: THREE.Object3D;
+  private batGripTop!: THREE.Object3D;
+  private batBuntSupport!: THREE.Object3D;
+  private batTip!: THREE.Object3D;
   private skinMat!: THREE.MeshLambertMaterial;
   private battingGloveMat!: THREE.MeshLambertMaterial;
+  private bodyHeight = 1;
+  private bodyWidth = 1;
+  private leftArmChain!: TwoBoneChain;
+  private rightArmChain!: TwoBoneChain;
+  private readonly battingMotion: BattingMotionSample = createBattingMotionSample();
+  private readonly leftIK: TwoBoneIKScratch = createTwoBoneIKScratch();
+  private readonly rightIK: TwoBoneIKScratch = createTwoBoneIKScratch();
+  private readonly scratchPosition = new THREE.Vector3();
+  private readonly scratchPosition2 = new THREE.Vector3();
+  private readonly replayPoleL = new THREE.Vector3();
+  private readonly replayPoleR = new THREE.Vector3();
+  private readonly replayAnchorL = new THREE.Vector3();
+  private readonly replayAnchorR = new THREE.Vector3();
+  private readonly replayBottom = new THREE.Vector3();
+  private readonly replayTop = new THREE.Vector3();
+  private readonly replaySupport = new THREE.Vector3();
+  private readonly reachShoulderL = new THREE.Vector3();
+  private readonly reachShoulderR = new THREE.Vector3();
+  private readonly reachTarget = new THREE.Vector3();
+  private readonly reachQuaternion = new THREE.Quaternion();
+  private readonly scratchQuaternion = new THREE.Quaternion();
+  private readonly scratchQuaternion2 = new THREE.Quaternion();
+  private readonly scratchEuler = new THREE.Euler();
+  private buntGrip = false;
   /** Helmet ear flap, mirrored to whichever side is facing the pitcher. */
   private earFlap: THREE.Mesh | null = null;
   /**
@@ -830,7 +962,8 @@ export class PlayerActor {
    * The hierarchy is what does the work:
    *
    *   root → legs → shins → feet
-   *   root → torso → chest, head, arms → forearms → hands → bat / glove
+   *   root → torso → chest, head, bat, arms → forearms → wrists → hands
+   *   left forearm → role-specific fielding glove
    *
    * Arms and head hang off the torso rather than off the root, so a hip turn
    * carries the whole upper body the way a real swing does. They used to be
@@ -1165,6 +1298,8 @@ export class PlayerActor {
     // --- Arms: shoulder → elbow → hand --------------------------------------
     const upperLen = 0.32 * b.height;
     const foreLen = 0.3 * b.height;
+    this.bodyHeight = b.height;
+    this.bodyWidth = b.width;
     const mkArm = (side: number) => {
       const shoulder = new THREE.Group();
       // The sleeve is the upper arm: a deltoid at the top tapering to the
@@ -1189,23 +1324,38 @@ export class PlayerActor {
       fore.scale.z = 1.03;
       fore.position.y = -foreLen * 0.3;
       elbow.add(fore);
-      const wrist = new THREE.Mesh(
+      const wristMesh = new THREE.Mesh(
         limbGeo(`${k}:wrist`, foreLen * 0.46, 0.047 * b.width, 0.038 * b.width),
         smoothMat(colors.skin),
       );
-      wrist.scale.z = 1.03;
-      wrist.position.y = -foreLen * 0.76;
-      elbow.add(wrist);
-      const hand = new THREE.Mesh(
-        limbGeo(`${k}:hand`, 0.115, 0.045 * b.width, 0.032 * b.width, 8),
+      wristMesh.scale.z = 1.03;
+      wristMesh.position.y = -foreLen * 0.76;
+      elbow.add(wristMesh);
+
+      const wrist = new THREE.Group();
+      wrist.name = side < 0 ? 'wrist-left' : 'wrist-right';
+      wrist.position.y = -foreLen;
+      const relaxedHand = new THREE.Mesh(
+        playerHandGeo(`hand:${side < 0 ? 'left' : 'right'}:relaxed:v1`, 1, side, false),
         smoothMat(colors.skin),
       );
-      hand.scale.z = 0.78;
-      hand.position.y = -foreLen - 0.025;
-      elbow.add(hand);
+      relaxedHand.scale.set(b.width, 1, b.width);
+      relaxedHand.name = side < 0 ? 'hand-left-relaxed' : 'hand-right-relaxed';
+      const gripHand = new THREE.Mesh(
+        playerHandGeo(`hand:${side < 0 ? 'left' : 'right'}:grip:v1`, 1, side, true),
+        smoothMat(colors.skin),
+      );
+      gripHand.scale.set(b.width, 1, b.width);
+      gripHand.name = side < 0 ? 'hand-left-grip' : 'hand-right-grip';
+      gripHand.visible = false;
+      const handAnchor = new THREE.Object3D();
+      handAnchor.name = side < 0 ? 'hand-anchor-left' : 'hand-anchor-right';
+      handAnchor.position.set(0, -0.035, 0);
+      wrist.add(relaxedHand, gripHand, handAnchor);
+      elbow.add(wrist);
       shoulder.add(elbow);
       shoulder.position.set(side * (shoulderW / 2 - 0.03), torsoH - chestH * 0.24, 0);
-      return { shoulder, elbow, hand, upper, fore };
+      return { shoulder, elbow, wrist, wristMesh, relaxedHand, gripHand, handAnchor, upper, fore };
     };
     const armL = mkArm(-1);
     const armR = mkArm(1);
@@ -1213,23 +1363,67 @@ export class PlayerActor {
     this.armR = armR.shoulder;
     this.foreL = armL.elbow;
     this.foreR = armR.elbow;
-    this.handL = armL.hand;
-    this.handR = armR.hand;
+    this.wristL = armL.wrist;
+    this.wristR = armR.wrist;
+    this.handRelaxedL = armL.relaxedHand;
+    this.handRelaxedR = armR.relaxedHand;
+    this.handGripL = armL.gripHand;
+    this.handGripR = armR.gripHand;
+    this.wristMeshL = armL.wristMesh;
+    this.wristMeshR = armR.wristMesh;
+    this.handAnchorL = armL.handAnchor;
+    this.handAnchorR = armR.handAnchor;
     this.skinMat = skin;
     this.battingGloveMat = mat(shade(colors.accent, -0.3));
     this.torso.add(this.armL, this.armR);
 
-    // Bat hangs off the right hand; hidden unless a batting pose is active.
+    this.leftArmChain = {
+      shoulder: this.armL,
+      elbow: this.foreL,
+      wrist: this.wristL,
+      upperLength: upperLen,
+      lowerLength: foreLen,
+    };
+    this.rightArmChain = {
+      shoulder: this.armR,
+      elbow: this.foreR,
+      wrist: this.wristR,
+      upperLength: upperLen,
+      lowerLength: foreLen,
+    };
+
+    // The bat is the authority. Both hands are solved to its sockets after all
+    // pose blending, so a transition or replay interpolation cannot open the grip.
     this.bat = new THREE.Group();
     this.bat.name = 'baseball-bat';
     const barrel = new THREE.Mesh(batBodyGeo(), smoothMat(0xc98f4e));
     barrel.name = 'bat-barrel-and-taper';
     const gripTape = new THREE.Mesh(batGripGeo(), smoothMat(0x1f1f22));
     gripTape.name = 'bat-grip-wrap-and-knob';
-    this.bat.add(barrel, gripTape);
+    this.batGripBottom = new THREE.Object3D();
+    this.batGripBottom.name = 'bat-grip-bottom';
+    this.batGripBottom.position.y = -0.025;
+    this.batGripTop = new THREE.Object3D();
+    this.batGripTop.name = 'bat-grip-top';
+    this.batGripTop.position.y = 0.065;
+    this.batGripTop.rotation.y = Math.PI;
+    this.batBuntSupport = new THREE.Object3D();
+    this.batBuntSupport.name = 'bat-bunt-support';
+    this.batBuntSupport.position.y = 0.34;
+    this.batBuntSupport.rotation.y = Math.PI;
+    this.batTip = new THREE.Object3D();
+    this.batTip.name = 'bat-tip';
+    this.batTip.position.y = 0.855;
+    this.bat.add(
+      barrel,
+      gripTape,
+      this.batGripBottom,
+      this.batGripTop,
+      this.batBuntSupport,
+      this.batTip,
+    );
     this.bat.visible = false;
-    this.foreR.add(this.bat);
-    this.bat.position.y = -foreLen - 0.03;
+    this.torso.add(this.bat);
 
     const gloveKind: GloveKind =
       equipment === 'catcher' ? 'catcher' : equipment === 'firstBase' ? 'firstBase' : 'field';
@@ -1292,9 +1486,28 @@ export class PlayerActor {
 
   applyReplay(source: Float32Array, offset: number): void {
     for (const object of this.replayObjects) offset = applyReplayObject(object, source, offset);
-    const material = this.bat.visible ? this.battingGloveMat : this.skinMat;
-    this.handL.material = material;
-    this.handR.material = material;
+    this.setBattingHands(this.bat.visible);
+    if (this.bat.visible) this.solveReplayGrip();
+  }
+
+  /** Read-only world-space joints for tests and visual tooling. */
+  readBattingDiagnostics(): BattingDiagnostics {
+    this.group.updateMatrixWorld(true);
+    const world = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3());
+    return {
+      shoulderLeft: world(this.armL),
+      shoulderRight: world(this.armR),
+      elbowLeft: world(this.foreL),
+      elbowRight: world(this.foreR),
+      wristLeft: world(this.wristL),
+      wristRight: world(this.wristR),
+      handAnchorLeft: world(this.handAnchorL),
+      handAnchorRight: world(this.handAnchorR),
+      gripBottom: world(this.batGripBottom),
+      gripTop: world(this.batGripTop),
+      buntSupport: world(this.batBuntSupport),
+      batTip: world(this.batTip),
+    };
   }
 
   /**
@@ -1351,6 +1564,7 @@ export class PlayerActor {
 
     this.bat.visible = false;
     this.glove.visible = false;
+    this.buntGrip = false;
     this.root.rotation.x = 0;
     this.root.rotation.z = 0;
     this.root.position.set(0, 0, 0);
@@ -1406,13 +1620,231 @@ export class PlayerActor {
 
     this.applyPoseTransition(dt, opts.pose, opts.poseT);
     this.transitionPose = opts.pose;
+    this.setBattingHands(this.bat.visible);
+    if (this.bat.visible) this.solveBatGrip(opts.handed ?? -1, this.buntGrip);
+  }
 
-    // Batting gloves whenever there is a bat in those hands. Bare skin on the
-    // handle was the single palest thing on the model and it sat right where
-    // the eye goes.
-    const gloved = this.bat.visible ? this.battingGloveMat : this.skinMat;
-    this.handL.material = gloved;
-    this.handR.material = gloved;
+  private setBattingHands(batting: boolean): void {
+    this.handRelaxedL.visible = !batting;
+    this.handRelaxedR.visible = !batting;
+    this.handGripL.visible = batting;
+    this.handGripR.visible = batting;
+    this.handRelaxedL.material = this.skinMat;
+    this.handRelaxedR.material = this.skinMat;
+    this.handGripL.material = this.battingGloveMat;
+    this.handGripR.material = this.battingGloveMat;
+    this.wristMeshL.material = batting ? this.battingGloveMat : this.skinMat;
+    this.wristMeshR.material = batting ? this.battingGloveMat : this.skinMat;
+  }
+
+  private setDeltaPose(
+    object: THREE.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    delta: THREE.Quaternion,
+    weight: number,
+  ): void {
+    this.scratchQuaternion.setFromEuler(this.scratchEuler.set(x, y, z, 'XYZ'));
+    this.scratchQuaternion2.identity().slerp(delta, weight);
+    object.quaternion.copy(this.scratchQuaternion).multiply(this.scratchQuaternion2).normalize();
+  }
+
+  /** Applies the CMU-derived body curve and the measured barrel path. */
+  private applyBattingMotion(phase: number, handed: number): void {
+    this.reset();
+    this.bat.visible = true;
+    this.buntGrip = false;
+    sampleBattingMotion(phase, handed, this.battingMotion);
+    const motion = this.battingMotion;
+    const leftBase = handed < 0 ? 0.2 : -0.2;
+    const rightBase = -leftBase;
+    const leftShinBase = handed < 0 ? -0.3 : -0.16;
+    const rightShinBase = handed < 0 ? -0.16 : -0.3;
+    const breath = phase <= 0.001 ? Math.sin(this.phase) * 0.012 : 0;
+
+    this.root.position.set(
+      motion.rootPosition.x * this.bodyWidth,
+      this.bob - 0.07 + motion.rootPosition.y * this.bodyHeight,
+      motion.rootPosition.z * this.bodyHeight,
+    );
+    this.setDeltaPose(this.root, 0, this.facing + handed * 0.15, 0, motion.rootQuaternion, 0.55);
+    this.setDeltaPose(this.torso, breath, handed * 0.25, 0, motion.torsoQuaternion, 0.82);
+    this.setDeltaPose(this.head, 0, handed * -0.34, 0, motion.headQuaternion, 0.38);
+    this.setDeltaPose(this.legL, leftBase, 0, 0, motion.leftThighQuaternion, 0.62);
+    this.setDeltaPose(this.shinL, leftShinBase, 0, 0, motion.leftShinQuaternion, 0.62);
+    this.setDeltaPose(this.legR, rightBase, 0, 0, motion.rightThighQuaternion, 0.62);
+    this.setDeltaPose(this.shinR, rightShinBase, 0, 0, motion.rightShinQuaternion, 0.62);
+
+    this.scratchPosition.copy(motion.batPosition);
+    this.scratchPosition.y += (this.bodyHeight - 1) * 1.25;
+    this.constrainBatToReach(this.scratchPosition, motion.batQuaternion, handed, false);
+    this.setBatRootTransform(this.scratchPosition, motion.batQuaternion);
+  }
+
+  /** Minimally translates the grip into the intersection of both arm reaches. */
+  private constrainBatToReach(
+    batPosition: THREE.Vector3,
+    batQuaternion: THREE.Quaternion,
+    handed: number,
+    bunt: boolean,
+  ): void {
+    this.reachShoulderL
+      .copy(this.armL.position)
+      .applyQuaternion(this.torso.quaternion)
+      .add(this.torso.position);
+    this.reachShoulderR
+      .copy(this.armR.position)
+      .applyQuaternion(this.torso.quaternion)
+      .add(this.torso.position);
+    const leftSocket = handed < 0
+      ? this.batGripBottom
+      : bunt ? this.batBuntSupport : this.batGripTop;
+    const rightSocket = handed < 0
+      ? bunt ? this.batBuntSupport : this.batGripTop
+      : this.batGripBottom;
+    const maxReach = (this.leftArmChain.upperLength + this.leftArmChain.lowerLength) * 0.982;
+
+    for (let iteration = 0; iteration < 8; iteration++) {
+      this.projectBatIntoReach(
+        batPosition,
+        batQuaternion,
+        this.reachShoulderL,
+        leftSocket,
+        this.handAnchorL,
+        maxReach,
+      );
+      this.projectBatIntoReach(
+        batPosition,
+        batQuaternion,
+        this.reachShoulderR,
+        rightSocket,
+        this.handAnchorR,
+        maxReach,
+      );
+    }
+  }
+
+  private projectBatIntoReach(
+    batPosition: THREE.Vector3,
+    batQuaternion: THREE.Quaternion,
+    shoulder: THREE.Vector3,
+    socket: THREE.Object3D,
+    anchor: THREE.Object3D,
+    maxReach: number,
+  ): void {
+    this.reachTarget.copy(socket.position).applyQuaternion(batQuaternion).add(batPosition);
+    this.reachQuaternion.copy(batQuaternion).multiply(socket.quaternion);
+    this.leftIK.direction.copy(anchor.position).applyQuaternion(this.reachQuaternion);
+    this.reachTarget.sub(this.leftIK.direction);
+    this.leftIK.direction.copy(this.reachTarget).sub(shoulder);
+    const distance = this.leftIK.direction.length();
+    if (distance > maxReach) {
+      batPosition.addScaledVector(this.leftIK.direction, -(distance - maxReach) / distance);
+    }
+  }
+
+  /** Converts an actor-root-space bat driver into the bat's torso-local transform. */
+  private setBatRootTransform(position: THREE.Vector3, quaternion: THREE.Quaternion): void {
+    this.scratchQuaternion2.copy(this.torso.quaternion).invert();
+    this.bat.position
+      .copy(position)
+      .sub(this.torso.position)
+      .applyQuaternion(this.scratchQuaternion2);
+    this.bat.quaternion.copy(this.scratchQuaternion2).multiply(quaternion).normalize();
+  }
+
+  private solveHand(
+    chain: TwoBoneChain,
+    anchor: THREE.Object3D,
+    socket: THREE.Object3D,
+    poleDirection: THREE.Vector3,
+    fallbackSide: number,
+    scratch: TwoBoneIKScratch,
+  ): void {
+    socket.getWorldPosition(this.scratchPosition);
+    this.torso.worldToLocal(this.scratchPosition);
+    socket.getWorldQuaternion(this.scratchQuaternion);
+    this.torso.getWorldQuaternion(this.scratchQuaternion2).invert();
+    this.scratchQuaternion.premultiply(this.scratchQuaternion2).normalize();
+
+    scratch.direction.copy(anchor.position).applyQuaternion(this.scratchQuaternion);
+    this.scratchPosition.sub(scratch.direction);
+    this.scratchPosition2
+      .copy(chain.shoulder.position)
+      .addScaledVector(poleDirection, 0.75);
+    solveTwoBoneIK(
+      chain,
+      this.scratchPosition,
+      this.scratchQuaternion,
+      this.scratchPosition2,
+      fallbackSide,
+      scratch,
+    );
+  }
+
+  private solveBatGrip(
+    handed: number,
+    bunt: boolean,
+    leftPole = this.battingMotion.leftElbowPole,
+    rightPole = this.battingMotion.rightElbowPole,
+  ): void {
+    this.group.updateMatrixWorld(true);
+    const leftSocket = handed < 0
+      ? this.batGripBottom
+      : bunt ? this.batBuntSupport : this.batGripTop;
+    const rightSocket = handed < 0
+      ? bunt ? this.batBuntSupport : this.batGripTop
+      : this.batGripBottom;
+    this.solveHand(this.leftArmChain, this.handAnchorL, leftSocket, leftPole, -1, this.leftIK);
+    this.solveHand(this.rightArmChain, this.handAnchorR, rightSocket, rightPole, 1, this.rightIK);
+    this.group.updateMatrixWorld(true);
+  }
+
+  /** Re-establishes the invariant after independently interpolated replay joints. */
+  private solveReplayGrip(): void {
+    this.group.updateMatrixWorld(true);
+    this.handAnchorL.getWorldPosition(this.replayAnchorL);
+    this.handAnchorR.getWorldPosition(this.replayAnchorR);
+    this.batGripBottom.getWorldPosition(this.replayBottom);
+    this.batGripTop.getWorldPosition(this.replayTop);
+    this.batBuntSupport.getWorldPosition(this.replaySupport);
+    this.foreL.getWorldPosition(this.replayPoleL);
+    this.foreR.getWorldPosition(this.replayPoleR);
+    this.torso.worldToLocal(this.replayPoleL);
+    this.torso.worldToLocal(this.replayPoleR);
+    this.replayPoleL.sub(this.armL.position).normalize();
+    this.replayPoleR.sub(this.armR.position).normalize();
+
+    let handed = -1;
+    let bunt = false;
+    let bestError =
+      this.replayAnchorL.distanceToSquared(this.replayBottom) +
+      this.replayAnchorR.distanceToSquared(this.replayTop);
+    const leftyError =
+      this.replayAnchorL.distanceToSquared(this.replayTop) +
+      this.replayAnchorR.distanceToSquared(this.replayBottom);
+    if (leftyError < bestError) {
+      bestError = leftyError;
+      handed = 1;
+    }
+    const rightBuntError =
+      this.replayAnchorL.distanceToSquared(this.replayBottom) +
+      this.replayAnchorR.distanceToSquared(this.replaySupport);
+    if (rightBuntError < bestError) {
+      bestError = rightBuntError;
+      handed = -1;
+      bunt = true;
+    }
+    const leftBuntError =
+      this.replayAnchorL.distanceToSquared(this.replaySupport) +
+      this.replayAnchorR.distanceToSquared(this.replayBottom);
+    if (leftBuntError < bestError) {
+      handed = 1;
+      bunt = true;
+    }
+    this.buntGrip = bunt;
+    this.solveBatGrip(handed, bunt, this.replayPoleL, this.replayPoleR);
   }
 
   private captureTransitionStart(): void {
@@ -1481,6 +1913,8 @@ export class PlayerActor {
     // elbow is the cheapest thing that stops the model looking like a doll.
     this.foreL.rotation.set(-0.18, 0, 0);
     this.foreR.rotation.set(-0.18, 0, 0);
+    this.wristL.rotation.set(0, 0, 0);
+    this.wristR.rotation.set(0, 0, 0);
     this.head.rotation.set(0, 0, 0);
     this.torso.rotation.set(0, 0, 0);
     this.root.position.y = this.bob;
@@ -1566,74 +2000,11 @@ export class PlayerActor {
   }
 
   private poseBatStance(handed: number): void {
-    this.reset();
-    this.bat.visible = true;
-    this.root.rotation.y = this.facing;
-    // Weight on the back foot, front knee soft, hands up by the back shoulder.
-    this.legL.rotation.x = 0.2;
-    this.legR.rotation.x = -0.2;
-    this.shinL.rotation.x = -0.3;
-    this.shinR.rotation.x = -0.16;
-    this.root.position.y = this.bob - 0.07;
-    this.torso.rotation.y = handed * 0.25;
-    // Hands up and BACK, by the rear shoulder, with the bat cocked over it.
-    // This is also a framing constraint and not only a fidelity one: the plate
-    // camera looks past this hitter at the strike zone, so anything the stance
-    // puts out in front of his chest ends up sitting on top of the zone.
-    this.armR.rotation.x = -2.15;
-    this.armR.rotation.z = handed * -0.35;
-    this.foreR.rotation.x = -0.3;
-    this.armL.rotation.x = -1.95;
-    this.armL.rotation.z = handed * -0.25;
-    this.foreL.rotation.x = -0.35;
-    this.bat.rotation.set(0.5, 0, handed * 0.4);
-    this.head.rotation.y = handed * -0.34;
+    this.applyBattingMotion(0, handed);
   }
 
   private poseBatSwing(t: number, handed: number): void {
-    this.reset();
-    this.bat.visible = true;
-    const k = Math.min(1, Math.max(0, t));
-    // Load, then whip through, then follow through.
-    const load = Math.min(1, k / 0.25);
-    const swing = k < 0.25 ? 0 : Math.min(1, (k - 0.25) / 0.35);
-    const follow = k < 0.6 ? 0 : Math.min(1, (k - 0.6) / 0.4);
-    const ease = swing * swing * (3 - 2 * swing);
-
-    // Hips fire first and the shoulders follow: the torso turn is what carries
-    // the arms and the bat, so the swing rotates as one piece.
-    // The torso now carries the arms, so its turn is roughly half what the old
-    // shoulders-independent version used — the arms get the rest for free.
-    this.torso.rotation.y = handed * (0.25 + load * 0.2 - ease * 1.5 - follow * 0.45);
-    this.torso.rotation.x = -ease * 0.1 - follow * 0.08;
-    this.root.rotation.y = this.facing + handed * (0.15 - ease * 0.35 - follow * 0.22);
-
-    // Elbows straighten as the barrel comes round, which is the whole visual of
-    // "getting extended".
-    this.armR.rotation.x = -2.15 - load * 0.15 + ease * 1.5 - follow * 0.85;
-    this.armR.rotation.z = handed * (-0.35 + ease * 0.9 + follow * 0.35);
-    this.foreR.rotation.x = -0.3 + ease * 0.3 - follow * 1.0;
-    this.armL.rotation.x = -1.95 - load * 0.12 + ease * 1.3 - follow * 1.15;
-    this.armL.rotation.z = handed * (-0.25 + ease * 0.8 + follow * 0.55);
-    this.foreL.rotation.x = -0.35 + ease * 0.35 - follow * 1.35;
-    // Contact is the point of maximum extension. The old wrist turn stopped
-    // short and then reversed during follow-through, making the barrel cut
-    // through the hitter's torso and shrinking its radius to 16 cm. This turn
-    // keeps travelling through a complete circle: out over the plate at
-    // contact, around the body, then up over the lead shoulder.
-    this.bat.rotation.set(
-      0.5 - ease * 1.0 + follow * 1.7,
-      0,
-      handed * (0.4 - ease * 5.6 - follow * 2.0),
-    );
-
-    // Back foot pivots up on the toe, front leg braces straight.
-    this.legR.rotation.x = -0.2 - ease * 0.34;
-    this.shinR.rotation.x = -0.16 - ease * 0.7;
-    this.legL.rotation.x = 0.2 + ease * 0.28;
-    this.shinL.rotation.x = -0.3 + ease * 0.26;
-    this.head.rotation.y = handed * (-0.34 + ease * 0.4);
-    this.root.position.y = this.bob - 0.07 - ease * 0.05 + follow * 0.02;
+    this.applyBattingMotion(t, handed);
   }
 
   private poseBunt(handed: number): void {
@@ -1653,7 +2024,17 @@ export class PlayerActor {
     this.armL.rotation.x = -1.2;
     this.armL.rotation.z = handed * 0.55;
     this.foreL.rotation.x = -0.5;
-    this.bat.rotation.set(0.1, 0, handed * 1.45);
+    this.buntGrip = true;
+    this.battingMotion.leftElbowPole.set(-0.8, 0.15, 0.35);
+    this.battingMotion.rightElbowPole.set(0.8, 0.15, 0.35);
+    if (handed > 0) {
+      this.battingMotion.leftElbowPole.x *= -1;
+      this.battingMotion.rightElbowPole.x *= -1;
+    }
+    this.scratchPosition.set(-handed * 0.08, 1.22 + (this.bodyHeight - 1) * 1.2, 0.72);
+    this.scratchQuaternion.setFromEuler(this.scratchEuler.set(0.1, 0, handed * 1.45));
+    this.constrainBatToReach(this.scratchPosition, this.scratchQuaternion, handed, true);
+    this.setBatRootTransform(this.scratchPosition, this.scratchQuaternion);
   }
 
   private posePitchSet(t: number): void {

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-08-09 — Two-handed batting motion release
+
+### Added
+
+- Hash-pinned offline CMU baseball-swing bake producing 33 native body-motion
+  samples with an exact `0.425` contact phase; raw BVH data does not ship.
+- Bat-authoritative bottom/top/bunt sockets with allocation-free two-bone arm IK.
+- Articulated wrists plus cached relaxed and batting-grip hand meshes with palms,
+  curled finger masses, opposing thumbs, and cuffs.
+- Deterministic right/left stance, gather, stride, heel-plant, contact,
+  extension, wrap, and finish screenshot gallery.
+
+### Fixed
+
+- Both hands now remain attached through stance transitions, contact, full
+  follow-through, bunts, and replay interpolation for all five body types.
+- Home Run Derby now carries a presentation clock through ball flight and uses
+  the same contact/follow-through mapping as normal batting.
+- Replay retains its original 154-float player payload while reconstructing the
+  derived wrist constraint after interpolation.
+
 ## 2026-08-09 — Broadcast replay and athlete presentation release
 
 ### Added
