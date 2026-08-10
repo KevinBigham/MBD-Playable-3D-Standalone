@@ -12,7 +12,7 @@ work. None of these tools may enter authoritative baseball simulation.
 | [three.quarks](https://github.com/Alchemist0823/three.quarks) | `0.17.1` with `three@0.182.0` | MIT | Accepted as isolated lab; runtime rejected | `tools/vfx-lab`; informs `MbdVfxPresetV1` |
 | [camera-controls](https://github.com/yomotsu/camera-controls) | `3.1.2` | MIT | Accepted, replay-only runtime | Lazy Free Cam module after replay freezes play |
 | [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) | `0.9.14` | MIT | Accepted, replay-only runtime | Self-contained local lazy adapter; five static camera proxies |
-| [CMU Motion Capture Database / una-dinosauria mirror](https://github.com/una-dinosauria/cmu-mocap) | commit `09a07f54f3bbb58797325f009282d0b2048a2871`, `124_07.bvh` SHA-256 `fe848034a77cac57ff49a77e9a57d2af3d714f549ced078b128e458910666ba4` | CMU database usage terms | Accepted, offline source only | Frames 264–425 bake to `src/render/batting-motion.generated.ts`; raw BVH never ships |
+| [CMU Motion Capture Database / una-dinosauria mirror](https://github.com/una-dinosauria/cmu-mocap) | commit `09a07f54f3bbb58797325f009282d0b2048a2871`; `124_07.bvh` SHA-256 `fe848034a77cac57ff49a77e9a57d2af3d714f549ced078b128e458910666ba4`; `124_01.bvh` SHA-256 `eee88ea11954d3448e13c847a403ab9a88f264d575c21427f61e722bb0d3cd58` | CMU database usage terms | Accepted, offline source only | Batting frames 264–425 and pitching frames 160–540 bake to native numeric modules; raw BVHs never ship |
 
 ## CMU batting-motion bake
 
@@ -27,6 +27,28 @@ drift. It creates 17 samples from stance to contact and 17 from contact to
 finish, sharing the exact `0.425` contact sample for 33 total. Runtime has no BVH
 request, loader, mixer, skinned mesh, or new dependency. Source fingers/thumbs
 are deliberately ignored; original low-poly hands and bat-socket IK own the grip.
+
+## CMU pitching-motion bake
+
+Pitching uses the same explicit development-only boundary, but its source is
+subject 124 trial 01 at `data/124/124_01.bvh`. The pinned mirror commit is
+`09a07f54f3bbb58797325f009282d0b2048a2871`; the accepted input is exactly
+491,121 bytes with SHA-256
+`eee88ea11954d3448e13c847a403ab9a88f264d575c21427f61e722bb0d3cd58`, 644
+frames, and frame time `0.0083333`. Frames 160–540 are sampled into 33 compact
+poses; source frame 448 is retained at presentation release phase `0.76`.
+
+```bash
+npx tsx scripts/mocap/bake-pitching-motion.ts --input /absolute/path/to/124_01.bvh
+```
+
+The command fails closed on all of those source facts and writes only
+`src/render/pitching-motion.generated.ts`. No raw BVH is committed, placed in
+`public`, requested by the browser, or emitted to `dist`; runtime has no BVH
+loader, mixer, skinned mesh, imported character, or additional dependency. The
+generated body curve is mirrored natively for left-arm deliveries, while native
+two-bone IK aligns the named hand socket to the pre-existing authoritative ball
+release. It changes neither gameplay/physics/RNG nor save or replay contracts.
 
 ## Theatre.js Broadcast Studio
 

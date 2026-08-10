@@ -3,6 +3,7 @@ import {
   CONTACT_Z,
   DEFAULT_PITCH_TEMPO,
   MOUND_Z,
+  PITCH_RELEASE_X,
   PITCH_TEMPO,
   TICK_DT,
   ZONE_CENTER_Y,
@@ -696,7 +697,7 @@ function beginWindup(state: GameState, type: PitchType, aimX: number, aimY: numb
     breakX,
     breakY,
     lateness: prof.lateness,
-    releaseX: armSign * 0.42,
+    releaseX: armSign * PITCH_RELEASE_X,
     timeScale: PITCH_TEMPO[state.setup.pitchTempo ?? DEFAULT_PITCH_TEMPO],
   });
 

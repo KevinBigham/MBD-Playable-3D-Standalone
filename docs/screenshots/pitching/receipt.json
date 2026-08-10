@@ -1,0 +1,102 @@
+{
+  "source": "http://127.0.0.1:4179",
+  "releaseFrame": 0.76,
+  "receipts": [
+    {
+      "name": "right-set",
+      "arm": "right",
+      "phase": 0,
+      "releaseSocket": {
+        "x": -0.27305599999999997,
+        "y": 0.6689679999999999,
+        "z": 20.848
+      },
+      "releaseTarget": {
+        "x": -0.42,
+        "y": 1.85,
+        "z": 19
+      },
+      "alignmentError": 2.1980748677331254
+    },
+    {
+      "name": "right-release",
+      "arm": "right",
+      "phase": 0.76,
+      "releaseSocket": {
+        "x": -0.41999999999999993,
+        "y": 1.85,
+        "z": 19
+      },
+      "releaseTarget": {
+        "x": -0.42,
+        "y": 1.85,
+        "z": 19
+      },
+      "alignmentError": 5.551115123125783e-17
+    },
+    {
+      "name": "right-finish",
+      "arm": "right",
+      "phase": 1,
+      "releaseSocket": {
+        "x": 0.18705800984897916,
+        "y": 0.8610418778285067,
+        "z": 18.626591191882873
+      },
+      "releaseTarget": {
+        "x": -0.42,
+        "y": 1.85,
+        "z": 19
+      },
+      "alignmentError": 1.2190126056404103
+    },
+    {
+      "name": "left-set",
+      "arm": "left",
+      "phase": 0,
+      "releaseSocket": {
+        "x": 0.2730560004698275,
+        "y": 0.6689679697389258,
+        "z": 20.848
+      },
+      "releaseTarget": {
+        "x": 0.42,
+        "y": 1.85,
+        "z": 19
+      },
+      "alignmentError": 2.19807488396108
+    },
+    {
+      "name": "left-release",
+      "arm": "left",
+      "phase": 0.76,
+      "releaseSocket": {
+        "x": 0.42000000000000004,
+        "y": 1.85,
+        "z": 19
+      },
+      "releaseTarget": {
+        "x": 0.42,
+        "y": 1.85,
+        "z": 19
+      },
+      "alignmentError": 5.551115123125783e-17
+    },
+    {
+      "name": "left-finish",
+      "arm": "left",
+      "phase": 1,
+      "releaseSocket": {
+        "x": -0.18705800986087373,
+        "y": 0.8610418777520426,
+        "z": 18.62659119186532
+      },
+      "releaseTarget": {
+        "x": 0.42,
+        "y": 1.85,
+        "z": 19
+      },
+      "alignmentError": 1.2190126057137447
+    }
+  ]
+}
