@@ -52,8 +52,12 @@ photographed or downloaded.
 | Package | Version | License | Used for |
 |---|---|---|---|
 | [three](https://github.com/mrdoob/three.js) | ^0.169.0 | MIT | WebGL rendering |
+| [camera-controls](https://github.com/yomotsu/camera-controls) | 3.1.2 | MIT | Replay-only Free Cam controls, loaded after replay playback is frozen |
+| [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh) | 0.9.14 | MIT | Replay-only static-camera collision adapter, loaded on Free Cam entry |
 
-That is the complete runtime dependency list. It ships in the production bundle.
+That is the complete runtime dependency list. `three` is loaded for normal
+rendering; the two replay packages are deferred and never participate in live
+gameplay or simulation. All three are present in the production dependency graph.
 
 ## Development dependencies
 
@@ -84,7 +88,7 @@ the studio's `node_modules/` directory for development installs.
 
 ## Reference material
 
-### CMU baseball-swing motion
+### CMU baseball batting and pitching motion
 
 Batting hips, torso, head, legs, and elbow intent are derived from CMU subject
 124 motion 07. The development-only bake uses frames 264–425 from
@@ -94,6 +98,17 @@ mirror at commit `09a07f54f3bbb58797325f009282d0b2048a2871`. The pinned input ha
 SHA-256 `fe848034a77cac57ff49a77e9a57d2af3d714f549ced078b128e458910666ba4`.
 Only `src/render/batting-motion.generated.ts` is committed. The raw BVH remains
 outside the repository and production build.
+
+Pitching hips, torso, head, arms, legs, and elbow intent are likewise derived
+offline from CMU subject 124 trial 01. The development-only bake reads frames
+160–540 from `data/124/124_01.bvh` in the same pinned
+[`una-dinosauria/cmu-mocap`](https://github.com/una-dinosauria/cmu-mocap) mirror
+at commit `09a07f54f3bbb58797325f009282d0b2048a2871`. Its accepted input is
+491,121 bytes with SHA-256
+`eee88ea11954d3448e13c847a403ab9a88f264d575c21427f61e722bb0d3cd58`; source
+frame 448 supplies the release reference. Only
+`src/render/pitching-motion.generated.ts` is committed. The raw pitching BVH
+remains outside the repository, `public`, and the production build.
 
 The CMU database permits use of its motion data while prohibiting direct resale
 of the database itself. Its requested acknowledgement is preserved here:
@@ -122,5 +137,6 @@ license they choose; the code is clean of third-party expressive content and
 carries only the MIT/Apache-2.0 obligations listed above, so any common
 open-source or commercial license can be applied.
 
-If distributing a build, include the Three.js MIT notice, which is reproduced in
-`node_modules/three/LICENSE`.
+If distributing a build, include the MIT notices for Three.js, camera-controls,
+and three-mesh-bvh. They are reproduced in their respective
+`node_modules/<package>/LICENSE` files.

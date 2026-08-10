@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PITCH_RELEASE_X, RELEASE_Y, RELEASE_Z } from '../core/constants';
 import type { BodyType, Player } from '../core/types';
 import {
   SWING_CONTACT_FRAME,
@@ -12,9 +13,24 @@ import {
   type TwoBoneChain,
   type TwoBoneIKScratch,
 } from './kinematics';
+import {
+  PITCHING_PHASES,
+  PITCH_RELEASE_FRAME,
+  createPitchingMotionSample,
+  samplePitchingMotion,
+  type PitchingMotionSample,
+} from './pitching';
 import { flatMat, shade, skinColor } from './palette';
 
 export { SWING_CONTACT_FRAME } from './batting';
+
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+/** Encodes glove parent side in its existing replayed local transform. */
+const GLOVE_SIDE_MARKER = 0.001;
+const MAX_PITCH_RELEASE_TARGET_ERROR = 0.05;
+const MAX_PITCH_SOCKET_CORRECTION = 0.4;
+const MAX_PITCH_DECAY_CORRECTION = 0.38;
+const MAX_PITCH_ROOT_CORRECTION = 0.25;
 
 /**
  * Low-poly athletes: turned, tapered forms on a jointed skeleton, animated by
@@ -844,6 +860,9 @@ export class PlayerActor {
   private shinR!: THREE.Group;
   private bat!: THREE.Group;
   private glove!: THREE.Mesh;
+  private gloveRestY = 0;
+  /** -1 left forearm (default), +1 right forearm. */
+  private gloveSide: -1 | 1 = -1;
   private shadow!: THREE.Mesh;
   private handRelaxedL!: THREE.Mesh;
   private handRelaxedR!: THREE.Mesh;
@@ -853,6 +872,9 @@ export class PlayerActor {
   private wristMeshR!: THREE.Mesh;
   private handAnchorL!: THREE.Object3D;
   private handAnchorR!: THREE.Object3D;
+  /** Ball-centre sockets, one derived from each throwing hand. */
+  private releaseSocketL!: THREE.Object3D;
+  private releaseSocketR!: THREE.Object3D;
   private batGripBottom!: THREE.Object3D;
   private batGripTop!: THREE.Object3D;
   private batBuntSupport!: THREE.Object3D;
@@ -864,10 +886,17 @@ export class PlayerActor {
   private leftArmChain!: TwoBoneChain;
   private rightArmChain!: TwoBoneChain;
   private readonly battingMotion: BattingMotionSample = createBattingMotionSample();
+  private readonly pitchingMotion: PitchingMotionSample = createPitchingMotionSample();
   private readonly leftIK: TwoBoneIKScratch = createTwoBoneIKScratch();
   private readonly rightIK: TwoBoneIKScratch = createTwoBoneIKScratch();
+  private readonly pitchingIK: TwoBoneIKScratch = createTwoBoneIKScratch();
+  /** Release calibration, retained for allocation-free geometry assertions. */
+  private pitchReleasePreCorrectionDistance = 0;
+  private pitchReleaseRootResidual = 0;
+  private pitchReleaseCalibrated = true;
   private readonly scratchPosition = new THREE.Vector3();
   private readonly scratchPosition2 = new THREE.Vector3();
+  private readonly pitchTarget = new THREE.Vector3();
   private readonly replayPoleL = new THREE.Vector3();
   private readonly replayPoleR = new THREE.Vector3();
   private readonly replayAnchorL = new THREE.Vector3();
@@ -1351,11 +1380,28 @@ export class PlayerActor {
       const handAnchor = new THREE.Object3D();
       handAnchor.name = side < 0 ? 'hand-anchor-left' : 'hand-anchor-right';
       handAnchor.position.set(0, -0.035, 0);
-      wrist.add(relaxedHand, gripHand, handAnchor);
+      // A separate ball-centre socket makes throwing presentation queryable
+      // without tying it to the bat-grip anchor. Its small forward offset puts
+      // the ball in the fingers rather than at the wrist joint.
+      const releaseSocket = new THREE.Object3D();
+      releaseSocket.name = side < 0 ? 'release-socket-left' : 'release-socket-right';
+      releaseSocket.position.set(0, -0.047, 0.052);
+      wrist.add(relaxedHand, gripHand, handAnchor, releaseSocket);
       elbow.add(wrist);
       shoulder.add(elbow);
       shoulder.position.set(side * (shoulderW / 2 - 0.03), torsoH - chestH * 0.24, 0);
-      return { shoulder, elbow, wrist, wristMesh, relaxedHand, gripHand, handAnchor, upper, fore };
+      return {
+        shoulder,
+        elbow,
+        wrist,
+        wristMesh,
+        relaxedHand,
+        gripHand,
+        handAnchor,
+        releaseSocket,
+        upper,
+        fore,
+      };
     };
     const armL = mkArm(-1);
     const armR = mkArm(1);
@@ -1373,6 +1419,8 @@ export class PlayerActor {
     this.wristMeshR = armR.wristMesh;
     this.handAnchorL = armL.handAnchor;
     this.handAnchorR = armR.handAnchor;
+    this.releaseSocketL = armL.releaseSocket;
+    this.releaseSocketR = armR.releaseSocket;
     this.skinMat = skin;
     this.battingGloveMat = mat(shade(colors.accent, -0.3));
     this.torso.add(this.armL, this.armR);
@@ -1438,8 +1486,9 @@ export class PlayerActor {
     // Field-ready elbows fold almost ninety degrees. Counter-rotate the palm
     // so the pocket, web and role-specific outline face the play instead of
     // presenting only the thin extruded edge to the broadcast camera.
+    this.gloveRestY = -foreLen - 0.11;
     this.glove.rotation.x = 1.2;
-    this.glove.position.y = -foreLen - 0.11;
+    this.glove.position.set(-GLOVE_SIDE_MARKER, this.gloveRestY, 0);
     this.glove.visible = false;
     this.foreL.add(this.glove);
 
@@ -1485,6 +1534,11 @@ export class PlayerActor {
   }
 
   applyReplay(source: Float32Array, offset: number): void {
+    // The signed local-X marker is replayed with the glove itself, retaining
+    // which forearm owned it without spending another presentation float. Old
+    // frames used zero and deterministically retain the historic left side.
+    const gloveOffset = offset + PLAYER_REPLAY_OBJECT_INDEX.glove * REPLAY_OBJECT_FLOATS;
+    this.setGloveSide(source[gloveOffset] > 0 ? 1 : -1);
     for (const object of this.replayObjects) offset = applyReplayObject(object, source, offset);
     this.setBattingHands(this.bat.visible);
     if (this.bat.visible) this.solveReplayGrip();
@@ -1508,6 +1562,34 @@ export class PlayerActor {
       buntSupport: world(this.batBuntSupport),
       batTip: world(this.batTip),
     };
+  }
+
+  /**
+   * Returns the ball-centre socket for the selected throwing hand. `out` is
+   * caller-owned so plate rendering and diagnostics do not allocate every
+   * frame. Positive arm signs are left-handed; negative signs are right-handed.
+   */
+  readPitchReleaseSocket(armSign: number, out: THREE.Vector3): THREE.Vector3 {
+    this.group.updateMatrixWorld(true);
+    return (armSign > 0 ? this.releaseSocketL : this.releaseSocketR).getWorldPosition(out);
+  }
+
+  /**
+   * Writes release calibration as `(pre-IK socket distance, root residual,
+   * calibrated)` into caller-owned scratch. A calibrated release is allowed at
+   * most 0.40 m before IK and 0.25 m of final root correction.
+   */
+  readPitchReleaseDiagnostics(out: THREE.Vector3): THREE.Vector3 {
+    return out.set(
+      this.pitchReleasePreCorrectionDistance,
+      this.pitchReleaseRootResidual,
+      this.pitchReleaseCalibrated ? 1 : 0,
+    );
+  }
+
+  /** -1 when the field glove is on the left forearm, +1 on the right. */
+  readPitchGloveSide(): -1 | 1 {
+    return this.gloveSide;
   }
 
   /**
@@ -1535,6 +1617,10 @@ export class PlayerActor {
       poseT: number;
       /** Batting side: -1 right-handed (third-base box), +1 left-handed. */
       handed?: number;
+      /** Throwing side: -1 right-handed, +1 left-handed. */
+      armSign?: number;
+      /** Authoritative physics ball position at pitch release. */
+      releaseTarget?: THREE.Vector3;
     },
   ): void {
     const y = opts.y ?? 0;
@@ -1564,6 +1650,8 @@ export class PlayerActor {
 
     this.bat.visible = false;
     this.glove.visible = false;
+    const pitching = opts.pose === 'pitchSet' || opts.pose === 'pitchThrow';
+    this.setGloveSide(pitching ? (opts.armSign ?? -1) : -1);
     this.buntGrip = false;
     this.root.rotation.x = 0;
     this.root.rotation.z = 0;
@@ -1587,10 +1675,10 @@ export class PlayerActor {
         this.poseBunt(opts.handed ?? -1);
         break;
       case 'pitchSet':
-        this.posePitchSet(opts.poseT);
+        this.posePitchSet(opts.poseT, opts.armSign ?? -1, opts.releaseTarget);
         break;
       case 'pitchThrow':
-        this.posePitchThrow(opts.poseT);
+        this.posePitchThrow(opts.poseT, opts.armSign ?? -1, opts.releaseTarget);
         break;
       case 'fieldReady':
         this.poseFieldReady();
@@ -1637,6 +1725,20 @@ export class PlayerActor {
     this.wristMeshR.material = batting ? this.battingGloveMat : this.skinMat;
   }
 
+  /**
+   * The sole glove remains one replay object while changing its arm parent.
+   * Its signed local-X marker is intentionally imperceptible in the pose but
+   * survives the existing replay transform stream to restore this ownership.
+   */
+  private setGloveSide(side: number): void {
+    const nextSide: -1 | 1 = side > 0 ? 1 : -1;
+    const parent = nextSide > 0 ? this.foreR : this.foreL;
+    if (this.glove.parent !== parent) parent.add(this.glove);
+    this.gloveSide = nextSide;
+    this.glove.position.set(nextSide * GLOVE_SIDE_MARKER, this.gloveRestY, 0);
+    this.glove.rotation.set(1.2, 0, 0);
+  }
+
   private setDeltaPose(
     object: THREE.Object3D,
     x: number,
@@ -1680,6 +1782,159 @@ export class PlayerActor {
     this.scratchPosition.y += (this.bodyHeight - 1) * 1.25;
     this.constrainBatToReach(this.scratchPosition, motion.batQuaternion, handed, false);
     this.setBatRootTransform(this.scratchPosition, motion.batQuaternion);
+  }
+
+  /** Applies the baked delivery curve; arm sign mirrors the canonical righty. */
+  private applyPitchingMotion(
+    phase: number,
+    armSign: number,
+    releaseTarget?: THREE.Vector3,
+  ): void {
+    this.reset();
+    this.glove.visible = true;
+    samplePitchingMotion(phase, armSign, this.pitchingMotion);
+    const motion = this.pitchingMotion;
+
+    // Motion translation is in the delivery's local forward axis. Root
+    // position lives under the world-facing group, so turn the displacement
+    // with the pitcher rather than always striding toward +Z of the diamond.
+    this.scratchPosition
+      .set(
+        motion.rootPosition.x * this.bodyWidth,
+        motion.rootPosition.y * this.bodyHeight,
+        motion.rootPosition.z * this.bodyHeight,
+      )
+      .applyAxisAngle(WORLD_UP, this.facing);
+    this.root.position.copy(this.scratchPosition);
+    this.root.rotation.set(0, this.facing, 0);
+    this.setDeltaPose(this.torso, 0, 0, 0, motion.torsoQuaternion, 0.9);
+    this.setDeltaPose(this.head, 0, 0, 0, motion.headQuaternion, 0.48);
+    this.setDeltaPose(this.legL, 0, 0, 0, motion.leftThighQuaternion, 0.74);
+    this.setDeltaPose(this.shinL, 0, 0, 0, motion.leftShinQuaternion, 0.74);
+    this.setDeltaPose(this.legR, 0, 0, 0, motion.rightThighQuaternion, 0.74);
+    this.setDeltaPose(this.shinR, 0, 0, 0, motion.rightShinQuaternion, 0.74);
+    this.setDeltaPose(this.armL, 0, 0, 0, motion.leftArmQuaternion, 1);
+    this.setDeltaPose(this.foreL, 0, 0, 0, motion.leftForearmQuaternion, 1);
+    this.setDeltaPose(this.armR, 0, 0, 0, motion.rightArmQuaternion, 1);
+    this.setDeltaPose(this.foreR, 0, 0, 0, motion.rightForearmQuaternion, 1);
+
+    const calibrationWeight = this.pitchCalibrationWeight(phase);
+    if (releaseTarget && calibrationWeight > 0) {
+      if (
+        !Number.isFinite(releaseTarget.x) ||
+        !Number.isFinite(releaseTarget.y) ||
+        !Number.isFinite(releaseTarget.z) ||
+        Math.abs(releaseTarget.x - armSign * PITCH_RELEASE_X) > MAX_PITCH_RELEASE_TARGET_ERROR ||
+        Math.abs(releaseTarget.y - RELEASE_Y) > MAX_PITCH_RELEASE_TARGET_ERROR ||
+        Math.abs(releaseTarget.z - RELEASE_Z) > MAX_PITCH_RELEASE_TARGET_ERROR
+      ) {
+        this.pitchReleasePreCorrectionDistance = Infinity;
+        this.pitchReleaseRootResidual = Infinity;
+        this.pitchReleaseCalibrated = false;
+        return;
+      }
+      const pole = armSign > 0 ? motion.leftElbowPole : motion.rightElbowPole;
+      const socket = armSign > 0 ? this.releaseSocketL : this.releaseSocketR;
+      // Ease toward the fixed physics point in late arm-cock. The same
+      // effective target is sampled on both sides of the phase handoff, so the
+      // visual ball cannot pop when simulation begins its flight.
+      this.group.updateMatrixWorld(true);
+      socket.getWorldPosition(this.pitchTarget);
+      const targetDistance = this.pitchTarget.distanceTo(releaseTarget);
+      if (
+        calibrationWeight >= 1 - 1e-6 &&
+        targetDistance > MAX_PITCH_SOCKET_CORRECTION
+      ) {
+        this.pitchReleasePreCorrectionDistance = targetDistance;
+        this.pitchReleaseRootResidual = Infinity;
+        this.pitchReleaseCalibrated = false;
+        return;
+      }
+      const boundedWeight = targetDistance > 0
+        ? Math.min(
+            calibrationWeight,
+            (MAX_PITCH_DECAY_CORRECTION * calibrationWeight) / targetDistance,
+          )
+        : calibrationWeight;
+      this.pitchTarget.lerp(releaseTarget, boundedWeight);
+      this.solvePitchRelease(armSign, this.pitchTarget, pole);
+    }
+  }
+
+  /** Late arm-cock calibration, held through release then gently released. */
+  private pitchCalibrationWeight(phase: number): number {
+    if (phase <= PITCHING_PHASES.armCock) return 0;
+    if (phase <= PITCH_RELEASE_FRAME) {
+      const t = (phase - PITCHING_PHASES.armCock) /
+        Math.max(1e-6, PITCH_RELEASE_FRAME - PITCHING_PHASES.armCock);
+      return t * t * (3 - 2 * t);
+    }
+    if (phase >= PITCHING_PHASES.followThrough) return 0;
+    const t = (phase - PITCH_RELEASE_FRAME) /
+      Math.max(1e-6, PITCHING_PHASES.followThrough - PITCH_RELEASE_FRAME);
+    return 1 - t * t * (3 - 2 * t);
+  }
+
+  /**
+   * Fits the throwing arm to the authoritative simulation release point. The
+   * baked curve keeps the delivery recognisable, the two-bone solve closes the
+   * arm, and a root-space residual preserves exact ball continuity for every
+   * body scale.
+   */
+  private solvePitchRelease(
+    armSign: number,
+    releaseTarget: THREE.Vector3,
+    elbowPole: THREE.Vector3,
+  ): void {
+    const chain = armSign > 0 ? this.leftArmChain : this.rightArmChain;
+    const socket = armSign > 0 ? this.releaseSocketL : this.releaseSocketR;
+    this.group.updateMatrixWorld(true);
+    this.pitchReleasePreCorrectionDistance = socket
+      .getWorldPosition(this.scratchPosition2)
+      .distanceTo(releaseTarget);
+    if (this.pitchReleasePreCorrectionDistance > MAX_PITCH_SOCKET_CORRECTION + 1e-6) {
+      this.pitchReleaseRootResidual = Infinity;
+      this.pitchReleaseCalibrated = false;
+      return;
+    }
+
+    // `solveTwoBoneIK` works in the torso's local space. Offset the wrist
+    // target by the socket's local ball-centre vector, then use the baked pole
+    // to retain the intended overhand elbow plane.
+    this.scratchPosition.copy(releaseTarget);
+    this.torso.worldToLocal(this.scratchPosition);
+    socket.getWorldQuaternion(this.scratchQuaternion);
+    this.torso.getWorldQuaternion(this.scratchQuaternion2).invert();
+    this.scratchQuaternion.premultiply(this.scratchQuaternion2).normalize();
+    this.pitchingIK.direction.copy(socket.position).applyQuaternion(this.scratchQuaternion);
+    this.scratchPosition.sub(this.pitchingIK.direction);
+    this.scratchPosition2
+      .copy(chain.shoulder.position)
+      .addScaledVector(elbowPole, 0.75);
+    solveTwoBoneIK(
+      chain,
+      this.scratchPosition,
+      this.scratchQuaternion,
+      this.scratchPosition2,
+      armSign,
+      this.pitchingIK,
+    );
+
+    // Body proportions vary by roster type while the simulation's release is
+    // fixed. A small residual is safe to correct in actor-root space; a large
+    // one signals a bad baked-root calibration and must remain visible to tests
+    // rather than teleporting the pitcher to conceal it.
+    this.group.updateMatrixWorld(true);
+    socket.getWorldPosition(this.scratchPosition2);
+    this.scratchPosition2.sub(releaseTarget).multiplyScalar(-1);
+    this.pitchReleaseRootResidual = this.scratchPosition2.length();
+    this.pitchReleaseCalibrated =
+      this.pitchReleasePreCorrectionDistance <= MAX_PITCH_SOCKET_CORRECTION &&
+      this.pitchReleaseRootResidual <= MAX_PITCH_ROOT_CORRECTION;
+    if (!this.pitchReleaseCalibrated) return;
+    this.group.getWorldQuaternion(this.scratchQuaternion).invert();
+    this.root.position.add(this.scratchPosition2.applyQuaternion(this.scratchQuaternion));
+    this.group.updateMatrixWorld(true);
   }
 
   /** Minimally translates the grip into the intersection of both arm reaches. */
@@ -1870,6 +2125,9 @@ export class PlayerActor {
     // The bat/barrel transform at contact is presentation-authoritative. A
     // smoothing window may affect the load, never the exact contact frame.
     if (pose === 'batSwing' && poseT >= SWING_CONTACT_FRAME) alpha = 1;
+    // Release is equally authoritative: the hand socket must meet the physics
+    // ball at the start of flight, so never blend a prior set pose through it.
+    if (pose === 'pitchThrow') alpha = 1;
     alpha = alpha * alpha * (3 - 2 * alpha);
 
     let offset = 0;
@@ -2037,38 +2295,18 @@ export class PlayerActor {
     this.setBatRootTransform(this.scratchPosition, this.scratchQuaternion);
   }
 
-  private posePitchSet(t: number): void {
-    this.reset();
-    this.glove.visible = true;
-    const k = Math.min(1, Math.max(0, t));
-    // Leg kick: the lift comes from the hip and the knee folds under it.
-    this.legL.rotation.x = -k * 1.35;
-    this.shinL.rotation.x = -k * 1.5;
-    this.legR.rotation.x = k * 0.1;
-    this.armR.rotation.x = -k * 1.5;
-    this.foreR.rotation.x = -0.4 - k * 1.5;
-    this.armL.rotation.x = -0.7 - k * 0.4;
-    this.foreL.rotation.x = -1.3 - k * 0.5;
-    this.root.rotation.x = -k * 0.14;
-    this.torso.rotation.y = k * 0.55;
+  private posePitchSet(t: number, armSign: number, releaseTarget?: THREE.Vector3): void {
+    this.applyPitchingMotion(
+      THREE.MathUtils.clamp(t, 0, 1) * PITCH_RELEASE_FRAME,
+      armSign,
+      releaseTarget,
+    );
   }
 
-  private posePitchThrow(t: number): void {
-    this.reset();
-    this.glove.visible = true;
-    const k = Math.min(1, Math.max(0, t));
-    const ease = k * k * (3 - 2 * k);
-    // Arm whips over the top: the elbow leads, then the forearm snaps through.
-    this.armR.rotation.x = -1.5 + ease * 3.6;
-    this.foreR.rotation.x = -1.9 + ease * 1.85;
-    this.armL.rotation.x = -1.1 + ease * 1.4;
-    this.foreL.rotation.x = -1.8 + ease * 1.3;
-    this.legL.rotation.x = -1.35 + ease * 2.0;
-    this.shinL.rotation.x = -1.5 + ease * 1.45;
-    this.legR.rotation.x = 0.1 - ease * 0.75;
-    this.shinR.rotation.x = -ease * 0.5;
-    this.root.rotation.x = 0.3 * ease;
-    this.torso.rotation.y = 0.55 - ease * 0.95;
+  private posePitchThrow(t: number, armSign: number, releaseTarget?: THREE.Vector3): void {
+    const phase = PITCH_RELEASE_FRAME +
+      THREE.MathUtils.clamp(t, 0, 1) * (1 - PITCH_RELEASE_FRAME);
+    this.applyPitchingMotion(phase, armSign, releaseTarget);
   }
 
   private poseThrow(t: number): void {

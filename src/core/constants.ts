@@ -61,6 +61,7 @@ export const MOUND_HEIGHT = 0.254;
 /** Ball is released in front of the rubber, from roughly shoulder height. */
 export const RELEASE_Z = 19.0;
 export const RELEASE_Y = 1.85;
+export const PITCH_RELEASE_X = 0.42;
 
 /** The plane the batter actually makes contact on, just in front of the plate. */
 export const CONTACT_Z = 0.62;

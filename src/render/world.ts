@@ -19,6 +19,7 @@ import {
   actorColorsFor,
 } from './actors';
 import { swingPoseProgress } from './batting';
+import { PITCH_THROW_DURATION } from './pitching';
 import type { Ball } from '../sim/physics';
 import { CameraDirector, type CameraDirectorState, followThrough } from './camera';
 import type { ReplayAnchor } from '../replay/contract';
@@ -167,6 +168,9 @@ export class GameWorld {
   private ball = new BallActor();
   private particles = new ParticleField();
   private rings = new ImpactRings();
+  /** Reused bridge between the simulation release point and the hand socket. */
+  private readonly pitchReleaseTarget = new THREE.Vector3();
+  private readonly pitchSocket = new THREE.Vector3();
 
   private fielders: ActorSlot[] = [];
   private runners: ActorSlot[] = [];
@@ -760,6 +764,15 @@ export class GameWorld {
 
   private syncFielders(dt: number, state: GameState): void {
     const side = fieldingSide(state);
+    const pitcher = lookupPlayer(state, state.pitcher.playerId);
+    const pitcherArmSign = pitcher.throws === 'L' ? 1 : -1;
+    const hasReleaseTarget =
+      !!state.ball.pitch &&
+      (state.phase === 'windup' || state.phase === 'pitch');
+    if (hasReleaseTarget) {
+      const release = state.ball.pitch!;
+      this.pitchReleaseTarget.set(release.x0, release.y0, release.z0);
+    }
     while (this.fielders.length < state.fielders.length) {
       const index = this.fielders.length;
       const role = fielderPresentationRole(index);
@@ -797,7 +810,7 @@ export class GameWorld {
         poseT =
           state.phase === 'windup'
             ? clamp01(state.phaseT / 0.42)
-            : clamp01(state.phaseT / 0.28);
+            : clamp01(state.phaseT / PITCH_THROW_DURATION);
       } else if (i === 1) {
         pose = state.phase === 'inplay' ? 'fieldReady' : 'crouch';
       }
@@ -817,7 +830,16 @@ export class GameWorld {
       const facing =
         speed > 0.7 ? Math.atan2(f.vx, f.vz) : Math.atan2(targetX - f.x, targetZ - f.z);
 
-      s.actor.update(dt, { x: f.x, z: f.z, speed, facing, pose, poseT });
+      s.actor.update(dt, {
+        x: f.x,
+        z: f.z,
+        speed,
+        facing,
+        pose,
+        poseT,
+        armSign: i === 0 ? pitcherArmSign : undefined,
+        releaseTarget: i === 0 && hasReleaseTarget ? this.pitchReleaseTarget : undefined,
+      });
       s.lastX = f.x;
       s.lastZ = f.z;
       s.pose = pose;
@@ -946,7 +968,16 @@ export class GameWorld {
     let z = b.z;
     let visible = true;
 
-    if (b.mode === 'held') {
+    const pitcher = this.fielders[0]?.actor;
+    const pitcherPlayer = state.pitcher.playerId
+      ? lookupPlayer(state, state.pitcher.playerId)
+      : null;
+    if (state.phase === 'windup' && pitcher && pitcherPlayer) {
+      pitcher.readPitchReleaseSocket(pitcherPlayer.throws === 'L' ? 1 : -1, this.pitchSocket);
+      x = this.pitchSocket.x;
+      y = this.pitchSocket.y;
+      z = this.pitchSocket.z;
+    } else if (b.mode === 'held') {
       const holder = state.fielders.find((f) => f.hasBall);
       if (holder) {
         x = holder.x;
